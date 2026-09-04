@@ -111,7 +111,20 @@ describe("atualização de código da instalação", () => {
     expect(res).toMatchObject({ ok: true, deploymentId: "dpl_9", ref: "abcdef1234567890" });
     // auto-deploy desligado: a instalação externa não publica sozinha
     const patch = calls.find((c) => c.method === "PATCH");
-    expect(patch?.body).toMatchObject({ git: { deploymentEnabled: { main: false, master: false } } });
+    expect(patch?.body).toEqual({
+      deploymentPolicy: {
+        deploymentSources: [
+          {
+            enabled: false,
+            environments: [
+              { type: "system", target: "production" },
+              { type: "system", target: "preview" },
+            ],
+            sources: ["git"],
+          },
+        ],
+      },
+    });
     const created = calls.find((c) => c.method === "POST");
     expect(created?.body).toMatchObject({
       gitSource: { repoId: "42", ref: "abcdef1234567890" },

@@ -58,11 +58,23 @@ etapa de código, e publica ali a versão autorizada.
    fixado (SHA), no card *Versão e atualizações*.
 4. Anotar a URL do repositório — ela vai no cadastro da instalação.
 
+### Repositório criado à mão (a partir do template)
+
+É um caminho válido e não atrapalha a automação:
+
+- se o conteúdo já é igual à versão do MASTER, a etapa *Código no GitHub*
+  detecta **0 arquivos diferentes** e conclui em segundos, sem republicar nada;
+- se preferir marcar explicitamente, use **Adotar repositório** na aba
+  *Acessos* — ela confere o conteúdo contra o MASTER e conclui a etapa;
+- a partir daí tudo segue automático: vínculo do deploy, variáveis, primeiro
+  build, banco e validação.
+
 Conferir antes de seguir:
 
 - [ ] repositório acessível pelo token de deploy
 - [ ] branch de referência definida (`main`)
 - [ ] auto-deploy por Git desabilitado no projeto de deploy da instalação
+
 
 ---
 
@@ -129,8 +141,24 @@ Conferir:
 
 ## Bloco 5 — Variáveis aplicadas pelo provisionamento
 
+**Nunca digitar variáveis na Vercel.** É normal (e esperado) que o projeto de
+deploy esteja **sem nenhuma variável** antes de rodar o provisionamento: elas
+são criadas pela automação, na etapa *Deploy conectado*, nesta ordem:
+
+1. vincula o projeto de deploy ao repositório da instalação;
+2. desliga o auto-deploy por Git;
+3. grava todas as variáveis abaixo (production, preview e development, com as
+   sensíveis cifradas);
+4. dispara o **primeiro build** a partir do repositório — funciona mesmo quando
+   o projeto ainda não tem nenhum deployment;
+5. confere a URL operacional respondendo por HTTP.
+
+Se algo aqui falhar, a etapa fica em erro com o motivo e o provisionamento pode
+ser retomado: as etapas concluídas não são refeitas.
+
 Gravadas automaticamente no projeto de deploy. Listadas aqui para auditoria,
 não para digitação:
+
 
 | Variável | Origem |
 | --- | --- |

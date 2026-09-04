@@ -912,28 +912,37 @@ export function createDeployClient(input: {
       }
     },
     async setAutoDeploy(enabled) {
-      // A API da Vercel mudou de formato: hoje o campo suportado é
-      // gitProviderOptions.createDeployments; instalações antigas ainda aceitam
-      // git.deploymentEnabled. Tentamos em ordem e só falhamos se nenhum aceitar.
-      const candidates: Array<Record<string, unknown>> = [
-        { gitProviderOptions: { createDeployments: enabled ? "enabled" : "disabled" } },
-        { git: { deploymentEnabled: { main: enabled, master: enabled } } },
-      ];
-      let lastError = "";
-      for (const body of candidates) {
-        try {
-          const res = await doFetch(
-            `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
-            { method: "PATCH", headers, body: JSON.stringify(body) },
-          );
-          if (res.ok) return { ok: true };
-          const text = await res.text().catch(() => "");
-          lastError = `HTTP ${res.status} ao ajustar o build automático (${text.slice(0, 200)})`;
-        } catch (e) {
-          lastError = (e as Error).message;
-        }
+      // Contrato atual da Vercel: deploymentPolicy controla quais origens podem
+      // iniciar deployments. Bloqueamos apenas pushes Git; deployments explícitos
+      // pela REST API continuam permitidos para atualizações autorizadas no MASTER.
+      const body = {
+        deploymentPolicy: {
+          deploymentSources: [
+            {
+              enabled,
+              environments: [
+                { type: "system", target: "production" },
+                { type: "system", target: "preview" },
+              ],
+              sources: ["git"],
+            },
+          ],
+        },
+      };
+      try {
+        const res = await doFetch(
+          `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
+          { method: "PATCH", headers, body: JSON.stringify(body) },
+        );
+        if (res.ok) return { ok: true };
+        const text = await res.text().catch(() => "");
+        return {
+          ok: false,
+          error: `HTTP ${res.status} ao ajustar o build automático (${text.slice(0, 200)})`,
+        };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
       }
-      return { ok: false, error: lastError || "Falha ao ajustar o build automático" };
     },
 
     async linkRepository(repo) {
@@ -1871,9 +1880,11 @@ export async function runAutomatedProvision(input: {
     checks.configuration = "ok";
 
     // Gravar variaveis NAO republica o app: sem um novo deployment o frontend
-    // continua rodando com o env antigo. O redeploy e disparado aqui — uma
-    // única vez por operação, garantido pelo checkpoint abaixo.
-    const redeployed = await deploy.redeploy();
+    // continua rodando com o env antigo. Aqui usamos build a partir do Git do
+    // repositório DA INSTALAÇÃO — assim funciona também quando o projeto Vercel
+    // ainda não tem NENHUM deployment (repositório publicado à mão, primeiro
+    // build). Sem repositório ligado, cai para rebuild do último snapshot.
+    const redeployed = await deploy.deployLatestCode();
     if (!redeployed.ok) {
       blocked.push(
         `Novo deployment nao disparado (as variaveis so valem apos republicar): ${
@@ -1881,6 +1892,7 @@ export async function runAutomatedProvision(input: {
         }`.trim(),
       );
     }
+
 
     // Estado do frontend so vira "ok" com resposta HTTP real da URL operacional.
     const probe = await probeOperationalUrl(url.origin, input.fetchImpl);
