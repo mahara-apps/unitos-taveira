@@ -62,9 +62,11 @@ WITH checks AS (
                     WHERE n.nspname = 'public' AND NOT tg.tgisinternal) >= 100 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 15, 'RLS habilitado em todas as tabelas de public',
-         (SELECT count(*)::text FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity),
+         coalesce((SELECT string_agg(tablename, ', ' ORDER BY tablename) FROM pg_tables
+                   WHERE schemaname = 'public' AND NOT rowsecurity), '0'),
          CASE WHEN (SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity) = 0
               THEN 'PASS' ELSE 'FAIL' END
+
   UNION ALL
   SELECT 16, 'trigger on_auth_user_created em auth.users',
          (SELECT count(*)::text FROM pg_trigger WHERE tgname = 'on_auth_user_created'),

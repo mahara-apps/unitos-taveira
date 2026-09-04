@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { applyStatementByStatement } from "@/lib/installation/automation.server";
+import {
+  applyStatementByStatement,
+  HELPER_TABLES,
+  hardenHelperTables,
+} from "@/lib/installation/automation.server";
 import {
   isDuplicateObjectError,
   prepareVerificationSql,
@@ -144,7 +148,7 @@ describe("summarizeVerificationRows", () => {
       { status: "FAIL", check_name: "cron: total de jobs", observed: "0" },
     ]);
     expect(s.ok).toBe(false);
-    expect(s.failedChecks).toEqual(["cron: total de jobs"]);
+    expect(s.failedChecks).toEqual(["cron: total de jobs (observado: 0)"]);
   });
 
   it("resultado sem linhas é inconclusivo, nunca PASS", () => {
@@ -255,5 +259,51 @@ describe("reexecução idempotente do baseline", () => {
     expect(result).toMatchObject({ ok: true, processed: 3, total: 3, complete: true });
     expect(batches.some((batch) => batch.includes("truncate table public._unitos_deferred_sql"))).toBe(true);
     expect(batches.some((batch) => batch.includes("DO $unitos_guard$"))).toBe(true);
+  });
+});
+
+describe("tabelas auxiliares da automação e RLS", () => {
+  it("cria a fila de statements adiados já com RLS e sem grants", async () => {
+    const batches: string[] = [];
+    await applyStatementByStatement(
+      {
+        query: async (batch) => {
+          batches.push(batch);
+          return { ok: true, rows: batch.includes(" as initialized") ? [{ initialized: true }] : [] };
+        },
+      },
+      "SELECT 1;",
+    );
+    const prep = batches.find((b) => b.includes("create table if not exists public._unitos_deferred_sql"));
+    expect(prep).toBeTruthy();
+    expect(prep).toContain("enable row level security");
+    expect(prep).toContain("revoke all on public._unitos_deferred_sql from anon, authenticated");
+  });
+
+  it("hardenHelperTables é idempotente e cobre as duas tabelas auxiliares", async () => {
+    const seen: string[] = [];
+    const management = {
+      query: async (sql: string) => {
+        seen.push(sql);
+        return { ok: true, rows: [] };
+      },
+    };
+    expect(await hardenHelperTables(management)).toEqual({ ok: true });
+    expect(await hardenHelperTables(management)).toEqual({ ok: true });
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe(seen[1]);
+    for (const table of HELPER_TABLES) expect(seen[0]).toContain(table);
+    expect(seen[0]).toContain("enable row level security");
+    expect(seen[0]).toContain("DROP TABLE IF EXISTS public._unitos_deferred_sql");
+  });
+
+  it("reprova a verificação 15 mostrando os nomes das tabelas sem RLS", () => {
+    const summary = summarizeVerificationRows([
+      { status: "FAIL", check_name: "RLS habilitado em todas as tabelas de public", observed: "_unitos_applied_deltas" },
+      { status: "PASS", check_name: "trigger on_auth_user_created em auth.users", observed: "1" },
+    ]);
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toContain("RLS habilitado em todas as tabelas de public");
+    expect(summary.reason).toContain("_unitos_applied_deltas");
   });
 });

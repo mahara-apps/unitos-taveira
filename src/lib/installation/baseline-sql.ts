@@ -133,7 +133,12 @@ export function summarizeVerificationRows(rows: readonly unknown[]): Verificatio
   }
   const failedChecks = parsed
     .filter((row) => String(row["status"] ?? "").trim().toUpperCase() === "FAIL")
-    .map((row) => String(row["check_name"] ?? "verificação sem nome"));
+    .map((row) => {
+      const name = String(row["check_name"] ?? row["check"] ?? "verificação sem nome");
+      const value = String(row["value"] ?? row["observed"] ?? "").trim();
+      return value ? `${name} (observado: ${value})` : name;
+    });
+
 
   return {
     total: parsed.length,

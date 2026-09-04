@@ -169,6 +169,55 @@ export async function probeOperationalUrl(
 /* ------------------------------------------------ Supabase Management API */
 
 /**
+ * Tabelas auxiliares da automação (`_unitos_*`) vivem em `public` mas NÃO fazem
+ * parte do produto: sem RLS elas reprovavam a verificação 15 do
+ * `verify-installation.sql` ("RLS habilitado em todas as tabelas de public").
+ * Sem policies e sem grants, ficam invisíveis pela Data API e acessíveis apenas
+ * pela Management API / service role.
+ */
+export const HELPER_TABLE_HARDENING_SQL = (table: string): string =>
+  [
+    `alter table ${table} enable row level security`,
+    `revoke all on ${table} from anon, authenticated`,
+  ].join(";\n");
+
+/** Nomes das tabelas auxiliares criadas pela automação no banco de destino. */
+export const HELPER_TABLES = [
+  "public._unitos_applied_deltas",
+  "public._unitos_deferred_sql",
+] as const;
+
+/**
+ * Auto-reparo idempotente antes da validação final: liga RLS e revoga grants em
+ * qualquer tabela auxiliar remanescente de execuções anteriores e descarta a
+ * fila de statements adiados quando ela já está vazia.
+ */
+export async function hardenHelperTables(management: {
+  query: (sql: string) => Promise<{ ok: boolean; rows: unknown[]; error?: string }>;
+}): Promise<{ ok: boolean; error?: string }> {
+  const sql = [
+    "DO $unitos_harden$",
+    "DECLARE t text; leftover int;",
+    "BEGIN",
+    `  FOREACH t IN ARRAY ARRAY[${HELPER_TABLES.map((n) => `'${n}'`).join(", ")}] LOOP`,
+    "    IF to_regclass(t) IS NOT NULL THEN",
+    "      EXECUTE format('alter table %s enable row level security', t);",
+    "      EXECUTE format('revoke all on %s from anon, authenticated', t);",
+    "    END IF;",
+    "  END LOOP;",
+    "  IF to_regclass('public._unitos_deferred_sql') IS NOT NULL THEN",
+    "    EXECUTE 'SELECT count(*) FROM public._unitos_deferred_sql WHERE stmt NOT LIKE ''-- __unitos%''' INTO leftover;",
+    "    IF leftover = 0 THEN DROP TABLE IF EXISTS public._unitos_deferred_sql; END IF;",
+    "  END IF;",
+    "END",
+    "$unitos_harden$;",
+  ].join("\n");
+  const res = await management.query(sql);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+
+/**
  * Reaplica um arquivo do baseline statement por statement, ignorando SOMENTE
  * erros de "objeto já existe". Qualquer outro erro aborta e é reportado.
  */
@@ -212,9 +261,11 @@ export async function applyStatementByStatement(
   const prep = await management.query(
     [
       "create table if not exists public._unitos_deferred_sql (id bigserial primary key, stmt text not null)",
+      HELPER_TABLE_HARDENING_SQL("public._unitos_deferred_sql"),
       `select exists(select 1 from public._unitos_deferred_sql where stmt = '${marker}') as initialized`,
     ].join(";\n"),
   );
+
   if (!prep.ok) return { ok: false, error: prep.error, processed };
 
   const prepRow = prep.rows.find((row): row is Record<string, unknown> => !!row && typeof row === "object");
@@ -2311,7 +2362,9 @@ export async function runAutomatedProvision(input: {
 
   /* 8. verificação final READ-ONLY */
   await mark("validation", "running");
+  await hardenHelperTables(management);
   const verify = await management.query(prepareVerificationSql(verifySql).sql);
+
   if (!verify.ok) {
     failures.push(`verify-installation: ${verify.error ?? "falha"}`);
     await mark("validation", "error", "verificação final falhou");
@@ -2452,7 +2505,9 @@ export async function runAutomatedValidate(input: {
 
   for (const id of stepIds) await report(client, operation, id, "running");
 
+  await hardenHelperTables(management);
   const verify = await management.query(prepareVerificationSql(verifySql).sql);
+
   if (!verify.ok) {
     return fail("BLOCKED", `verify-installation não pôde ser executado: ${verify.error ?? "falha"}`);
   }
@@ -2585,6 +2640,8 @@ export async function applyDatabaseDelta(input: {
   const ledger = await management.query(
     [
       "create table if not exists public._unitos_applied_deltas (label text primary key, applied_at timestamptz not null default now())",
+      HELPER_TABLE_HARDENING_SQL("public._unitos_applied_deltas"),
+
       `select exists(select 1 from public._unitos_applied_deltas where label = ${sqlLiteral(ledgerLabel)}) as applied`,
     ].join(";\n"),
   );
