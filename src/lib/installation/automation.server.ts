@@ -126,6 +126,18 @@ revoke all on function public.cron_secret() from anon;
 revoke all on function public.cron_secret() from authenticated;
 `;
 
+/**
+ * Mantém criação do helper e gravação na mesma chamada da Management API.
+ * Isso torna a retomada atômica: não há janela em que a API confirme a criação
+ * e uma chamada seguinte ainda resolva uma versão antiga do schema.
+ */
+function writeCronSecretToVaultSql(secret: string): string {
+  return `${CRON_SECRET_VAULT_HELPERS_SQL}
+
+select public.set_cron_secret(${sqlLiteral(secret)}::text);
+`;
+}
+
 
 
 /** Substitui as variáveis psql (`:'app_url'`) usadas pelos scripts. */
@@ -1817,9 +1829,14 @@ export async function runAutomatedProvision(input: {
   return null;
   };
 
+  /* 4. banco, storage e seeds — ANTES dos secrets: o segredo do cron é gravado
+   * por uma função criada pelo baseline (public.set_cron_secret). Com a ordem
+   * invertida o provisionamento falhava em banco novo e as variáveis do deploy
+   * nunca eram gravadas. */
+  const baselineEarly = await runBaselinePhase(null, null);
+  if (baselineEarly) return baselineEarly;
 
-
-  /* 4 + 5. secrets exclusivos, URL operacional e variáveis do deploy.
+  /* 5 + 6. secrets exclusivos, URL operacional e variáveis do deploy.
    * Fase atômica com checkpoint: uma retomada NÃO regera secrets nem
    * reconfigura/republica o deploy quando a fase já foi concluída. */
   const stage = await readStageProgress(client, operation);
@@ -1851,19 +1868,9 @@ export async function runAutomatedProvision(input: {
       return finish(null, null);
     }
     // O destino pode ter recebido o baseline sem os helpers do Vault (ou com
-    // versão antiga). Recria-os de forma idempotente antes de gravar o valor.
-    const vaultHelpers = await management.query(CRON_SECRET_VAULT_HELPERS_SQL);
-    if (!vaultHelpers.ok) {
-      failures.push(
-        `Helpers do Vault (set_cron_secret) não criados no destino: ${vaultHelpers.error ?? ""}`.trim(),
-      );
-      await mark("secrets", "error", "set_cron_secret indisponível no destino");
-      checks.secrets = "error";
-      return finish(null, null);
-    }
-    const vault = await management.query(
-      `select public.set_cron_secret(${sqlLiteral(secrets.CRON_SECRET)}::text);`,
-    );
+    // versão antiga). Criação e gravação acontecem atomicamente na mesma query,
+    // inclusive ao retomar uma operação iniciada por uma versão anterior.
+    const vault = await management.query(writeCronSecretToVaultSql(secrets.CRON_SECRET));
     if (!vault.ok) {
       failures.push(`CRON_SECRET não gravado no Vault do destino: ${vault.error ?? ""}`.trim());
       await mark("secrets", "error", "set_cron_secret falhou");
@@ -1995,9 +2002,9 @@ export async function runAutomatedProvision(input: {
     );
   }
 
-  /* 5. banco, storage e seeds — só agora, com código publicado e URL própria. */
-  const baselineEarly = await runBaselinePhase(url.origin, url.source);
-  if (baselineEarly) return baselineEarly;
+  // banco/storage/seeds já foram aplicados antes dos secrets (fase 4).
+
+
 
 
   /* 6. Brain stats */

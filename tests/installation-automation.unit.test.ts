@@ -359,6 +359,67 @@ describe("runAutomatedProvision", () => {
     expect(result.steps.every((s) => s.state === "done")).toBe(true);
   });
 
+  it("prepara o banco ANTES de gravar o segredo de cron e as variáveis do deploy", async () => {
+    const { api } = fakeClient();
+    const order: string[] = [];
+    const fetchImpl = vi.fn(async (url: string, init?: { body?: unknown }) => {
+      const gh = githubResponse(url);
+      if (gh) return gh;
+      if (url.includes("/api-keys")) {
+        return Response.json([
+          { name: "anon", api_key: "sb_publishable_x" },
+          { name: "service_role", api_key: "sb_secret_x" },
+        ]);
+      }
+      if (url.includes("/database/query")) {
+        const body = String((init?.body as string) ?? "");
+        if (body.includes("select public.set_cron_secret(")) {
+          order.push("cron_secret");
+          expect(body).toContain("create or replace function public.set_cron_secret(_value text)");
+          expect(body).toMatch(/select public\.set_cron_secret\('[^']+'::text\)/);
+        }
+        else if (body.includes("create table") || body.includes("CREATE TABLE")) {
+          if (!order.includes("baseline")) order.push("baseline");
+        }
+        return Response.json([{ schemas: 3, item: "ok" }]);
+      }
+      if (url.includes("api.vercel.com/v9/projects")) {
+        return Response.json({
+          name: "unitos-pitada",
+          targets: { production: { url: "unitos-pitada-abc.vercel.app" } },
+        });
+      }
+      if (url.includes("/env")) {
+        order.push("env");
+        return Response.json({ created: [] });
+      }
+      if (url.includes("api.vercel.com/v6/deployments")) {
+        return Response.json({ deployments: [{ uid: "dpl_1", name: "unitos-pitada" }] });
+      }
+      if (url.includes("api.vercel.com/v13/deployments")) return Response.json({ id: "dpl_2" });
+      return new Response("{}", { status: 200 });
+    });
+
+    const result = await runProvision({
+      client: api,
+      operation: OP,
+      installation: INSTALLATION,
+      env: {
+        UNITOS_SUPABASE_MANAGEMENT_TOKEN: "t",
+        UNITOS_VERCEL_TOKEN: "v",
+        UNITOS_GITHUB_TOKEN: "g",
+      },
+      fetchImpl: fetchImpl as never,
+    });
+
+    expect(result.result).toBe("PASS");
+    expect(order.indexOf("baseline")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("cron_secret")).toBeGreaterThan(order.indexOf("baseline"));
+    expect(order.indexOf("env")).toBeGreaterThan(order.indexOf("cron_secret"));
+  });
+
+
+
   it("avisa (sem quebrar) quando o redeploy não pode ser disparado", async () => {
     const { api } = fakeClient();
     const fetchImpl = vi.fn(async (url: string) => {

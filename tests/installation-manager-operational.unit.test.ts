@@ -16,16 +16,16 @@ import {
 } from "@/lib/installation/manager-contract";
 
 describe("etapas do provisionamento", () => {
-  it("declara as etapas operacionais na ordem do bootstrap: código antes do banco", () => {
+  it("declara as etapas na ordem do bootstrap: código e banco antes de secrets/variáveis", () => {
     expect(PROVISION_STEPS.map((s) => s.id)).toEqual([
       "supabase",
       "code",
       "deploy_link",
-      "secrets",
-      "deploy",
       "database",
       "storage",
       "seeds",
+      "secrets",
+      "deploy",
       "brain",
       "cron",
       "validation",
