@@ -201,6 +201,19 @@ export async function applyStatementByStatement(
   // poucas chamadas. Assim um objeto duplicado é ignorado isoladamente, mas
   // qualquer erro diferente continua abortando. Isso evita as ~1.800 chamadas
   // sequenciais que excediam a vida do Worker em retomadas parciais.
+  // Tabela de statements adiados: o dump emite objetos em ordem alfabética, e
+  // uma função/policy/view pode referenciar algo criado mais adiante
+  // (ex.: app_access_role -> is_super_admin). Em vez de depender de
+  // check_function_bodies (que não cobre views/policies), o statement que falha
+  // por objeto inexistente é guardado e reexecutado no final, em rodadas, até
+  // não haver mais progresso.
+  if (from === 0) {
+    const prep = await management.query(
+      "create table if not exists public._unitos_deferred_sql (id bigserial primary key, stmt text not null)",
+    );
+    if (!prep.ok) return { ok: false, error: prep.error, processed };
+  }
+
   for (let start = from; start < stopAt; start += batchSize) {
     if (await options?.isCancelled?.()) {
       return { ok: false, error: "Operação cancelada pelo Super Admin.", processed };
@@ -221,6 +234,9 @@ export async function applyStatementByStatement(
           "EXCEPTION",
           "  WHEN SQLSTATE '42710' OR SQLSTATE '42P07' OR SQLSTATE '42P06'",
           "    OR SQLSTATE '42701' OR SQLSTATE '42723' OR SQLSTATE '23505' THEN NULL;",
+          "  WHEN SQLSTATE '42883' OR SQLSTATE '42P01' OR SQLSTATE '42704'",
+          "    OR SQLSTATE '42703' OR SQLSTATE '42P17' THEN",
+          `    INSERT INTO public._unitos_deferred_sql (stmt) VALUES (${tag}${statement}${tag});`,
           "  WHEN SQLSTATE '42P16' THEN",
           "    IF SQLERRM ILIKE '%multiple primary key%' THEN",
           "      NULL;",
@@ -232,25 +248,60 @@ export async function applyStatementByStatement(
         ].join("\n");
       })
       .join("\n");
-    // O dump emite funções em ordem alfabética, então uma função SQL pode
-    // referenciar outra criada mais adiante (ex.: app_access_role ->
-    // is_super_admin). Postgres valida o corpo de funções LANGUAGE sql na
-    // criação e falharia com 42883. Desligar a validação de corpo por sessão
-    // torna a aplicação independente da ordem, sem alterar nenhuma DDL.
     const result = await management.query(`SET check_function_bodies = off;\n${guarded}`);
 
     if (!result.ok) return { ok: false, error: result.error, processed };
     processed += batch.length;
     await options?.onProgress?.(processed, statements.length);
   }
+
+  const complete = processed >= statements.length;
+  if (complete) {
+    // Rodadas de reexecução dos adiados: cada rodada resolve as dependências
+    // criadas na rodada anterior. Para quando não houver mais progresso.
+    const drain = await management.query(
+      [
+        "SET check_function_bodies = off;",
+        "DO $unitos_drain$",
+        "DECLARE r record; cur int; prev int := -1; pend text;",
+        "BEGIN",
+        "  LOOP",
+        "    SELECT count(*) INTO cur FROM public._unitos_deferred_sql;",
+        "    EXIT WHEN cur = 0 OR cur = prev;",
+        "    prev := cur;",
+        "    FOR r IN SELECT id, stmt FROM public._unitos_deferred_sql ORDER BY id LOOP",
+        "      BEGIN",
+        "        EXECUTE r.stmt;",
+        "        DELETE FROM public._unitos_deferred_sql WHERE id = r.id;",
+        "      EXCEPTION",
+        "        WHEN SQLSTATE '42710' OR SQLSTATE '42P07' OR SQLSTATE '42P06'",
+        "          OR SQLSTATE '42701' OR SQLSTATE '42723' OR SQLSTATE '23505' THEN",
+        "          DELETE FROM public._unitos_deferred_sql WHERE id = r.id;",
+        "        WHEN OTHERS THEN NULL;",
+        "      END;",
+        "    END LOOP;",
+        "  END LOOP;",
+        "  SELECT string_agg(left(stmt, 160), ' || ') INTO pend FROM public._unitos_deferred_sql;",
+        "  IF pend IS NOT NULL THEN",
+        "    RAISE EXCEPTION 'statements com dependência não resolvida: %', pend;",
+        "  END IF;",
+        "  DROP TABLE IF EXISTS public._unitos_deferred_sql;",
+        "END",
+        "$unitos_drain$;",
+      ].join("\n"),
+    );
+    if (!drain.ok) return { ok: false, error: drain.error, processed };
+  }
+
   return {
     ok: true,
     skipped: 0,
     processed,
     total: statements.length,
-    complete: processed >= statements.length,
+    complete,
   };
 }
+
 
 
 

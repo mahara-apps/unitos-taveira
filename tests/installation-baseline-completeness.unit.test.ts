@@ -142,13 +142,17 @@ describe("reexecução idempotente do baseline", () => {
     const result = await applyStatementByStatement(
       {
         query: async (batch) => {
+          if (!batch.includes("DO $unitos_guard$")) {
+            // chamadas auxiliares: preparação da tabela de adiados e drenagem final
+            return { ok: true, rows: [] };
+          }
           calls += 1;
-          expect(batch).toContain("DO $unitos_guard$");
           expect(batch).toContain("WHEN SQLSTATE '42710'");
           expect(batch).toContain("WHEN SQLSTATE '42P16'");
           expect(batch).toContain("multiple primary key");
           return { ok: true, rows: [] };
         },
+
       },
       sql,
       { onProgress: (processed) => void progress.push(processed), maxStatements: 256 },
