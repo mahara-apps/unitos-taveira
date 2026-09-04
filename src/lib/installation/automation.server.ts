@@ -78,6 +78,56 @@ function sqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/**
+ * Helpers do Vault usados pelos jobs de cron. Aplicado de forma idempotente no
+ * destino antes de gravar o CRON_SECRET, porque instalações cujo baseline foi
+ * aplicado parcialmente (ou repositório adotado manualmente) podem não ter
+ * `public.set_cron_secret`, o que causava `42883: function does not exist`.
+ */
+const CRON_SECRET_VAULT_HELPERS_SQL = `
+create extension if not exists supabase_vault with schema vault;
+
+create or replace function public.set_cron_secret(_value text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare v_id uuid;
+begin
+  if _value is null or length(_value) < 16 then
+    raise exception 'cron secret inválido';
+  end if;
+  select id into v_id from vault.secrets where name = 'cron_secret';
+  if v_id is null then
+    perform vault.create_secret(_value, 'cron_secret', 'Segredo compartilhado dos endpoints /api/public de cron');
+  else
+    perform vault.update_secret(v_id, _value, 'cron_secret', 'Segredo compartilhado dos endpoints /api/public de cron');
+  end if;
+end;
+$fn$;
+
+revoke all on function public.set_cron_secret(text) from public;
+revoke all on function public.set_cron_secret(text) from anon;
+revoke all on function public.set_cron_secret(text) from authenticated;
+grant execute on function public.set_cron_secret(text) to service_role;
+
+create or replace function public.cron_secret()
+returns text
+language sql
+security definer
+set search_path = public
+as $fn$
+  select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret' limit 1;
+$fn$;
+
+revoke all on function public.cron_secret() from public;
+revoke all on function public.cron_secret() from anon;
+revoke all on function public.cron_secret() from authenticated;
+`;
+
+
+
 /** Substitui as variáveis psql (`:'app_url'`) usadas pelos scripts. */
 function bindAppUrl(sql: string, appUrl: string): string {
   const pure = stripPsqlMetaCommands(sql).sql;
@@ -1800,8 +1850,19 @@ export async function runAutomatedProvision(input: {
       checks.secrets = "error";
       return finish(null, null);
     }
+    // O destino pode ter recebido o baseline sem os helpers do Vault (ou com
+    // versão antiga). Recria-os de forma idempotente antes de gravar o valor.
+    const vaultHelpers = await management.query(CRON_SECRET_VAULT_HELPERS_SQL);
+    if (!vaultHelpers.ok) {
+      failures.push(
+        `Helpers do Vault (set_cron_secret) não criados no destino: ${vaultHelpers.error ?? ""}`.trim(),
+      );
+      await mark("secrets", "error", "set_cron_secret indisponível no destino");
+      checks.secrets = "error";
+      return finish(null, null);
+    }
     const vault = await management.query(
-      `select public.set_cron_secret(${sqlLiteral(secrets.CRON_SECRET)});`,
+      `select public.set_cron_secret(${sqlLiteral(secrets.CRON_SECRET)}::text);`,
     );
     if (!vault.ok) {
       failures.push(`CRON_SECRET não gravado no Vault do destino: ${vault.error ?? ""}`.trim());
