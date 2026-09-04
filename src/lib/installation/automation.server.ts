@@ -232,7 +232,13 @@ export async function applyStatementByStatement(
         ].join("\n");
       })
       .join("\n");
-    const result = await management.query(guarded);
+    // O dump emite funções em ordem alfabética, então uma função SQL pode
+    // referenciar outra criada mais adiante (ex.: app_access_role ->
+    // is_super_admin). Postgres valida o corpo de funções LANGUAGE sql na
+    // criação e falharia com 42883. Desligar a validação de corpo por sessão
+    // torna a aplicação independente da ordem, sem alterar nenhuma DDL.
+    const result = await management.query(`SET check_function_bodies = off;\n${guarded}`);
+
     if (!result.ok) return { ok: false, error: result.error, processed };
     processed += batch.length;
     await options?.onProgress?.(processed, statements.length);
