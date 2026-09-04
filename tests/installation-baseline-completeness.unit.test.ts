@@ -177,4 +177,25 @@ describe("reexecução idempotente do baseline", () => {
     );
     expect(result).toMatchObject({ ok: false, error: "Operação cancelada pelo Super Admin." });
   });
+
+  it("reinicia com segurança quando o checkpoint antigo não tem a fila de dependências", async () => {
+    const batches: string[] = [];
+    const result = await applyStatementByStatement(
+      {
+        query: async (batch) => {
+          batches.push(batch);
+          return {
+            ok: true,
+            rows: batch.includes(" as initialized") ? [{ initialized: false }] : [],
+          };
+        },
+      },
+      "SELECT 1; SELECT 2; SELECT 3;",
+      { startIndex: 3 },
+    );
+
+    expect(result).toMatchObject({ ok: true, processed: 3, total: 3, complete: true });
+    expect(batches.some((batch) => batch.includes("truncate table public._unitos_deferred_sql"))).toBe(true);
+    expect(batches.some((batch) => batch.includes("DO $unitos_guard$"))).toBe(true);
+  });
 });

@@ -192,9 +192,9 @@ export async function applyStatementByStatement(
   // o checkpoint ficava parado exatamente no limite do lote (ex.: 150/264 =
   // 57% no delta). 25 mantém cada chamada curta e deixa um checkpoint fino.
   const batchSize = 25;
-  const from = Math.min(Math.max(options?.startIndex ?? 0, 0), statements.length);
+  let from = Math.min(Math.max(options?.startIndex ?? 0, 0), statements.length);
   const maxStatements = Math.max(options?.maxStatements ?? batchSize, 1);
-  const stopAt = Math.min(statements.length, from + maxStatements);
+  let stopAt = Math.min(statements.length, from + maxStatements);
   let processed = from;
 
   // Cada statement é protegido no próprio Postgres e os lotes são enviados em
@@ -207,11 +207,30 @@ export async function applyStatementByStatement(
   // check_function_bodies (que não cobre views/policies), o statement que falha
   // por objeto inexistente é guardado e reexecutado no final, em rodadas, até
   // não haver mais progresso.
-  if (from === 0) {
-    const prep = await management.query(
+  const marker = "-- __unitos_deferred_sql_initialized__";
+  const prep = await management.query(
+    [
       "create table if not exists public._unitos_deferred_sql (id bigserial primary key, stmt text not null)",
+      `select exists(select 1 from public._unitos_deferred_sql where stmt = '${marker}') as initialized`,
+    ].join(";\n"),
+  );
+  if (!prep.ok) return { ok: false, error: prep.error, processed };
+
+  const prepRow = prep.rows.find((row): row is Record<string, unknown> => !!row && typeof row === "object");
+  const initialized = prepRow?.["initialized"] === true || prepRow?.["initialized"] === "true";
+  if (from === 0 || !initialized) {
+    const reset = await management.query(
+      `truncate table public._unitos_deferred_sql; insert into public._unitos_deferred_sql (stmt) values ('${marker}')`,
     );
-    if (!prep.ok) return { ok: false, error: prep.error, processed };
+    if (!reset.ok) return { ok: false, error: reset.error, processed: 0 };
+    // Checkpoints gravados por versões anteriores podem apontar para o final do
+    // arquivo sem que a fila de dependências exista. Recomeçar é seguro porque
+    // cada statement já trata objetos duplicados isoladamente.
+    if (!initialized) {
+      from = 0;
+      processed = 0;
+      stopAt = Math.min(statements.length, maxStatements);
+    }
   }
 
   for (let start = from; start < stopAt; start += batchSize) {
@@ -266,10 +285,10 @@ export async function applyStatementByStatement(
         "DECLARE r record; cur int; prev int := -1; pend text;",
         "BEGIN",
         "  LOOP",
-        "    SELECT count(*) INTO cur FROM public._unitos_deferred_sql;",
+        `    SELECT count(*) INTO cur FROM public._unitos_deferred_sql WHERE stmt <> '${marker}';`,
         "    EXIT WHEN cur = 0 OR cur = prev;",
         "    prev := cur;",
-        "    FOR r IN SELECT id, stmt FROM public._unitos_deferred_sql ORDER BY id LOOP",
+        `    FOR r IN SELECT id, stmt FROM public._unitos_deferred_sql WHERE stmt <> '${marker}' ORDER BY id LOOP`,
         "      BEGIN",
         "        EXECUTE r.stmt;",
         "        DELETE FROM public._unitos_deferred_sql WHERE id = r.id;",
@@ -281,7 +300,7 @@ export async function applyStatementByStatement(
         "      END;",
         "    END LOOP;",
         "  END LOOP;",
-        "  SELECT string_agg(left(stmt, 160), ' || ') INTO pend FROM public._unitos_deferred_sql;",
+        `  SELECT string_agg(left(stmt, 160), ' || ') INTO pend FROM public._unitos_deferred_sql WHERE stmt <> '${marker}';`,
         "  IF pend IS NOT NULL THEN",
         "    RAISE EXCEPTION 'statements com dependência não resolvida: %', pend;",
         "  END IF;",

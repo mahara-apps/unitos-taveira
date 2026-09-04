@@ -544,7 +544,13 @@ describe("runAutomatedProvision", () => {
     const sizes: number[] = [];
     const sql = Array.from({ length: 57 }, (_, index) => `SELECT ${index};`).join("\n");
     const result = await applyStatementByStatement(
-      { query: async (batch) => { { const n = (batch.match(/DO \$unitos_guard\$/g) ?? []).length; if (n > 0) sizes.push(n); } return { ok: true, rows: [] }; } },
+      {
+        query: async (batch) => {
+          const n = (batch.match(/DO \$unitos_guard\$/g) ?? []).length;
+          if (n > 0) sizes.push(n);
+          return { ok: true, rows: [] };
+        },
+      },
       sql,
     );
     expect(result).toEqual({
@@ -563,8 +569,12 @@ describe("runAutomatedProvision", () => {
     const sql = Array.from({ length: 57 }, (_, index) => `SELECT ${index};`).join("\n");
     const management = {
       query: async (batch: string) => {
-        { const n = (batch.match(/DO \$unitos_guard\$/g) ?? []).length; if (n > 0) sizes.push(n); }
-        return { ok: true, rows: [] };
+        const n = (batch.match(/DO \$unitos_guard\$/g) ?? []).length;
+        if (n > 0) sizes.push(n);
+        return {
+          ok: true,
+          rows: batch.includes(" as initialized") ? [{ initialized: true }] : [],
+        };
       },
     };
     const second = await applyStatementByStatement(management, sql, { startIndex: 25 });
