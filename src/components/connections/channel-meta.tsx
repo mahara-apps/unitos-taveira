@@ -36,6 +36,10 @@ export type ChannelDef = {
   /** true = OAuth implementado (Meta). false = "Em breve". */
   available: boolean;
   provider?: "meta";
+  /** Caminho recomendado de conexão (aparece primeiro e com selo). */
+  recommended?: boolean;
+  /** Explicação curta exibida no cartão de conexão. */
+  hint?: string;
 };
 
 export const CHANNEL_DEFS: ChannelDef[] = [
@@ -54,6 +58,8 @@ export const CHANNEL_DEFS: ChannelDef[] = [
     tone: "text-sky-600",
     available: true,
     provider: "meta",
+    recommended: true,
+    hint: "Traz as Páginas e as contas de Instagram vinculadas — atribuição correta dos ativos",
   },
   { key: "tiktok", label: "TikTok", icon: Music2, tone: "text-muted-foreground", available: false },
   {
@@ -93,7 +99,10 @@ export const CHANNEL_DEFS: ChannelDef[] = [
 export const CHANNEL_ICON_SIZE = "h-4 w-4";
 
 export const CHANNEL_BY_KEY = new Map(CHANNEL_DEFS.map((c) => [c.key, c]));
-export const CONNECTABLE_CHANNELS = CHANNEL_DEFS.filter((c) => c.available);
+/** Canais conectáveis — recomendado primeiro (Facebook), demais na ordem do catálogo. */
+export const CONNECTABLE_CHANNELS = CHANNEL_DEFS.filter((c) => c.available).sort(
+  (a, b) => Number(!!b.recommended) - Number(!!a.recommended),
+);
 export const UPCOMING_CHANNELS = CHANNEL_DEFS.filter((c) => !c.available);
 
 export function channelDef(channel: string): ChannelDef {

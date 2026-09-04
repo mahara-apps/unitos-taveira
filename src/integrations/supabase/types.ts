@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_profiles: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          is_system: boolean
+          key: string
+          name: string
+          permissions: Json
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          key: string
+          name: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          key?: string
+          name?: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "access_profiles_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activity_events: {
         Row: {
           actor_id: string | null
@@ -2086,12 +2134,14 @@ export type Database = {
         Row: {
           accepted_at: string | null
           accepted_by: string | null
+          access_profile_key: string | null
           brand_id: string
           created_at: string
           email: string
           expires_at: string
           id: string
           invited_by: string
+          module_permissions: Json | null
           permissions: Json
           revoked_at: string | null
           revoked_by: string | null
@@ -2103,12 +2153,14 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           accepted_by?: string | null
+          access_profile_key?: string | null
           brand_id: string
           created_at?: string
           email: string
           expires_at?: string
           id?: string
           invited_by: string
+          module_permissions?: Json | null
           permissions?: Json
           revoked_at?: string | null
           revoked_by?: string | null
@@ -2120,12 +2172,14 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           accepted_by?: string | null
+          access_profile_key?: string | null
           brand_id?: string
           created_at?: string
           email?: string
           expires_at?: string
           id?: string
           invited_by?: string
+          module_permissions?: Json | null
           permissions?: Json
           revoked_at?: string | null
           revoked_by?: string | null
@@ -2278,39 +2332,52 @@ export type Database = {
       }
       brand_members: {
         Row: {
+          access_profile_id: string | null
           brand_id: string
           created_at: string
           deactivated_at: string | null
           deactivated_by: string | null
           id: string
           is_active: boolean
+          module_permissions: Json | null
           permissions: Json
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
+          access_profile_id?: string | null
           brand_id: string
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
           id?: string
           is_active?: boolean
+          module_permissions?: Json | null
           permissions?: Json
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
+          access_profile_id?: string | null
           brand_id?: string
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
           id?: string
           is_active?: boolean
+          module_permissions?: Json | null
           permissions?: Json
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "brand_members_access_profile_id_fkey"
+            columns: ["access_profile_id"]
+            isOneToOne: false
+            referencedRelation: "access_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "brand_members_brand_id_fkey"
             columns: ["brand_id"]
@@ -6965,6 +7032,7 @@ export type Database = {
         }[]
       }
       accept_brand_invite: { Args: { _token: string }; Returns: string }
+      access_profiles_system_defaults: { Args: never; Returns: Json }
       ai_job_claim_lease: {
         Args: { _job_id: string; _lease_seconds?: number; _owner: string }
         Returns: boolean
@@ -7146,6 +7214,10 @@ export type Database = {
         Args: { _event_id: string }
         Returns: number
       }
+      effective_module_permissions: {
+        Args: { _brand_id: string; _user_id: string }
+        Returns: Json
+      }
       emit_brain_event: {
         Args: {
           p_action?: string
@@ -7182,6 +7254,15 @@ export type Database = {
         Args: {
           _brand_id: string
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_module_access: {
+        Args: {
+          _brand_id: string
+          _min_level?: string
+          _module: string
           _user_id: string
         }
         Returns: boolean
@@ -7286,6 +7367,7 @@ export type Database = {
       }
       media_plan_public_items: { Args: { _token: string }; Returns: Json }
       media_plan_public_resolve: { Args: { _token: string }; Returns: Json }
+      module_level_rank: { Args: { _level: string }; Returns: number }
       my_access: { Args: { _brand_id?: string }; Returns: Json }
       notification_pref_for_kind: { Args: { _kind: string }; Returns: string }
       notification_prefs_allows: {
@@ -7372,6 +7454,7 @@ export type Database = {
         Returns: number
       }
       safe_uuid: { Args: { _txt: string }; Returns: string }
+      seed_access_profiles: { Args: { _brand_id: string }; Returns: number }
       set_cron_secret: { Args: { _value: string }; Returns: undefined }
       start_timer: {
         Args: { _brand_id: string; _task_id: string }

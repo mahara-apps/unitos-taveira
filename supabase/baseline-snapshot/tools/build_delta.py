@@ -39,11 +39,30 @@ HEAD = """-- ===================================================================
 
 """
 
+# Migrations exclusivas do MASTER: agendam cron apontando para a URL do projeto
+# MASTER. Uma instalacao nova recebe suas proprias rotinas por
+# supabase/install/020_cron.sql, com a URL e o CRON_SECRET dela.
+MASTER_ONLY_MARKERS = (
+    "project--3f33732a-cb8b-43ae-84fb-01d9e367fb0c",
+)
+
+
+def _is_master_only(path: str) -> bool:
+    with open(path, encoding="utf-8") as fh:
+        sql = fh.read()
+    return any(marker in sql for marker in MASTER_ONLY_MARKERS)
+
+
+
+
 
 def main() -> None:
     files = sorted(glob.glob(os.path.join(MIGRATIONS, "*.sql")))
     start = os.path.join(MIGRATIONS, START_MIGRATION)
-    selected = files[files.index(start):]
+    selected = [
+        p for p in files[files.index(start):] if not _is_master_only(p)
+    ]
+
 
     parts = [HEAD]
     for path in selected:

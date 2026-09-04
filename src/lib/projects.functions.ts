@@ -30,6 +30,27 @@ type ProjectListRow = {
   monthly_plans: ProjectPlanRef | null;
 };
 
+/**
+ * Busca as pautas vinculadas em consulta própria (sem embed por nome de FK).
+ * Falha aqui é tolerada: o projeto continua listado, apenas sem o selo da pauta.
+ */
+async function fetchPlanRefs(
+  sb: { from: (t: string) => any },
+  rows: Array<{ monthly_plan_id: string | null }>,
+): Promise<{ map: Map<string, ProjectPlanRef>; error: string | null }> {
+  const ids = [...new Set(rows.map((r) => r.monthly_plan_id).filter(Boolean))] as string[];
+  const map = new Map<string, ProjectPlanRef>();
+  if (ids.length === 0) return { map, error: null };
+  try {
+    const { data, error } = await sb.from("monthly_plans").select("id, title, status").in("id", ids);
+    if (error) throw error;
+    for (const p of (data ?? []) as ProjectPlanRef[]) map.set(p.id, p);
+    return { map, error: null };
+  } catch (e) {
+    return { map, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export const listProjects = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -44,10 +65,13 @@ export const listProjects = createServerFn({ method: "GET" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    // A leitura dos projetos NÃO depende de embed por nome de FK nem das
+    // estatísticas: em instalações onde a FK/os grants de `monthly_plans` ou
+    // `posts` estejam ausentes, a lista continua aparecendo (só perde extras).
     let query = context.supabase
       .from("projects")
       .select(
-        "id, brand_id, client_id, name, description, status, status_id, color, progress, start_date, due_at, goals, owner_id, done_at, archived_at, created_at, updated_at, monthly_plan_id, monthly_plans!projects_monthly_plan_id_fkey(id, title, status)",
+        "id, brand_id, client_id, name, description, status, status_id, color, progress, start_date, due_at, goals, owner_id, done_at, archived_at, created_at, updated_at, monthly_plan_id",
       )
       .eq("brand_id", data.brandId)
       .order("created_at", { ascending: false });
@@ -59,44 +83,65 @@ export const listProjects = createServerFn({ method: "GET" })
 
     const { data: rawRows, error } = await query;
     if (error) throw error;
-    const projects = ((rawRows ?? []) as unknown as ProjectListRow[]).map((p) => ({
-      ...p,
-      plan: p.monthly_plans
-        ? { id: p.monthly_plans.id, title: p.monthly_plans.title, status: p.monthly_plans.status }
-        : null,
-    }));
-    if (projects.length === 0) return { projects: [], stats: {} as Record<string, ProjectStats> };
-
-    const ids = projects.map((p) => p.id);
-
-    const { data: postRows, error: postErr } = await context.supabase
-      .from("posts")
-      .select("id, project_id, stage, stage_id, published_at, review_status")
-      .eq("brand_id", data.brandId)
-      .in("project_id", ids);
-    if (postErr) throw postErr;
-
-    // `stage_id` é a fonte operacional; o enum legado é só fallback.
-    const stageMap = await loadStageMap(
-      context.supabase,
-      (postRows ?? []).map((p) => p.stage_id as string | null),
-    );
-
-    const stats: Record<string, ProjectStats> = {};
-    for (const id of ids) stats[id] = { total: 0, approved: 0, published: 0, pending: 0 };
-    for (const p of postRows ?? []) {
-      const s = stats[p.project_id as string];
-      if (!s) continue;
-      s.total += 1;
-      const stage = effectiveStage(p.stage_id as string | null, p.stage as string | null, stageMap);
-      const review = String(p.review_status ?? "").toLowerCase();
-      const published = !!p.published_at || stage === "published";
-      if (published) s.published += 1;
-      if (review === "approved" || stage === "approved") s.approved += 1;
-      if (!published && review !== "approved" && stage !== "approved") s.pending += 1;
+    const baseRows = (rawRows ?? []) as unknown as ProjectListRow[];
+    if (baseRows.length === 0) {
+      return { projects: [], stats: {} as Record<string, ProjectStats>, degraded: null };
     }
 
-    return { projects, stats };
+    const planRefs = await fetchPlanRefs(context.supabase, baseRows);
+    const projects = baseRows.map((p) => ({
+      ...p,
+      plan: p.monthly_plan_id ? (planRefs.map.get(p.monthly_plan_id) ?? null) : null,
+    }));
+
+    const ids = projects.map((p) => p.id);
+    const stats: Record<string, ProjectStats> = {};
+    for (const id of ids) stats[id] = { total: 0, approved: 0, published: 0, pending: 0 };
+
+    let statsError: string | null = null;
+    try {
+      const { data: postRows, error: postErr } = await context.supabase
+        .from("posts")
+        .select("id, project_id, stage, stage_id, published_at, review_status")
+        .eq("brand_id", data.brandId)
+        .in("project_id", ids);
+      if (postErr) throw postErr;
+
+      // `stage_id` é a fonte operacional; o enum legado é só fallback.
+      const stageMap = await loadStageMap(
+        context.supabase,
+        (postRows ?? []).map((p) => p.stage_id as string | null),
+      );
+
+      for (const p of postRows ?? []) {
+        const s = stats[p.project_id as string];
+        if (!s) continue;
+        s.total += 1;
+        const stage = effectiveStage(
+          p.stage_id as string | null,
+          p.stage as string | null,
+          stageMap,
+        );
+        const review = String(p.review_status ?? "").toLowerCase();
+        const published = !!p.published_at || stage === "published";
+        if (published) s.published += 1;
+        if (review === "approved" || stage === "approved") s.approved += 1;
+        if (!published && review !== "approved" && stage !== "approved") s.pending += 1;
+      }
+    } catch (e) {
+      statsError = e instanceof Error ? e.message : String(e);
+    }
+
+    const degradedParts = [
+      planRefs.error ? `pautas vinculadas: ${planRefs.error}` : null,
+      statsError ? `progresso das publicações: ${statsError}` : null,
+    ].filter(Boolean) as string[];
+
+    return {
+      projects,
+      stats,
+      degraded: degradedParts.length > 0 ? degradedParts.join(" · ") : null,
+    };
   });
 
 export type ProjectStats = { total: number; approved: number; published: number; pending: number };
@@ -135,7 +180,7 @@ export const getProject = createServerFn({ method: "GET" })
     const { data: projectRaw, error } = await context.supabase
       .from("projects")
       .select(
-        "id, brand_id, client_id, name, description, status, status_id, color, progress, start_date, due_at, goals, owner_id, done_at, archived_at, created_at, updated_at, monthly_plan_id, monthly_plans!projects_monthly_plan_id_fkey(id, title, status)",
+        "id, brand_id, client_id, name, description, status, status_id, color, progress, start_date, due_at, goals, owner_id, done_at, archived_at, created_at, updated_at, monthly_plan_id",
       )
       .eq("brand_id", data.brandId)
       .eq("id", data.projectId)
@@ -143,14 +188,11 @@ export const getProject = createServerFn({ method: "GET" })
     if (error) throw error;
     if (!projectRaw) throw new Error("Projeto não encontrado");
     const projectRow = projectRaw as unknown as ProjectListRow;
+    const planRefs = await fetchPlanRefs(context.supabase, [projectRow]);
     const project = {
       ...projectRow,
-      plan: projectRow.monthly_plans
-        ? {
-            id: projectRow.monthly_plans.id,
-            title: projectRow.monthly_plans.title,
-            status: projectRow.monthly_plans.status,
-          }
+      plan: projectRow.monthly_plan_id
+        ? (planRefs.map.get(projectRow.monthly_plan_id) ?? null)
         : null,
     };
 

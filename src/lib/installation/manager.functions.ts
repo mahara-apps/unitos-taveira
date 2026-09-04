@@ -1510,3 +1510,162 @@ async function findRunningProvision(
   return row ? (row as never) : null;
 }
 
+
+/* ---------------------------------------------- integrações (somente leitura) */
+
+export type IntegrationInspection = {
+  id: "custom_domain" | "meta" | "resend" | "evolution" | "ai" | "branding";
+  state: "configured" | "pending" | "not_configured";
+  detail: string;
+};
+
+export type IntegrationsInspection = {
+  ok: boolean;
+  /** Motivo em pt-BR quando a leitura não foi possível (sem credenciais etc.). */
+  reason: string | null;
+  appUrl: string | null;
+  domainAssigned: boolean;
+  domainVerified: boolean;
+  metaRedirectUri: string | null;
+  expectedMetaRedirectUri: string | null;
+  superAdminSetupUrl: string | null;
+  items: IntegrationInspection[];
+  checkedAt: string;
+};
+
+/**
+ * Conferência READ-ONLY das integrações de uma instalação: quais variáveis
+ * existem no projeto de deploy (só os NOMES), se o domínio definitivo está
+ * atribuído/verificado e se o endereço de retorno do Meta bate com o domínio.
+ * Nenhum segredo é lido nem devolvido; nada é gravado no destino.
+ */
+export const inspectInstallationIntegrationsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }): Promise<IntegrationsInspection> => {
+    await guard(context);
+
+    const {
+      customDomainState,
+      classifyOperationalUrl,
+      metaIntegrationState,
+      envIntegrationState,
+      metaRedirectUriFor,
+    } = await import("./readiness-contract");
+
+    const { data: row, error } = await context.supabase
+      .from("installations")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Instalação não encontrada.");
+    const record = mapInstallation(row);
+
+    const url = classifyOperationalUrl(record.domain);
+    const appUrl = url.ok ? url.origin : null;
+    const checkedAt = new Date().toISOString();
+    const domainItem: IntegrationInspection = {
+      id: "custom_domain",
+      state: customDomainState(record.domain),
+      detail: appUrl
+        ? `URL operacional ${appUrl}.`
+        : "Domínio definitivo ainda não cadastrado nesta instalação.",
+    };
+
+    const blockedResult = (reason: string): IntegrationsInspection => ({
+      ok: false,
+      reason,
+      appUrl,
+      domainAssigned: false,
+      domainVerified: false,
+      metaRedirectUri: null,
+      expectedMetaRedirectUri: metaRedirectUriFor(record.domain),
+      superAdminSetupUrl: appUrl ? `${appUrl}/setup` : null,
+      items: [domainItem],
+      checkedAt,
+    });
+
+    const { resolveInstallationEnv } = await import("./credentials.server");
+    const env = await resolveInstallationEnv(context.supabase as never, data.id);
+    const token = (env["UNITOS_VERCEL_TOKEN"] ?? "").trim();
+    if (!token || !record.deployProject) {
+      return blockedResult(
+        !token
+          ? "Sem o token do deploy desta instalação não é possível conferir as variáveis."
+          : "Instalação sem projeto de deploy cadastrado.",
+      );
+    }
+
+    const { createDeployClient } = await import("./automation.server");
+    const deploy = createDeployClient({
+      token,
+      project: record.deployProject,
+      teamId: (env["UNITOS_VERCEL_TEAM_ID"] ?? "").trim() || null,
+    });
+
+    const listed = await deploy.listEnv(["META_REDIRECT_URI"]);
+    if (!listed.ok) {
+      return blockedResult(listed.error ?? "Falha ao consultar as variáveis do deploy.");
+    }
+    const keys = listed.keys ?? [];
+    const metaRedirectUri = listed.plain?.["META_REDIRECT_URI"] ?? null;
+
+    let domainAssigned = false;
+    let domainVerified = false;
+    if (url.ok && url.kind === "custom") {
+      const domain = await deploy.ensureDomain(url.origin);
+      domainAssigned = domain.ok;
+      domainVerified = domain.ok && domain.verified === true;
+      domainItem.detail = domain.ok
+        ? `URL operacional ${url.origin} — domínio ${domainVerified ? "verificado" : "atribuído, aguardando verificação de DNS"}.`
+        : `Domínio ${url.origin} não pôde ser confirmado no deploy: ${domain.error ?? "erro desconhecido"}.`;
+      if (!domain.ok) domainItem.state = "pending";
+      else if (!domainVerified) domainItem.state = "pending";
+    }
+
+    const meta = metaIntegrationState({
+      envKeys: keys,
+      redirectUri: metaRedirectUri,
+      appUrl: record.domain,
+      appType: "unitos",
+    });
+
+    const items: IntegrationInspection[] = [
+      domainItem,
+      { id: "meta", state: meta.state, detail: meta.detail },
+      {
+        id: "resend",
+        ...envIntegrationState({ envKeys: keys, required: ["RESEND_API_KEY"], label: "E-mail (Resend)" }),
+      },
+      {
+        id: "evolution",
+        ...envIntegrationState({
+          envKeys: keys,
+          required: ["EVOLUTION_API_URL", "EVOLUTION_API_KEY"],
+          label: "WhatsApp (Evolution)",
+        }),
+      },
+      {
+        id: "ai",
+        // IA é BYOK por workspace (credenciais no banco da instalação), não por
+        // variável de ambiente: aqui só informamos onde ela é configurada.
+        state: "not_configured" as const,
+        detail:
+          "IA é configurada dentro da instalação, em Administração → IA, com as chaves da própria agência.",
+      },
+    ].map((i) => ({ id: i.id, state: i.state, detail: i.detail }) as IntegrationInspection);
+
+    return {
+      ok: true,
+      reason: null,
+      appUrl,
+      domainAssigned,
+      domainVerified,
+      metaRedirectUri,
+      expectedMetaRedirectUri: meta.expectedRedirectUri ?? null,
+      superAdminSetupUrl: appUrl ? `${appUrl}/setup` : null,
+      items,
+      checkedAt,
+    };
+  });

@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getMyProfile } from "@/lib/profile.functions";
 import { countMyPendingTasksFn } from "@/lib/tasks.functions";
 import { useActiveContextOptional } from "@/hooks/use-active-context";
+import { useSessionUser } from "@/hooks/use-session-user";
 import { UnitosLogo } from "@/components/brand/unitos-logo";
 import {
   LayoutDashboard,
@@ -55,6 +56,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAccessRole } from "@/hooks/use-access-role";
+import { useModulePermissions } from "@/hooks/use-module-permissions";
+import { allowedSidebarUrls } from "@/lib/module-permissions";
 import { canAccessSidebarUrl } from "@/lib/permissions";
 import { useBrandFeatures } from "@/hooks/use-feature-access";
 import { useIsSuperAdmin } from "@/hooks/use-feature-access";
@@ -122,7 +125,8 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (u: string) => pathname === u || pathname.startsWith(u + "/");
-  const { role } = useAccessRole();
+  const { role, authorityRole } = useAccessRole();
+  const { permissions: modulePerms, isReady: permsReady } = useModulePermissions();
   const featuresQ = useBrandFeatures();
   const superQ = useIsSuperAdmin();
   const isSuper = !!superQ.data?.isSuperAdmin;
@@ -164,11 +168,21 @@ export function AppSidebar() {
     const f = featuresQ.data.find((r) => r.key === key);
     return !!f?.enabled;
   };
+  // Usuários operacionais também passam pelo filtro de módulos do perfil de
+  // acesso. Papéis administrativos mantêm o menu completo.
+  const moduleAllowsUrl = (url: string) => {
+    if (authorityRole !== "user") return true;
+    if (!permsReady) return true;
+    const allowed = allowedSidebarUrls(modulePerms);
+    return [...allowed].some((u) => url === u || url.startsWith(u + "/"));
+  };
   const visibleGroups = groups
     .map((g) => ({
       ...g,
       items: g.items.filter(
-        (i) => (isSuper || canAccessSidebarUrl(role, i.url)) && featureEnabled(i.featureKey),
+        (i) =>
+          (isSuper || (canAccessSidebarUrl(role, i.url) && moduleAllowsUrl(i.url))) &&
+          featureEnabled(i.featureKey),
       ),
     }))
     .filter((g) => g.items.length > 0);
@@ -313,9 +327,12 @@ function UserProfileMenu() {
   useSidebar();
   const queryClient = useQueryClient();
   const fetchProfile = useServerFn(getMyProfile);
+  const { userId } = useSessionUser();
   const { data: profile } = useQuery({
-    queryKey: ["me", "profile"],
+    queryKey: ["me", "profile", userId],
     queryFn: () => fetchProfile(),
+    enabled: Boolean(userId),
+    retry: 0,
     staleTime: 30_000,
   });
   const user = profile

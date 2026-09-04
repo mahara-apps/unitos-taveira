@@ -813,6 +813,14 @@ function ProjectsIndexPage() {
         </div>
       </DashboardPanelSurface>
 
+      {/* Informações complementares indisponíveis: os projetos continuam listados. */}
+      {projectsQ.data?.degraded ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+          Alguns dados complementares não carregaram ({projectsQ.data.degraded}). Os projetos
+          abaixo estão completos; apenas o selo da pauta e/ou o progresso podem faltar.
+        </div>
+      ) : null}
+
       {/* Lista de projetos */}
       {projectsQ.isError ? (
         <DashboardPanelSurface className="space-y-3 p-6 text-center">

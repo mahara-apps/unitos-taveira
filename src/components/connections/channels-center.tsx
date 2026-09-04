@@ -401,7 +401,11 @@ export function ChannelsCenter({
       setPortfolioChannel(channel);
       qc.invalidateQueries({ queryKey: ["meta-discovered-accounts", brandId] });
       qc.invalidateQueries({ queryKey: ["meta-portfolio-status", brandId] });
-      if (!connectOpen) setPortfolioOpen(true);
+      // Caminho ÚNICO: a seleção de contas acontece sempre dentro de
+      // "Conectar canais" (etapa Ativos) — nunca em um segundo modal paralelo.
+      setPortfolioOpen(false);
+      setConnectOpen(true);
+      setAssetsStep(true);
     },
     [brandId, connectOpen, qc],
   );
@@ -900,6 +904,31 @@ export function ChannelsCenter({
         </TabsContent>
       </Tabs>
 
+      {/* Sessão Meta autorizada e wizard fechado: retomada clara e explícita. */}
+      {portfolioSessionId && !connectOpen && !portfolioOpen ? (
+        <Card className="flex flex-col gap-3 border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Autorização da Meta concluída</p>
+            <p className="text-xs text-muted-foreground">
+              Continue de onde parou para ativar as contas e vinculá-las a um cliente.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-xs"
+              onClick={() => setPortfolioSessionId(null)}
+            >
+              Descartar
+            </Button>
+            <Button size="sm" className="text-xs" onClick={() => setPortfolioOpen(true)}>
+              Retomar seleção de contas
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       {/* -------------------------------- diálogos -------------------------------- */}
 
       <ConnectChannelsDialog
@@ -910,7 +939,7 @@ export function ChannelsCenter({
             clearWatchdogs();
             setFlow({ kind: "idle" });
             setAssetsStep(false);
-            setPortfolioSessionId(null);
+            // A sessão é preservada para permitir "Retomar seleção de contas".
             invalidate();
           }
         }}
@@ -942,8 +971,8 @@ export function ChannelsCenter({
         }}
       />
 
-      {/* Fluxo legado (fora do wizard): seleção de contas em modal próprio. */}
-      {portfolioSessionId && !connectOpen ? (
+      {/* Retomada EXPLÍCITA: nunca abre sozinho depois de fechar o wizard. */}
+      {portfolioSessionId && !connectOpen && portfolioOpen ? (
         <MetaPortfolioDialog
           open={portfolioOpen}
           onOpenChange={(v) => {

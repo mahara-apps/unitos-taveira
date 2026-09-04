@@ -1748,3 +1748,678 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 20260904003109_e946ede4-70ec-4dcc-ab46-fcff03508f2a.sql
+-- ---------------------------------------------------------------------------
+-- 1) Comentários de projeto e job
+CREATE TABLE public.work_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  job_id uuid REFERENCES public.project_jobs(id) ON DELETE CASCADE,
+  author_id uuid NOT NULL,
+  body text NOT NULL,
+  mentions uuid[] NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX work_comments_project_idx ON public.work_comments (project_id, created_at);
+CREATE INDEX work_comments_job_idx ON public.work_comments (job_id, created_at);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.work_comments TO authenticated;
+GRANT ALL ON public.work_comments TO service_role;
+ALTER TABLE public.work_comments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "work_comments_select" ON public.work_comments
+  FOR SELECT TO authenticated
+  USING (public.can_access_project(project_id, auth.uid()));
+CREATE POLICY "work_comments_insert" ON public.work_comments
+  FOR INSERT TO authenticated
+  WITH CHECK (author_id = auth.uid() AND public.can_access_project(project_id, auth.uid()));
+CREATE POLICY "work_comments_update_own" ON public.work_comments
+  FOR UPDATE TO authenticated
+  USING (author_id = auth.uid() AND public.can_access_project(project_id, auth.uid()))
+  WITH CHECK (author_id = auth.uid());
+CREATE POLICY "work_comments_delete_own" ON public.work_comments
+  FOR DELETE TO authenticated
+  USING (author_id = auth.uid() AND public.can_access_project(project_id, auth.uid()));
+
+CREATE TRIGGER work_comments_touch
+  BEFORE UPDATE ON public.work_comments
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- 2) Envolvidos no projeto
+CREATE TABLE public.project_participants (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (project_id, user_id)
+);
+CREATE INDEX project_participants_project_idx ON public.project_participants (project_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_participants TO authenticated;
+GRANT ALL ON public.project_participants TO service_role;
+ALTER TABLE public.project_participants ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "project_participants_select" ON public.project_participants
+  FOR SELECT TO authenticated
+  USING (public.can_access_project(project_id, auth.uid()));
+CREATE POLICY "project_participants_insert" ON public.project_participants
+  FOR INSERT TO authenticated
+  WITH CHECK (public.can_access_project(project_id, auth.uid()));
+CREATE POLICY "project_participants_delete" ON public.project_participants
+  FOR DELETE TO authenticated
+  USING (public.can_access_project(project_id, auth.uid()));
+
+-- 3) Status cadastráveis por workspace
+CREATE TABLE public.work_statuses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  scope text NOT NULL CHECK (scope IN ('project', 'job', 'task')),
+  name text NOT NULL,
+  color text NOT NULL DEFAULT '#8b5cf6',
+  position integer NOT NULL DEFAULT 0,
+  is_done boolean NOT NULL DEFAULT false,
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX work_statuses_brand_scope_idx ON public.work_statuses (brand_id, scope, position);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.work_statuses TO authenticated;
+GRANT ALL ON public.work_statuses TO service_role;
+ALTER TABLE public.work_statuses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "work_statuses_select" ON public.work_statuses
+  FOR SELECT TO authenticated
+  USING (public.brand_member_role(auth.uid(), brand_id) IS NOT NULL);
+CREATE POLICY "work_statuses_write" ON public.work_statuses
+  FOR ALL TO authenticated
+  USING (public.brand_member_role(auth.uid(), brand_id) IN ('owner', 'admin'))
+  WITH CHECK (public.brand_member_role(auth.uid(), brand_id) IN ('owner', 'admin'));
+
+CREATE TRIGGER work_statuses_touch
+  BEFORE UPDATE ON public.work_statuses
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- 4) Campos adicionais em jobs, projetos e tarefas
+ALTER TABLE public.project_jobs
+  ADD COLUMN IF NOT EXISTS assignee_id uuid,
+  ADD COLUMN IF NOT EXISTS start_date date,
+  ADD COLUMN IF NOT EXISTS due_at date,
+  ADD COLUMN IF NOT EXISTS status_id uuid REFERENCES public.work_statuses(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS done_at timestamptz,
+  ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+ALTER TABLE public.projects
+  ADD COLUMN IF NOT EXISTS status_id uuid REFERENCES public.work_statuses(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS done_at timestamptz,
+  ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+ALTER TABLE public.tasks
+  ADD COLUMN IF NOT EXISTS start_date date,
+  ADD COLUMN IF NOT EXISTS status_id uuid REFERENCES public.work_statuses(id) ON DELETE SET NULL;
+
+-- ---------------------------------------------------------------------------
+-- 20260904020708_29c957ce-462d-471e-8ce0-63fb81b6756f.sql
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.work_links (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  job_id uuid REFERENCES public.project_jobs(id) ON DELETE CASCADE,
+  task_id uuid REFERENCES public.tasks(id) ON DELETE CASCADE,
+  post_id uuid REFERENCES public.posts(id) ON DELETE CASCADE,
+  topic_id uuid REFERENCES public.monthly_plan_topics(id) ON DELETE CASCADE,
+  url text NOT NULL,
+  title text,
+  source text NOT NULL DEFAULT 'link',
+  created_by uuid,
+  created_by_client boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT work_links_url_scheme CHECK (url ~* '^https?://.{3,}$' AND length(url) <= 2000),
+  CONSTRAINT work_links_single_target CHECK (
+    (CASE WHEN project_id IS NOT NULL THEN 1 ELSE 0 END)
+    + (CASE WHEN job_id IS NOT NULL THEN 1 ELSE 0 END)
+    + (CASE WHEN task_id IS NOT NULL THEN 1 ELSE 0 END)
+    + (CASE WHEN post_id IS NOT NULL THEN 1 ELSE 0 END)
+    + (CASE WHEN topic_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+  )
+);
+
+CREATE INDEX work_links_project_idx ON public.work_links (project_id) WHERE project_id IS NOT NULL;
+CREATE INDEX work_links_job_idx ON public.work_links (job_id) WHERE job_id IS NOT NULL;
+CREATE INDEX work_links_task_idx ON public.work_links (task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX work_links_post_idx ON public.work_links (post_id) WHERE post_id IS NOT NULL;
+CREATE INDEX work_links_topic_idx ON public.work_links (topic_id) WHERE topic_id IS NOT NULL;
+CREATE INDEX work_links_brand_idx ON public.work_links (brand_id, created_at DESC);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.work_links TO authenticated;
+GRANT ALL ON public.work_links TO service_role;
+
+ALTER TABLE public.work_links ENABLE ROW LEVEL SECURITY;
+
+-- Membros do workspace: escopo herdado do cliente (owner/admin cobrem o workspace;
+-- manager/user só clientes atribuídos). Links sem cliente exigem membership no brand.
+CREATE POLICY "work_links_select_members" ON public.work_links
+  FOR SELECT TO authenticated
+  USING (
+    (client_id IS NOT NULL AND public.can_access_client(client_id, auth.uid()))
+    OR (client_id IS NULL AND public.brand_member_role(auth.uid(), brand_id) IS NOT NULL)
+    OR (client_id IS NOT NULL AND public.is_portal_client_of(client_id, auth.uid()))
+  );
+
+CREATE POLICY "work_links_insert_members" ON public.work_links
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (client_id IS NOT NULL AND public.can_access_client(client_id, auth.uid()))
+    OR (client_id IS NULL AND public.brand_member_role(auth.uid(), brand_id) IS NOT NULL)
+    OR (client_id IS NOT NULL AND public.is_portal_client_of(client_id, auth.uid()) AND created_by_client)
+  );
+
+CREATE POLICY "work_links_update_members" ON public.work_links
+  FOR UPDATE TO authenticated
+  USING (
+    (client_id IS NOT NULL AND public.can_access_client(client_id, auth.uid()))
+    OR (client_id IS NULL AND public.brand_member_role(auth.uid(), brand_id) IS NOT NULL)
+  )
+  WITH CHECK (
+    (client_id IS NOT NULL AND public.can_access_client(client_id, auth.uid()))
+    OR (client_id IS NULL AND public.brand_member_role(auth.uid(), brand_id) IS NOT NULL)
+  );
+
+-- Agência apaga qualquer link do seu escopo; cliente do portal apaga só o que ele enviou.
+CREATE POLICY "work_links_delete_members" ON public.work_links
+  FOR DELETE TO authenticated
+  USING (
+    (client_id IS NOT NULL AND public.can_access_client(client_id, auth.uid()))
+    OR (client_id IS NULL AND public.brand_member_role(auth.uid(), brand_id) IS NOT NULL)
+    OR (
+      client_id IS NOT NULL
+      AND public.is_portal_client_of(client_id, auth.uid())
+      AND created_by_client
+      AND created_by = auth.uid()
+    )
+  );
+
+CREATE TRIGGER work_links_touch_updated_at
+  BEFORE UPDATE ON public.work_links
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ---------------------------------------------------------------------------
+-- 20260904115915_6e08f179-be62-4672-b2e3-f11228737de8.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.installations
+  ADD COLUMN IF NOT EXISTS pinned_commit_sha text,
+  ADD COLUMN IF NOT EXISTS pinned_release text,
+  ADD COLUMN IF NOT EXISTS pinned_at timestamptz,
+  ADD COLUMN IF NOT EXISTS pinned_by uuid;
+
+-- ---------------------------------------------------------------------------
+-- 20260904125113_2795b058-5c51-4688-a3a4-38d30dc022c3.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.reconcile_client_document_ai(_brand_id uuid, _client_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _touched integer := 0;
+  _n integer := 0;
+BEGIN
+  IF _brand_id IS NULL OR _client_id IS NULL THEN
+    RETURN 0;
+  END IF;
+  IF NOT public.can_access_client(_client_id, auth.uid()) THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+
+  WITH latest AS (
+    SELECT r.document_id, r.status, r.error,
+           row_number() OVER (PARTITION BY r.document_id ORDER BY r.created_at DESC) AS rn
+      FROM public.briefing_import_runs r
+     WHERE r.brand_id = _brand_id
+       AND r.client_id = _client_id
+       AND r.document_id IS NOT NULL
+  ), upd AS (
+    UPDATE public.client_documents d
+       SET ai_status = 'failed',
+           ai_error = COALESCE(NULLIF(l.error, ''), 'A leitura nao foi concluida. Tente analisar novamente.'),
+           updated_at = now()
+      FROM latest l
+     WHERE l.rn = 1
+       AND l.document_id = d.id
+       AND d.brand_id = _brand_id
+       AND d.client_id = _client_id
+       AND d.ai_status IN ('queued', 'running')
+       AND l.status IN ('failed', 'expired', 'cancelled')
+    RETURNING 1
+  )
+  SELECT count(*) INTO _n FROM upd;
+  _touched := _touched + _n;
+
+  WITH upd2 AS (
+    UPDATE public.client_documents d
+       SET ai_status = 'failed',
+           ai_error = COALESCE(NULLIF(d.ai_error, ''), 'A leitura ficou parada e foi encerrada. Clique em Reanalisar para tentar de novo.'),
+           updated_at = now()
+     WHERE d.brand_id = _brand_id
+       AND d.client_id = _client_id
+       AND d.ai_status IN ('queued', 'running')
+       AND d.updated_at < now() - interval '20 minutes'
+       AND NOT EXISTS (
+         SELECT 1 FROM public.briefing_import_runs r
+          WHERE r.document_id = d.id
+            AND r.status IN ('queued', 'running')
+       )
+    RETURNING 1
+  )
+  SELECT count(*) INTO _n FROM upd2;
+  _touched := _touched + _n;
+
+  RETURN _touched;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reconcile_client_document_ai(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reconcile_client_document_ai(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.reconcile_client_document_ai(uuid, uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.briefing_import_reap()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _requeued integer := 0;
+  _expired integer := 0;
+  _docs integer := 0;
+BEGIN
+  WITH stalled AS (
+    SELECT id FROM public.briefing_import_runs
+     WHERE status = 'running'
+       AND lease_expires_at IS NOT NULL
+       AND lease_expires_at < now()
+       AND attempt + 1 < max_attempts
+       AND (deadline_at IS NULL OR deadline_at > now())
+     LIMIT 50
+  ), upd AS (
+    UPDATE public.briefing_import_runs r
+       SET status = 'queued',
+           attempt = r.attempt + 1,
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           resume_step = COALESCE(r.resume_step, r.current_step),
+           error = NULL,
+           error_kind = NULL,
+           updated_at = now()
+     WHERE r.id IN (SELECT id FROM stalled)
+    RETURNING 1
+  )
+  SELECT count(*) INTO _requeued FROM upd;
+
+  WITH dead AS (
+    SELECT id FROM public.briefing_import_runs
+     WHERE status IN ('queued','running')
+       AND (
+         (deadline_at IS NOT NULL AND deadline_at < now())
+         OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at < now())
+       )
+     LIMIT 50
+  ), upd2 AS (
+    UPDATE public.briefing_import_runs r
+       SET status = 'expired',
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           finished_at = now(),
+           error_kind = COALESCE(NULLIF(r.error_kind, ''), CASE WHEN NULLIF(r.error, '') IS NOT NULL THEN NULL ELSE 'stalled' END, 'stalled'),
+           error = COALESCE(NULLIF(r.error, ''), 'Processamento interrompido antes de concluir. Tente novamente.'),
+           updated_at = now()
+     WHERE r.id IN (SELECT id FROM dead)
+    RETURNING r.id, r.document_id, r.error
+  ), docs AS (
+    UPDATE public.client_documents d
+       SET ai_status = 'failed',
+           ai_error = COALESCE(NULLIF(u.error, ''), 'Processamento interrompido antes de concluir. Tente novamente.'),
+           updated_at = now()
+      FROM upd2 u
+     WHERE u.document_id = d.id
+       AND d.ai_status IN ('queued','running')
+    RETURNING 1
+  ), counted AS (
+    SELECT (SELECT count(*) FROM upd2) AS runs, (SELECT count(*) FROM docs) AS synced
+  )
+  SELECT runs, synced INTO _expired, _docs FROM counted;
+
+  -- Documentos presos sem nenhuma execucao viva (kick perdido, isolate morto).
+  UPDATE public.client_documents d
+     SET ai_status = 'failed',
+         ai_error = COALESCE(NULLIF(d.ai_error, ''), 'A leitura ficou parada e foi encerrada. Clique em Reanalisar para tentar de novo.'),
+         updated_at = now()
+   WHERE d.ai_status IN ('queued','running')
+     AND d.updated_at < now() - interval '20 minutes'
+     AND NOT EXISTS (
+       SELECT 1 FROM public.briefing_import_runs r
+        WHERE r.document_id = d.id
+          AND r.status IN ('queued','running')
+     );
+
+  RETURN jsonb_build_object('requeued', _requeued, 'expired', _expired, 'documents_synced', _docs);
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260904142244_dba3410c-bae3-4b0a-b002-e179789cc6e6.sql
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.installation_credentials (
+  installation_id uuid PRIMARY KEY REFERENCES public.installations(id) ON DELETE CASCADE,
+  supabase_management_token_ciphertext text,
+  vercel_token_ciphertext text,
+  vercel_team_id text,
+  github_token_ciphertext text,
+  updated_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.installation_credentials TO authenticated;
+GRANT ALL ON public.installation_credentials TO service_role;
+
+ALTER TABLE public.installation_credentials ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "installation_credentials_super_admin_all" ON public.installation_credentials
+  FOR ALL
+  TO authenticated
+  USING (public.is_super_admin(auth.uid()))
+  WITH CHECK (public.is_super_admin(auth.uid()));
+
+CREATE TRIGGER update_installation_credentials_updated_at
+  BEFORE UPDATE ON public.installation_credentials
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ---------------------------------------------------------------------------
+-- 20260904204006_816ffe74-cd82-4215-8507-5ea4100ac791.sql
+-- ---------------------------------------------------------------------------
+-- =============================================================
+-- Perfis de acesso + permissões por módulo (RBAC operacional)
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS public.access_profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  key text NOT NULL,
+  name text NOT NULL,
+  is_system boolean NOT NULL DEFAULT false,
+  permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (brand_id, key)
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.access_profiles TO authenticated;
+GRANT ALL ON public.access_profiles TO service_role;
+
+ALTER TABLE public.access_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "access_profiles_select_members" ON public.access_profiles;
+CREATE POLICY "access_profiles_select_members" ON public.access_profiles
+  FOR SELECT TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.brand_members bm
+      WHERE bm.brand_id = access_profiles.brand_id AND bm.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "access_profiles_write_admin" ON public.access_profiles;
+CREATE POLICY "access_profiles_write_admin" ON public.access_profiles
+  FOR ALL TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR public.brand_member_role(auth.uid(), access_profiles.brand_id) IN ('owner','admin')
+  )
+  WITH CHECK (
+    public.is_super_admin(auth.uid())
+    OR public.brand_member_role(auth.uid(), access_profiles.brand_id) IN ('owner','admin')
+  );
+
+CREATE OR REPLACE FUNCTION public.access_profiles_touch_updated_at()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_access_profiles_updated ON public.access_profiles;
+CREATE TRIGGER trg_access_profiles_updated
+  BEFORE UPDATE ON public.access_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.access_profiles_touch_updated_at();
+
+-- Impede remover perfis do sistema
+CREATE OR REPLACE FUNCTION public.access_profiles_block_system_delete()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF OLD.is_system THEN
+    RAISE EXCEPTION 'system_profile_delete_blocked';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_access_profiles_block_system_delete ON public.access_profiles;
+CREATE TRIGGER trg_access_profiles_block_system_delete
+  BEFORE DELETE ON public.access_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.access_profiles_block_system_delete();
+
+-- -------------------------------------------------------------
+-- Colunas no membro do workspace
+-- -------------------------------------------------------------
+ALTER TABLE public.brand_members
+  ADD COLUMN IF NOT EXISTS access_profile_id uuid REFERENCES public.access_profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS module_permissions jsonb;
+
+ALTER TABLE public.brand_invites
+  ADD COLUMN IF NOT EXISTS access_profile_key text,
+  ADD COLUMN IF NOT EXISTS module_permissions jsonb;
+
+-- -------------------------------------------------------------
+-- Seed dos perfis de sistema
+-- -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.access_profiles_system_defaults()
+RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+  SELECT '[
+    {"key":"atendimento","name":"Atendimento","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"view","approvals":"full","media_plans":"view","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"view"}},
+    {"key":"criativo","name":"Criativo","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"own","content":"full","calendar":"view","approvals":"own","media_plans":"none","connections":"none","reports":"none","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"trafego","name":"Tráfego","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"own","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"midia","name":"Mídia","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"view","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"producao","name":"Produção","permissions":{"clients":"view","briefing":"view","projects":"own","tasks":"full","planning":"view","content":"own","calendar":"full","approvals":"own","media_plans":"none","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"financeiro","name":"Financeiro","permissions":{"clients":"view","briefing":"none","projects":"view","tasks":"view","planning":"view","content":"none","calendar":"view","approvals":"none","media_plans":"view","connections":"none","reports":"full","users":"none","settings":"none","ai":"none","brain":"none","chat":"view","portal":"none"}},
+    {"key":"total","name":"Total","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"full","approvals":"full","media_plans":"full","connections":"full","reports":"full","users":"full","settings":"full","ai":"full","brain":"full","chat":"full","portal":"full"}}
+  ]'::jsonb;
+$$;
+
+CREATE OR REPLACE FUNCTION public.seed_access_profiles(_brand_id uuid)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  item jsonb;
+  n integer := 0;
+BEGIN
+  FOR item IN SELECT * FROM jsonb_array_elements(public.access_profiles_system_defaults())
+  LOOP
+    INSERT INTO public.access_profiles (brand_id, key, name, is_system, permissions)
+    VALUES (_brand_id, item->>'key', item->>'name', true, item->'permissions')
+    ON CONFLICT (brand_id, key) DO UPDATE
+      SET name = CASE WHEN public.access_profiles.is_system THEN EXCLUDED.name ELSE public.access_profiles.name END;
+    n := n + 1;
+  END LOOP;
+  RETURN n;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.seed_access_profiles_for_new_brand()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  PERFORM public.seed_access_profiles(NEW.id);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_brands_seed_access_profiles ON public.brands;
+CREATE TRIGGER trg_brands_seed_access_profiles
+  AFTER INSERT ON public.brands
+  FOR EACH ROW EXECUTE FUNCTION public.seed_access_profiles_for_new_brand();
+
+DO $$
+DECLARE b record;
+BEGIN
+  FOR b IN SELECT id FROM public.brands LOOP
+    PERFORM public.seed_access_profiles(b.id);
+  END LOOP;
+END $$;
+
+-- -------------------------------------------------------------
+-- Resolução efetiva das permissões por módulo
+-- -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.effective_module_permissions(_user_id uuid, _brand_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role text;
+  v_profile jsonb := '{}'::jsonb;
+  v_override jsonb := '{}'::jsonb;
+  v_total jsonb;
+BEGIN
+  IF _user_id IS NULL OR _brand_id IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  SELECT (public.access_profiles_system_defaults() -> 6) -> 'permissions' INTO v_total;
+
+  IF public.is_super_admin(_user_id) THEN
+    RETURN v_total;
+  END IF;
+
+  SELECT lower(bm.role),
+         COALESCE(ap.permissions, '{}'::jsonb),
+         COALESCE(bm.module_permissions, '{}'::jsonb)
+    INTO v_role, v_profile, v_override
+    FROM public.brand_members bm
+    LEFT JOIN public.access_profiles ap ON ap.id = bm.access_profile_id
+   WHERE bm.brand_id = _brand_id AND bm.user_id = _user_id;
+
+  IF v_role IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  IF v_role IN ('owner','admin','manager') THEN
+    RETURN v_total;
+  END IF;
+
+  RETURN v_profile || v_override;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.module_level_rank(_level text)
+RETURNS integer LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE lower(COALESCE(_level,'none'))
+    WHEN 'full' THEN 3
+    WHEN 'own' THEN 2
+    WHEN 'view' THEN 1
+    ELSE 0
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.has_module_access(
+  _user_id uuid, _brand_id uuid, _module text, _min_level text DEFAULT 'view'
+)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.module_level_rank(
+           public.effective_module_permissions(_user_id, _brand_id) ->> _module
+         ) >= public.module_level_rank(_min_level);
+$$;
+
+REVOKE ALL ON FUNCTION public.seed_access_profiles(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.seed_access_profiles(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.effective_module_permissions(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_module_access(uuid, uuid, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.module_level_rank(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.access_profiles_system_defaults() TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260904204218_1dbeeacc-a77f-4811-83bd-7be593358210.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.access_profiles_system_defaults()
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT '[
+    {"key":"atendimento","name":"Atendimento","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"view","approvals":"full","media_plans":"view","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"view"}},
+    {"key":"criativo","name":"Criativo","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"own","content":"full","calendar":"view","approvals":"own","media_plans":"none","connections":"none","reports":"none","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"trafego","name":"Tráfego","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"own","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"midia","name":"Mídia","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"view","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"producao","name":"Produção","permissions":{"clients":"view","briefing":"view","projects":"own","tasks":"full","planning":"view","content":"own","calendar":"full","approvals":"own","media_plans":"none","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","portal":"none"}},
+    {"key":"financeiro","name":"Financeiro","permissions":{"clients":"view","briefing":"none","projects":"view","tasks":"view","planning":"view","content":"none","calendar":"view","approvals":"none","media_plans":"view","connections":"none","reports":"full","users":"none","settings":"none","ai":"none","brain":"none","chat":"view","portal":"none"}},
+    {"key":"total","name":"Total","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"full","approvals":"full","media_plans":"full","connections":"full","reports":"full","users":"full","settings":"full","ai":"full","brain":"full","chat":"full","portal":"full"}}
+  ]'::jsonb;
+$$;
+
+CREATE OR REPLACE FUNCTION public.module_level_rank(_level text)
+RETURNS integer LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT CASE lower(COALESCE(_level,'none'))
+    WHEN 'full' THEN 3
+    WHEN 'own' THEN 2
+    WHEN 'view' THEN 1
+    ELSE 0
+  END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260904205402_b52283f7-981d-434f-99b0-67d26759dd0e.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.effective_module_permissions(_user_id uuid, _brand_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_role text;
+  v_profile jsonb := '{}'::jsonb;
+  v_override jsonb := '{}'::jsonb;
+  v_total jsonb;
+BEGIN
+  IF _user_id IS NULL OR _brand_id IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  SELECT (public.access_profiles_system_defaults() -> 6) -> 'permissions' INTO v_total;
+
+  IF public.is_super_admin(_user_id) THEN
+    RETURN v_total;
+  END IF;
+
+  SELECT lower(bm.role::text),
+         COALESCE(ap.permissions, '{}'::jsonb),
+         COALESCE(bm.module_permissions, '{}'::jsonb)
+    INTO v_role, v_profile, v_override
+    FROM public.brand_members bm
+    LEFT JOIN public.access_profiles ap ON ap.id = bm.access_profile_id
+   WHERE bm.brand_id = _brand_id AND bm.user_id = _user_id;
+
+  IF v_role IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  IF v_role IN ('owner','admin','manager') THEN
+    RETURN v_total;
+  END IF;
+
+  RETURN v_profile || v_override;
+END;
+$function$;

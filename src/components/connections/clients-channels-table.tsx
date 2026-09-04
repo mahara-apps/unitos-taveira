@@ -588,7 +588,8 @@ export function ClientsChannelsTable({
                                   onClick={() => setExpanded(isOpen ? null : key)}
                                 >
                                   <Link2 className="h-3.5 w-3.5" />
-                                  Ver canais
+                                  Vincular a um cliente
+
                                 </Button>
                               ) : null
                             ) : null}

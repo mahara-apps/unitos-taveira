@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { briefingContentSignature, decideBriefingFormSync } from "@/lib/briefing-form-sync";
 import { describeError, readApiError } from "@/lib/errors";
+
 import { generateMonthlyPlanFn } from "@/lib/monthly-plans.functions";
 import {
   PautaOrganizationField,
@@ -273,14 +275,57 @@ export function BriefingWorkspace({
   });
 
   const [form, setForm] = useState<FormState | null>(null);
-  useEffect(() => {
-    if (hubQ.data && !form) setForm(toForm(hubQ.data));
-  }, [hubQ.data, form]);
-
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  /** Versão (updated_at) do briefing que gerou o formulário em tela. */
+  const [syncedVersion, setSyncedVersion] = useState<string | null>(null);
+  /** Edições locais ainda não salvas — evita sobrescrever o trabalho do usuário. */
+  const [dirty, setDirty] = useState(false);
+  /** Versão mais nova disponível no servidor quando há edições pendentes. */
+  const [incomingVersion, setIncomingVersion] = useState<string | null>(null);
+  /** Assinatura do conteúdo que originou o formulário em tela. */
+  const [syncedSignature, setSyncedSignature] = useState<string | null>(null);
+
+  const applyServerData = useCallback((client: BrandHubClient) => {
+    setForm(toForm(client));
+    setSyncedVersion(client.updated_at ?? null);
+    setSyncedSignature(briefingContentSignature(client));
+    setSavedAt(client.updated_at ?? null);
+    setDirty(false);
+    setIncomingVersion(null);
+  }, []);
+
+  // Sincroniza o formulário sempre que chega uma versão nova do briefing
+  // (importação por IA, geração de estratégia, edição em outra aba).
+  // Comparamos data E conteúdo: bancos sem o gatilho de updated_at não mudam
+  // a data, e nesse caso a assinatura do conteúdo é o que revela a mudança.
   useEffect(() => {
-    if (hubQ.data?.updated_at && !savedAt) setSavedAt(hubQ.data.updated_at);
-  }, [hubQ.data?.updated_at, savedAt]);
+    const data = hubQ.data;
+    if (!data) return;
+    const version = data.updated_at ?? null;
+    const signature = briefingContentSignature(data);
+    const decision = decideBriefingFormSync({
+      hasForm: !!form,
+      dirty,
+      serverVersion: version,
+      syncedVersion,
+      serverSignature: signature,
+      syncedSignature,
+    });
+    if (decision === "keep") return;
+    if (decision === "apply") {
+      applyServerData(data);
+      return;
+    }
+    setIncomingVersion(version ?? signature);
+  }, [hubQ.data, form, dirty, syncedVersion, syncedSignature, applyServerData]);
+
+
+  /** Toda edição do formulário passa por aqui para marcar alterações pendentes. */
+  const updateForm = useCallback((next: FormState) => {
+    setDirty(true);
+    setForm(next);
+  }, []);
+
 
   const completion = useMemo(() => (form ? computeCompletion(form) : 0), [form]);
 
@@ -466,8 +511,10 @@ export function BriefingWorkspace({
     onSuccess: () => {
       toast.success("Briefing salvo");
       setSavedAt(new Date().toISOString());
+      setDirty(false);
       qc.invalidateQueries({ queryKey: ["brand-hub", brandId, clientId] });
     },
+
     onError: (e: Error) => toast.error(e.message || "Falha ao salvar"),
   });
 
@@ -487,12 +534,38 @@ export function BriefingWorkspace({
 
   return (
     <>
+      {incomingVersion ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <p className="text-xs text-foreground">
+            A IA atualizou este briefing. Você tem alterações não salvas nos campos abaixo.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs"
+              onClick={() => setIncomingVersion(null)}
+            >
+              Manter minhas edições
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                if (hubQ.data) applyServerData(hubQ.data);
+              }}
+            >
+              Atualizar campos
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <StackedBrainLayout
         brandId={brandId}
         clientId={clientId}
         client={hubQ.data}
         form={form}
-        setForm={setForm}
+        setForm={updateForm}
         completion={completion}
         onSave={() => save.mutate()}
         saving={save.isPending}
@@ -520,9 +593,15 @@ export function BriefingWorkspace({
         clientId={clientId}
         open={importOpen}
         onOpenChange={setImportOpen}
+        onApplied={async () => {
+          const fresh = await hubQ.refetch();
+          if (fresh.data) applyServerData(fresh.data);
+          toast.success("Campos do briefing atualizados com a análise da IA.");
+        }}
       />
     </>
   );
+
 }
 
 

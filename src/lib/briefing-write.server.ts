@@ -98,7 +98,12 @@ export async function writeCanonicalBriefing(
     return { hub: current as BrandHubData, completion, changedFields: [], versionId: null };
   }
 
-  const update: Record<string, unknown> = { brand_hub: next };
+  // updated_at explícito: não dependemos do gatilho trg_clients_updated, que
+  // pode não existir em instalações com schema defasado.
+  const update: Record<string, unknown> = {
+    brand_hub: next,
+    updated_at: new Date().toISOString(),
+  };
   if (statusChanged) {
     update.briefing_status = status;
     update.briefing_status_at = new Date().toISOString();

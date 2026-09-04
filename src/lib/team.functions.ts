@@ -4,6 +4,7 @@ import { z } from "zod";
 import { callRpc } from "@/lib/supabase-rpc";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ALL_PERMISSION_IDS, normalizePermissions, type PermissionId } from "@/lib/permissions";
+import { normalizeModulePermissions } from "@/lib/module-permissions";
 import {
   assertBrandAdmin,
   assertCanGrantBrandRole,
@@ -29,7 +30,7 @@ export const listBrandTeam = createServerFn({ method: "GET" })
     const [membersRes, invitesRes, clientsRes] = await Promise.all([
       supabase
         .from("brand_members")
-        .select("brand_id, user_id, role, permissions, created_at")
+        .select("brand_id, user_id, role, permissions, created_at, access_profile_id, module_permissions")
         .eq("brand_id", data.brandId),
       supabase
         .from("brand_invites")
@@ -90,6 +91,8 @@ export const listBrandTeam = createServerFn({ method: "GET" })
           user_id: m.user_id,
           role: m.role as (typeof ROLES)[number],
           permissions: normalizePermissions(m.permissions),
+          access_profile_id: m.access_profile_id ?? null,
+          module_permissions: normalizeModulePermissions(m.module_permissions),
           created_at: m.created_at,
           full_name: p?.full_name ?? null,
           email: null as string | null,
@@ -122,6 +125,8 @@ const InviteInput = z.object({
   role: z.enum(ASSIGNABLE).default("user"),
   permissions: z.array(z.enum(ALL_PERMISSION_IDS as [PermissionId, ...PermissionId[]])).default([]),
   expiresAt: z.string().datetime().optional(),
+  /** Perfil de acesso aplicado quando o convite for aceito. */
+  accessProfileId: z.string().uuid().nullable().optional(),
 });
 
 function randomToken(bytes = 24): string {
@@ -227,6 +232,21 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
     const brandName = (brand?.nome_fantasia || brand?.name || "").trim();
     if (!brandName) throw new Error("brand_sem_nome");
 
+    // Perfil de acesso do convite: validado contra o workspace, gravado por
+    // `key` para ser reaplicado quando o convite for aceito.
+    let inviteProfileKey: string | null = null;
+    if (data.accessProfileId) {
+      const { data: prof, error: pErr } = await supabase
+        .from("access_profiles")
+        .select("key")
+        .eq("id", data.accessProfileId)
+        .eq("brand_id", data.brandId)
+        .maybeSingle();
+      if (pErr) throw pErr;
+      if (!prof) throw new Error("invalid_access_profile");
+      inviteProfileKey = prof.key;
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const results: Array<{
@@ -278,6 +298,7 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
 
       const insertPayload = {
         brand_id: data.brandId,
+        ...(inviteProfileKey ? { access_profile_key: inviteProfileKey } : {}),
         email,
         role: data.role,
         permissions: data.permissions,
@@ -436,6 +457,37 @@ export const acceptBrandInvite = createServerFn({ method: "POST" })
       _token: data.token,
     });
     if (error) throw error;
+
+    // Aplica o perfil de acesso escolhido no convite (permissões por módulo).
+    // Best-effort: nunca impede a entrada do usuário no workspace.
+    if (typeof brandId === "string" && brandId) {
+      try {
+        const { data: invite } = await context.supabase
+          .from("brand_invites")
+          .select("access_profile_key")
+          .eq("token", data.token)
+          .maybeSingle();
+        const key = invite?.access_profile_key ?? null;
+        if (key) {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { data: prof } = await supabaseAdmin
+            .from("access_profiles")
+            .select("id")
+            .eq("brand_id", brandId)
+            .eq("key", key)
+            .maybeSingle();
+          if (prof?.id) {
+            await supabaseAdmin
+              .from("brand_members")
+              .update({ access_profile_id: prof.id })
+              .eq("brand_id", brandId)
+              .eq("user_id", context.userId);
+          }
+        }
+      } catch (e) {
+        console.error("[accept invite] perfil de acesso não aplicado", e);
+      }
+    }
     return { brandId };
   });
 
@@ -828,6 +880,8 @@ const AddPersonInput = z.object({
   permissions: z.array(z.enum(ALL_PERMISSION_IDS as [PermissionId, ...PermissionId[]])).default([]),
   clientIds: z.array(z.string().uuid()).default([]),
   sendEmail: z.boolean().default(true),
+  /** Perfil de acesso (permissões por módulo) aplicado ao membro. */
+  accessProfileId: z.string().uuid().nullable().optional(),
 });
 
 export const addPerson = createServerFn({ method: "POST" })
@@ -926,6 +980,9 @@ export const addPerson = createServerFn({ method: "POST" })
         user_id: targetId,
         role: data.role,
         permissions: data.permissions,
+        ...(data.accessProfileId !== undefined
+          ? { access_profile_id: data.accessProfileId }
+          : {}),
       },
       { onConflict: "brand_id,user_id" },
     );

@@ -254,11 +254,22 @@ export function isTemporaryDeployUrl(raw: string | null | undefined): boolean {
 }
 
 /**
+ * O cadastro guarda o domínio como hostname (`app.cliente.com.br`), enquanto a
+ * validação de URL exige origem https absoluta. Normalizamos apenas o metadado:
+ * valores que já trazem protocolo continuam literais (e podem ser recusados).
+ */
+export function normalizeOriginCandidate(raw: string | null | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+/**
  * Classifica a URL da instalação. A URL temporária do deploy é VÁLIDA: nenhuma
  * instalação fica bloqueada esperando domínio definitivo.
  */
 export function classifyOperationalUrl(raw: string | null | undefined): OperationalUrl {
-  const validated = validatePublicAppUrl(raw);
+  const validated = validatePublicAppUrl(normalizeOriginCandidate(raw));
   if (!validated.ok) return { ok: false, reason: validated.reason };
   return {
     ok: true,
@@ -273,6 +284,101 @@ export function customDomainState(raw: string | null | undefined): OptionalState
   if (!url.ok) return (raw ?? "").trim() ? "pending" : "not_configured";
   return url.kind === "custom" ? "configured" : "pending";
 }
+
+/* --------------------------------------------------- integrações opcionais */
+
+/** Endereço de retorno do OAuth Meta para uma origem de instalação. */
+export function metaRedirectUriFor(origin: string | null | undefined): string | null {
+  const url = classifyOperationalUrl(origin);
+  return url.ok ? `${url.origin}/api/public/meta/callback` : null;
+}
+
+export type IntegrationStateReport = {
+  state: OptionalState;
+  /** Motivo/ação em pt-BR — vira tooltip na tela. */
+  detail: string;
+  /** Endereço que precisa estar cadastrado no painel do Meta. */
+  expectedRedirectUri?: string | null;
+};
+
+/**
+ * Estado real da conexão Meta de uma instalação, a partir das variáveis
+ * observadas no projeto de deploy e da URL operacional. Função PURA: quem lê as
+ * variáveis é o chamador (nenhum valor sensível é necessário aqui — só a
+ * presença da chave e o valor de `META_REDIRECT_URI`, que não é segredo).
+ */
+export function metaIntegrationState(input: {
+  envKeys: readonly string[];
+  redirectUri?: string | null;
+  appUrl?: string | null;
+  /** "unitos" (App oficial) ou "client" (App próprio do cliente). */
+  appType?: "unitos" | "client" | null;
+}): IntegrationStateReport {
+  const keys = new Set(input.envKeys.map((k) => k.trim()));
+  const expected = metaRedirectUriFor(input.appUrl);
+  const has = (k: string) => keys.has(k);
+
+  if (!has("META_APP_ID") || !has("META_APP_SECRET")) {
+    return {
+      state: "not_configured",
+      detail:
+        "App Meta ainda não enviado para esta instalação. Rode o provisionamento novamente ou informe o App em Administração → App Meta.",
+      expectedRedirectUri: expected,
+    };
+  }
+
+  const current = (input.redirectUri ?? "").trim();
+  if (!current || !has("META_REDIRECT_URI")) {
+    return {
+      state: "pending",
+      detail: expected
+        ? `Endereço de retorno ausente. Deve ser ${expected}.`
+        : "Endereço de retorno ausente e a URL operacional ainda não está definida.",
+      expectedRedirectUri: expected,
+    };
+  }
+  if (expected && current.replace(/\/+$/, "") !== expected) {
+    return {
+      state: "pending",
+      detail: `Endereço de retorno divergente do domínio: está ${current}, deveria ser ${expected}.`,
+      expectedRedirectUri: expected,
+    };
+  }
+
+  const configId = has("META_BUSINESS_CONFIG_ID");
+  const mode = input.appType === "client" ? "App do cliente" : "App Meta oficial do Unitos";
+  return {
+    state: configId ? "configured" : "pending",
+    detail: configId
+      ? `${mode} · retorno ${current} — cadastre este endereço em “URIs de redirecionamento válidos”.`
+      : `${mode} sem Config ID do Facebook Login for Business: o consentimento cai no modo legado.`,
+    expectedRedirectUri: expected,
+  };
+}
+
+/** Estado de uma integração cuja configuração é só presença de variáveis. */
+export function envIntegrationState(input: {
+  envKeys: readonly string[];
+  required: readonly string[];
+  label: string;
+}): IntegrationStateReport {
+  const keys = new Set(input.envKeys.map((k) => k.trim()));
+  const missing = input.required.filter((k) => !keys.has(k));
+  if (!missing.length) {
+    return { state: "configured", detail: `${input.label} configurado nesta instalação.` };
+  }
+  if (missing.length === input.required.length) {
+    return {
+      state: "not_configured",
+      detail: `${input.label} ainda não configurado (falta ${missing.join(", ")}).`,
+    };
+  }
+  return {
+    state: "pending",
+    detail: `${input.label} incompleto — falta ${missing.join(", ")}.`,
+  };
+}
+
 
 /* --------------------------------------------------- troca de URL definitiva */
 

@@ -29,8 +29,10 @@ import {
   runAutomatedValidateFn,
   runAutomatedUpdateFn,
   getMasterVersionFn,
+  inspectInstallationIntegrationsFn,
   startInstallationOperationFn,
   updateInstallationFn,
+  type IntegrationsInspection,
 } from "@/lib/installation/manager.functions";
 
 import {
@@ -55,6 +57,7 @@ import {
   computeReadiness,
   customDomainState,
   isTemporaryDeployUrl,
+  type OptionalConfigId,
   type OptionalState,
 } from "@/lib/installation/readiness-contract";
 import { Badge } from "@/components/ui/badge";
@@ -169,6 +172,7 @@ function InstallationDetailPage() {
   const completeFn = useServerFn(completeInstallationOperationFn);
   const cancelFn = useServerFn(cancelInstallationOperationFn);
   const healthFn = useServerFn(refreshInstallationHealthFn);
+  const inspectFn = useServerFn(inspectInstallationIntegrationsFn);
   const capabilityFn = useServerFn(getAutomationCapabilityFn);
   const autoFn = useServerFn(runAutomatedProvisionFn);
   const autoValidateFn = useServerFn(runAutomatedValidateFn);
@@ -179,6 +183,7 @@ function InstallationDetailPage() {
   const editFn = useServerFn(updateInstallationFn);
 
   const [runCommand, setRunCommand] = useState<string | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationsInspection | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
 
@@ -348,6 +353,18 @@ function InstallationDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Conferência das integrações: leitura sob demanda (o MASTER consulta o
+  // projeto de deploy). Nada é gravado no destino e nenhum segredo é lido.
+  const inspect = useMutation({
+    mutationFn: () => inspectFn({ data: { id } }),
+    onSuccess: (result) => {
+      setIntegrations(result);
+      if (result.ok) toast.success("Integrações conferidas.");
+      else toast.warning(result.reason ?? "Não foi possível conferir as integrações.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const health = useMutation({
     mutationFn: () => healthFn({ data: { id } }),
     onSuccess: () => {
@@ -422,9 +439,15 @@ function InstallationDetailPage() {
 
   // Estado definitivo: o núcleo decide READY; integrações opcionais nunca
   // bloqueiam. O MASTER só afirma "configurado" no que a instalação reportou.
+  const optionalFromInspection: Partial<Record<OptionalConfigId, OptionalState>> = {};
+  const optionalDetail: Partial<Record<OptionalConfigId, string>> = {};
+  for (const item of integrations?.items ?? []) {
+    optionalFromInspection[item.id] = item.state;
+    optionalDetail[item.id] = item.detail;
+  }
   const readiness = computeReadiness({
     core: inst.healthChecks,
-    optional: { custom_domain: customDomainState(inst.domain) },
+    optional: { custom_domain: customDomainState(inst.domain), ...optionalFromInspection },
     operationRunning: !!activeOp,
   });
   const optionalConfigured = OPTIONAL_CONFIG.filter(
@@ -623,10 +646,14 @@ function InstallationDetailPage() {
                   }
                 />
                 <CheckRow
-                  state={readiness.core.super_admin.state === "ok" ? "ok" : "attention"}
+                  // Primeiro acesso é do cliente (em /setup): não é falha da
+                  // instalação, então nunca aparece como "atenção".
+                  state={readiness.core.super_admin.state === "ok" ? "ok" : "pending"}
                   label="Super Admin"
                   value={
-                    readiness.core.super_admin.state === "ok" ? "criado" : "pendente em /setup"
+                    readiness.core.super_admin.state === "ok"
+                      ? "criado"
+                      : "aguardando primeiro acesso em /setup"
                   }
                 />
                 <CheckRow
@@ -768,28 +795,76 @@ function InstallationDetailPage() {
           <Card>
             <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pb-3">
               <CardTitle className="truncate text-sm">Configuração opcional</CardTitle>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                Não bloqueia a operação
-              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                disabled={inspect.isPending}
+                onClick={() => inspect.mutate()}
+              >
+                {inspect.isPending ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Conferir integrações
+              </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <p className="text-[11px] text-muted-foreground">
+                Não bloqueia a operação.{" "}
+                {integrations
+                  ? `Conferido em ${formatDateTimeBr(integrations.checkedAt)}.`
+                  : "Use “Conferir integrações” para ler o estado real desta instalação."}
+              </p>
+              {integrations && !integrations.ok && integrations.reason && (
+                <p className="text-[11px] text-severity-warning">{integrations.reason}</p>
+              )}
               <DataGrid columns={3}>
                 {OPTIONAL_CONFIG.map((item) => {
                   const state = readiness.optional[item.id];
+                  const detail = optionalDetail[item.id];
                   return (
                     <DataCell key={item.id} label={item.label}>
-                      <div className="mt-1">
+                      <div className="mt-1 space-y-1" title={detail ?? undefined}>
                         <StateBadge
                           state={OPTIONAL_STATE[state]}
                           label={OPTIONAL_STATE_LABEL[state]}
                         />
+                        {detail && (
+                          <p className="line-clamp-2 text-[11px] text-muted-foreground">{detail}</p>
+                        )}
                       </div>
                     </DataCell>
                   );
                 })}
               </DataGrid>
+              {integrations?.expectedMetaRedirectUri && (
+                <p className="text-[11px] text-muted-foreground">
+                  Endereço de retorno do Meta desta instalação:{" "}
+                  <code className="rounded bg-muted px-1 py-0.5">
+                    {integrations.expectedMetaRedirectUri}
+                  </code>{" "}
+                  — cadastre em “URIs de redirecionamento do OAuth válidos”.
+                </p>
+              )}
+              {integrations?.superAdminSetupUrl && readiness.core.super_admin.state !== "ok" && (
+                <p className="text-[11px] text-muted-foreground">
+                  Super Admin ainda não criado: o cliente faz o primeiro acesso em{" "}
+                  <a
+                    className="underline"
+                    href={integrations.superAdminSetupUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {integrations.superAdminSetupUrl}
+                  </a>
+                  .
+                </p>
+              )}
             </CardContent>
           </Card>
+
         </TabsContent>
 
         {/* ACESSOS */}

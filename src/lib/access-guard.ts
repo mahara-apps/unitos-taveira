@@ -394,3 +394,54 @@ export async function resolveScopedClientIds(
   return scope.allowedClientIds;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Permissões por MÓDULO (RBAC operacional)                           */
+/* ------------------------------------------------------------------ */
+
+import {
+  mergeModulePermissions,
+  type ModuleKey,
+  type ModuleLevel,
+  type ModulePermissions,
+} from "@/lib/module-permissions";
+
+/**
+ * Permissões efetivas do usuário no workspace — espelha
+ * `public.effective_module_permissions` (perfil + overrides; admins → tudo).
+ */
+export async function resolveModulePermissions(
+  supabase: RpcClient,
+  userId: string,
+  brandId: string,
+): Promise<ModulePermissions> {
+  const { data, error } = await callRpc(supabase, "effective_module_permissions", {
+    _user_id: userId,
+    _brand_id: brandId,
+  });
+  if (error) throw error;
+  return mergeModulePermissions(data, null);
+}
+
+/**
+ * Defesa em profundidade: exige nível mínimo no módulo antes de qualquer
+ * escrita. NÃO substitui o gate de escopo por cliente (`assertClientScope`).
+ */
+export async function assertModuleAccess(
+  supabase: RpcClient,
+  userId: string,
+  brandId: string,
+  moduleKey: ModuleKey,
+  minLevel: ModuleLevel = "view",
+): Promise<void> {
+  if (!brandId) throw new Error("Forbidden: workspace obrigatório");
+  const { data, error } = await callRpc(supabase, "has_module_access", {
+    _user_id: userId,
+    _brand_id: brandId,
+    _module: moduleKey,
+    _min_level: minLevel,
+  });
+  if (error || data !== true) {
+    throw new Error(`Forbidden: sem permissão suficiente no módulo ${moduleKey}`);
+  }
+}

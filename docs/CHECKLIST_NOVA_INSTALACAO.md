@@ -274,3 +274,30 @@ MASTER pronto (tokens UNITOS_*)
                                       └─ validar de novo → "Pronto" verde
                                            └─ opcionais: domínio, Meta, e-mail, WhatsApp, IA, branding
 ```
+
+---
+
+## Propagar correções do MASTER para instalações existentes
+
+Toda correção de banco feita no MASTER precisa chegar às instalações já
+criadas. A sequência é sempre esta:
+
+1. No MASTER, aplicar a migration normalmente.
+2. Regenerar o pacote de instalação:
+   `python3 supabase/baseline-snapshot/tools/build_delta.py`
+   (atualiza `007_delta_migrations.sql`, usado por instalação nova E por
+   atualização de instalação existente).
+3. Subir `MASTER_RELEASE_VERSION` em `src/lib/installation/manager-contract.ts`
+   (ex.: `1.0.0` → `1.0.1`). Sem isso o botão *Atualizar* fica indisponível,
+   porque a instalação parece estar na mesma versão.
+4. Publicar o MASTER.
+5. Em **Instalações**, abrir cada instalação e autorizar a atualização no card
+   *Versão e atualizações*. A operação agora tem 4 etapas:
+   `Atualização do banco → Novo deployment → Build e publicação → Versão`.
+
+A etapa **Atualização do banco** aplica o delta no Supabase da instalação,
+comando por comando, com checkpoint (retoma de onde parou) e ledger no banco de
+destino (`public._unitos_applied_deltas`): repetir a atualização com o mesmo
+delta é no-op. Ela roda **antes** do build, para que o código novo nunca fique
+publicado sobre um banco antigo. Se ela falhar, a atualização para com o motivo
+exato — nunca termina "verde" com banco desatualizado.

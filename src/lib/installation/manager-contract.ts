@@ -16,8 +16,12 @@
 
 import { MASTER_FORBIDDEN_TOKENS } from "./bootstrap-contract";
 
-/** Versão do baseline/release que o MASTER distribui para as instalações. */
-export const MASTER_RELEASE_VERSION = "1.0.0";
+/**
+ * Versão do baseline/release que o MASTER distribui para as instalações.
+ * Subir a cada correção de banco/código propagável: é o que habilita o botão
+ * "Atualizar" (que agora também aplica o delta de banco na instalação).
+ */
+export const MASTER_RELEASE_VERSION = "1.0.1";
 
 /* ------------------------------------------------------------------ MASTER */
 
@@ -325,6 +329,7 @@ export const VALIDATE_STEPS = [
  * instalação (novo build a partir do repositório) e registra a versão.
  */
 export const UPDATE_STEPS = [
+  { id: "database", label: "Atualização do banco", script: "supabase/baseline-snapshot/007_delta_migrations.sql" },
   { id: "code", label: "Novo deployment do código do MASTER", script: "vercel: POST /v13/deployments" },
   { id: "build", label: "Build e publicação", script: "vercel: GET /v13/deployments/{id}" },
   { id: "version", label: "Versão registrada", script: "installations.current_version" },

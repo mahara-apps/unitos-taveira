@@ -523,7 +523,7 @@ export function BriefingImportDialog({
           <div className="space-y-4">
             <ContextExplainer />
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className={embedded ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
               <section className="flex min-w-0 flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="text-[13px] font-semibold tracking-tight">
@@ -815,19 +815,20 @@ export function BriefingImportDialog({
   if (embedded) {
     if (!open) return null;
     return (
-      <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+      <div className="flex max-h-[52vh] flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/20">
         {queue.length > 1 ? (
-          <div className="flex justify-end">
+          <div className="flex justify-end border-b border-border/60 px-4 py-2">
             <Badge variant="outline" className="text-[11px]">
               {index + 1} de {queue.length}
             </Badge>
           </div>
         ) : null}
-        {body}
-        <div className="border-t border-border/60 pt-3">{footer}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{body}</div>
+        <div className="border-t border-border/60 bg-background/60 px-4 py-3">{footer}</div>
       </div>
     );
   }
+
 
   return (
     <ExpandedModal
