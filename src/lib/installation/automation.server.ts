@@ -267,7 +267,7 @@ export type DeployClient = {
    */
   setAutoDeploy: (
     enabled: boolean,
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; error?: string; unsupported?: boolean }>;
   /**
    * Liga o projeto de deploy ao repositório `owner/repo` DA INSTALAÇÃO,
    * substituindo qualquer vínculo anterior. Idempotente.
@@ -936,6 +936,15 @@ export function createDeployClient(input: {
         );
         if (res.ok) return { ok: true };
         const text = await res.text().catch(() => "");
+        // Planos Hobby não têm política de deployment: seguimos com o build
+        // automático ligado em vez de bloquear o provisionamento.
+        if (res.status === 403 && /pro_plan_required|not available for Hobby/i.test(text)) {
+          return {
+            ok: true,
+            unsupported: true,
+            error: "plano da Vercel não permite política de deployment (auto-deploy segue ligado)",
+          };
+        }
         return {
           ok: false,
           error: `HTTP ${res.status} ao ajustar o build automático (${text.slice(0, 200)})`,
@@ -1612,8 +1621,8 @@ export async function runAutomatedProvision(input: {
     return finish(null, null);
   }
   // Instalação externa nunca publica sozinha a cada commit: o build automático
-  // fica desligado e só o MASTER autoriza novas publicações. Fail-closed: se o
-  // desligamento não pode ser confirmado, o provisionamento não segue.
+  // fica desligado quando o plano da Vercel permite. Em plano Hobby a política
+  // não existe: seguimos com aviso, sem bloquear o provisionamento.
   const autoDeployOff = await deploy.setAutoDeploy(false);
   if (!autoDeployOff.ok) {
     blocked.push(
@@ -1625,7 +1634,13 @@ export async function runAutomatedProvision(input: {
     checks.configuration = "attention";
     return finish(null, null);
   }
-  await mark("deploy_link", "done", `projeto ligado a ${repo.slug} · auto-deploy por Git desligado`);
+  await mark(
+    "deploy_link",
+    "done",
+    autoDeployOff.unsupported
+      ? `projeto ligado a ${repo.slug} · auto-deploy por Git segue ligado (${autoDeployOff.error ?? "plano da Vercel sem política de deployment"})`
+      : `projeto ligado a ${repo.slug} · auto-deploy por Git desligado`,
+  );
 
 
   /* 5. baseline do banco — roda DEPOIS de código, deploy conectado e variáveis:
