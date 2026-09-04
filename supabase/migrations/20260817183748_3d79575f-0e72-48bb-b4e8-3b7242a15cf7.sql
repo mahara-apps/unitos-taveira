@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.post_placements_post_format_noconn_key;

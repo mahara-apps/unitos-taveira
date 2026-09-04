@@ -1,0 +1,1 @@
+ALTER TABLE public.post_approvals ADD COLUMN IF NOT EXISTS decided_by_name text;

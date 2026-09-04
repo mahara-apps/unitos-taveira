@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.enforce_task_project_client() FROM anon, authenticated;

@@ -1,0 +1,2 @@
+ALTER TABLE public.brand_media_assets ADD COLUMN IF NOT EXISTS client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_brand_media_client ON public.brand_media_assets (brand_id, client_id, created_at DESC);

@@ -1,0 +1,1 @@
+DELETE FROM public.agent_prompts WHERE agent_id = 'construtor_agentes';

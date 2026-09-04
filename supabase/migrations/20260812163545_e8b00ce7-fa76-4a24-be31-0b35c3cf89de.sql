@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.stop_timer(uuid);

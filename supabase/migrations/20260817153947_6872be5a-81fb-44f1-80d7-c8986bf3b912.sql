@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_social_accounts_connection ON public.client_social_accounts (connection_id);

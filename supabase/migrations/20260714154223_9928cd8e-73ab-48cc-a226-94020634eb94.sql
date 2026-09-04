@@ -1,0 +1,1 @@
+ALTER TABLE public.posts ALTER COLUMN script DROP NOT NULL; ALTER TABLE public.posts ALTER COLUMN script SET DEFAULT '[]'::jsonb;

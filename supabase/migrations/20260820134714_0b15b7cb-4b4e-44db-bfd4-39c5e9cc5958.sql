@@ -1,0 +1,1 @@
+ALTER TABLE public.brands ADD COLUMN IF NOT EXISTS login_logo_url text;

@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.message_logs_guard_scope() FROM PUBLIC, anon, authenticated;
+COMMENT ON FUNCTION public.message_logs_guard_scope() IS 'Fase 10B: trigger interno. Valida clients.brand_id = message_logs.brand_id. Sem EXECUTE público.';

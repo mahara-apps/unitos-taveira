@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_oauth_sessions ADD COLUMN IF NOT EXISTS state_nonce text;
+CREATE UNIQUE INDEX IF NOT EXISTS meta_oauth_sessions_state_nonce_key ON public.meta_oauth_sessions (state_nonce) WHERE state_nonce IS NOT NULL;

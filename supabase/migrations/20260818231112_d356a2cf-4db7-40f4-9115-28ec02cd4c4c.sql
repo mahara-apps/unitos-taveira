@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.is_brand_admin_level(uuid, uuid) FROM PUBLIC, anon;

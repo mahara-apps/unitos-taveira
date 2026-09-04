@@ -1,0 +1,1 @@
+SELECT public.brain_run_mining_safe();
