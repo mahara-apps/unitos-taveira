@@ -152,7 +152,8 @@ export function PortalLinkCard({
             )}
           </CardTitle>
           <CardDescription>
-            Link público somente-leitura para acompanhamento e aprovações.
+            Acesso por login e senha para o cliente. O link sem senha é apenas acompanhamento
+            (somente leitura).
           </CardDescription>
         </div>
         {active && (
@@ -167,7 +168,16 @@ export function PortalLinkCard({
           </Button>
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
+        <PortalAccessSection
+          clientId={clientId}
+          {...(clientName ? { clientName } : {})}
+        />
+
+        <div className="border-t border-border/60 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Link de acompanhamento (sem senha, somente leitura)
+        </div>
+
         {linkQ.isLoading ? (
           <Skeleton className="h-24 w-full rounded-lg" />
         ) : active ? (
@@ -269,8 +279,6 @@ export function PortalLinkCard({
           </div>
         )}
       </CardContent>
-
-      <PortalAccessSection clientId={clientId} />
 
       {active && (
         <CustomizeModal

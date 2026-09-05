@@ -7,6 +7,7 @@ import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { clearAccessCaches, getCachedPortalAccess } from "@/lib/access-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -119,8 +120,15 @@ export function LoginForm() {
       return;
     }
     toast.success("Bem-vindo de volta");
+    // A identidade mudou: o escopo memorizado do usuário anterior não vale mais.
+    clearAccessCaches();
+    // Contato de cliente vai direto para a área dele — sem passar pela UI
+    // interna (que redirecionaria de novo, gerando um pisca).
+    const access = await getCachedPortalAccess().catch(() => null);
+    const target =
+      access && access.isPortalUser && !access.isTeamMember ? "/area/inicio" : resolveNext();
     await router.invalidate();
-    navigate({ to: resolveNext(), replace: true });
+    navigate({ to: target, replace: true });
   }
 
   return (
