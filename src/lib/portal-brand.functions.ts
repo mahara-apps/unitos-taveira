@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolvePortalSessionScope } from "@/lib/portal-permissions.server";
 import { resolveSessionScope, resolveTokenScope, scopedAdmin } from "@/lib/portal-scope.server";
 
 /**
@@ -61,9 +62,11 @@ export const getPortalSessionBrandHubFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i ?? {}))
   .handler(async ({ context, data }): Promise<PortalBrandHub> => {
-    const scope = await resolveSessionScope(
+    const scope = await resolvePortalSessionScope(
       (context as { supabase: unknown }).supabase,
       data.clientId,
+      "brand",
+      "view",
     );
     return readBrandHub(scope.clientId, scope.brandId);
   });

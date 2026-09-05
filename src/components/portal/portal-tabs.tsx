@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { PortalLink, usePortalApi } from "./portal-context";
+import { PortalLink, usePortalApi, usePortalCanInteract } from "./portal-context";
 import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import type { PortalTabId } from "./portal-nav";
 import { PautaApprovals } from "./portal-pauta";
@@ -527,6 +527,7 @@ export function ApprovalsTab() {
       ) : q.isError ? (
         <ErrorState
           description="Não conseguimos carregar seus conteúdos agora."
+          message={(q.error as Error)?.message}
           onRetry={() => q.refetch()}
         />
       ) : !q.data?.length ? (
@@ -621,6 +622,8 @@ function ApprovalCard({ post, onOpen }: { post: Record<string, unknown>; onOpen:
 function ApprovalDialog({ postId, onClose }: { postId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const api = usePortalApi();
+  // Decisão só aparece quando o cliente realmente pode decidir.
+  const canDecide = usePortalCanInteract("approvals");
   const q = useQuery({
     queryKey: ["portal", "post", api.scopeKey, postId],
     queryFn: () => api.post(postId),
@@ -748,6 +751,7 @@ function ApprovalDialog({ postId, onClose }: { postId: string; onClose: () => vo
               ) : q.isError ? (
                 <ErrorState
                   description="Não conseguimos carregar este conteúdo."
+                  message={(q.error as Error)?.message}
                   onRetry={() => void q.refetch()}
                 />
               ) : (
@@ -827,7 +831,17 @@ function ApprovalDialog({ postId, onClose }: { postId: string; onClose: () => vo
 
             {/* Ações */}
             <div className="space-y-3 border-t border-border/60 bg-card/70 px-5 py-4">
-              {mode ? (
+              {!canDecide ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Este acesso é de acompanhamento: as decisões ficam com quem tem login
+                    autorizado.
+                  </p>
+                  <Button size="sm" variant="ghost" className="w-full" onClick={onClose}>
+                    Voltar para a lista
+                  </Button>
+                </div>
+              ) : mode ? (
                 <div className="flex gap-2">
                   <Button
                     variant="ghost"

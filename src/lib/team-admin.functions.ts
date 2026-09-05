@@ -55,6 +55,8 @@ type MemberRow = {
 type ProfileRow = {
   id: string;
   full_name: string | null;
+  email: string | null;
+
   avatar_url: string | null;
   phone: string | null;
   job_title: string | null;
@@ -84,7 +86,7 @@ export const listTeamMembersFn = createServerFn({ method: "POST" })
     const { data: profs } = await supabaseAdmin
       .from("user_profiles")
       .select(
-        "id, full_name, avatar_url, phone, job_title, requires_password_change, is_super_admin",
+        "id, full_name, email, avatar_url, phone, job_title, requires_password_change, is_super_admin",
       )
       .in("id", ids);
     const profiles = (profs ?? []) as unknown as ProfileRow[];
@@ -117,7 +119,7 @@ export const listTeamMembersFn = createServerFn({ method: "POST" })
           role: m.role,
           isActive,
           fullName: p?.full_name ?? null,
-          email: a?.email ?? null,
+          email: p?.email ?? a?.email ?? null,
           phone: p?.phone ?? null,
           jobTitle: p?.job_title ?? null,
           avatarUrl: p?.avatar_url ?? null,

@@ -138,3 +138,12 @@ export const listPortalSessionBriefingsFn = createServerFn({ method: "POST" })
 
 export type PortalSessionClient = PortalClient;
 export type PortalSessionPost = PortalPost;
+
+/** Permissões efetivas do cliente no portal (usado para montar a navegação). */
+export const getPortalSessionPermissionsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ clientId: z.string().uuid() }).parse(input ?? {}))
+  .handler(async ({ context, data }) => {
+    const { readPortalPermissions } = await import("@/lib/portal-permissions.server");
+    return readPortalPermissions(context.supabase, data.clientId);
+  });

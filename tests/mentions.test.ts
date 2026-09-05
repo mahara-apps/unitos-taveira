@@ -75,3 +75,22 @@ describe("notifyMentions", () => {
     expect(inserted).toHaveLength(0);
   });
 });
+
+describe("menções com token estável", () => {
+  const people = [
+    { id: "11111111-1111-1111-1111-111111111111", name: "Maria Souza", email: "maria@x.com" },
+    { id: "22222222-2222-2222-2222-222222222222", name: "Maria Souza", email: "maria2@x.com" },
+  ];
+
+  it("resolve a pessoa exata pelo token", () => {
+    const ids = resolveMentions(
+      "oi @[Maria Souza](22222222-2222-2222-2222-222222222222) veja",
+      people,
+    );
+    expect(ids).toEqual(["22222222-2222-2222-2222-222222222222"]);
+  });
+
+  it("ignora menção legada ambígua entre homônimos", () => {
+    expect(resolveMentions("oi @Maria Souza", people)).toEqual([]);
+  });
+});

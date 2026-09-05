@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolvePortalSessionScope } from "@/lib/portal-permissions.server";
 import type {
   PortalPlanSummary,
   PublicPlanDecisionResult,
@@ -44,7 +45,7 @@ export const listPortalSessionPlansFn = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<PortalPlanSummary[]> => {
     const { resolveSessionScope, scopedAdmin } = await import("@/lib/portal-scope.server");
     const { listPlansForClient } = await import("@/lib/monthly-plan-decision.server");
-    const scope = await resolveSessionScope(context.supabase, data.clientId);
+    const scope = await resolvePortalSessionScope(context.supabase, data.clientId, "pauta", "view");
     return listPlansForClient(await scopedAdmin(), scope.clientId);
   });
 
@@ -54,7 +55,7 @@ export const getPortalSessionPlanFn = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<PublicPlanResolve> => {
     const { resolveSessionScope, scopedAdmin } = await import("@/lib/portal-scope.server");
     const { loadPlanForClient } = await import("@/lib/monthly-plan-decision.server");
-    const scope = await resolveSessionScope(context.supabase, data.clientId);
+    const scope = await resolvePortalSessionScope(context.supabase, data.clientId, "pauta", "view");
     return loadPlanForClient(await scopedAdmin(), data.planId, scope.clientId);
   });
 
@@ -66,7 +67,12 @@ export const decidePortalSessionPlanFn = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<PublicPlanDecisionResult> => {
     const { resolveSessionScope, scopedAdmin } = await import("@/lib/portal-scope.server");
     const { decidePlanAsClient } = await import("@/lib/monthly-plan-decision.server");
-    const scope = await resolveSessionScope(context.supabase, data.clientId);
+    const scope = await resolvePortalSessionScope(
+      context.supabase,
+      data.clientId,
+      "pauta",
+      "interact",
+    );
     return decidePlanAsClient(await scopedAdmin(), {
       planId: data.planId,
       clientId: scope.clientId,
@@ -101,16 +107,7 @@ export const decidePortalPlanFn = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) =>
     tokenIn.extend({ planId: z.string().uuid(), ...decisionShape }).parse(i),
   )
-  .handler(async ({ data }): Promise<PublicPlanDecisionResult> => {
-    const { resolveTokenScope, scopedAdmin } = await import("@/lib/portal-scope.server");
-    const { decidePlanAsClient } = await import("@/lib/monthly-plan-decision.server");
-    const scope = await resolveTokenScope(data.token);
-    return decidePlanAsClient(await scopedAdmin(), {
-      planId: data.planId,
-      clientId: scope.clientId,
-      brandId: scope.brandId,
-      decision: data.decision,
-      feedback: data.feedback,
-      items: data.items,
-    });
+  .handler(async (): Promise<PublicPlanDecisionResult> => {
+    // Link sem senha é somente leitura: aprovar pauta exige login do contato.
+    throw new Error("portal_token_read_only");
   });

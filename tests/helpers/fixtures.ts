@@ -88,6 +88,24 @@ export async function cleanupTestIdentities(): Promise<void> {
       () => undefined,
       () => undefined,
     );
+  // Remove vínculos em QUALQUER workspace (inclusive o workspace real da instalação),
+  // para que contas de teste nunca apareçam nas listas de equipe/menções.
+  await admin
+    .from("brand_members")
+    .delete()
+    .in("user_id", ids)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+  await admin
+    .from("client_members")
+    .delete()
+    .in("user_id", ids)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
   for (const id of ids) {
     await admin.auth.admin.deleteUser(id).catch(() => {});
     createdUserIds.delete(id);

@@ -32,3 +32,30 @@ describe("conclusão da etapa de ativos da Meta", () => {
     expect(s.needsCloseConfirm).toBe(false);
   });
 });
+
+describe("resumo por canal e destino", () => {
+  it("descreve o destino quando o cliente está escolhido", () => {
+    const s = assignFinishState({
+      activated: ["Página A", "@perfil"],
+      target: "c1",
+      clientName: "Taveira",
+      channels: { facebook: 1, instagram: 1 },
+    });
+    expect(s.breakdown).toBe("1 Página · 1 conta do Instagram");
+    expect(s.destination).toContain("Taveira");
+    expect(s.canLink).toBe(true);
+  });
+
+  it("explica o que acontece ao concluir sem cliente", () => {
+    const s = assignFinishState({ activated: ["Página A"], channels: { facebook: 1 } });
+    expect(s.destination).toContain("workspace");
+    expect(s.canLink).toBe(false);
+    expect(s.canFinishWithoutClient).toBe(true);
+  });
+
+  it("sem contas ativadas, nada é conectado", () => {
+    const s = assignFinishState({ activated: [] });
+    expect(s.destination).toContain("Nada será conectado");
+    expect(s.breakdown).toBe("");
+  });
+});

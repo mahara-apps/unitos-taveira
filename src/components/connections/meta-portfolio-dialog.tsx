@@ -22,6 +22,8 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  X,
+
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -117,6 +119,93 @@ function metaPopupFeatures(): string {
   return `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
 }
 
+/** Conta ativada nesta passagem pelo painel (o que será vinculado ao cliente). */
+export type SelectedAccount = {
+  connectionId: string;
+  label: string;
+  channel: "facebook" | "instagram" | "threads" | "ads";
+  targetId: string;
+  lookupId: string | null;
+};
+
+const CHANNEL_LABEL: Record<SelectedAccount["channel"], string> = {
+  facebook: "Página",
+  instagram: "Instagram",
+  threads: "Threads",
+  ads: "Ads",
+};
+
+function ChannelGlyph({ channel }: { channel: SelectedAccount["channel"] }) {
+  if (channel === "facebook") return <Facebook className="h-3 w-3 text-[#1877F2]" />;
+  if (channel === "instagram") return <Instagram className="h-3 w-3 text-[#DD2A7B]" />;
+  if (channel === "threads") return <AtSign className="h-3 w-3" />;
+  return <BarChart3 className="h-3 w-3 text-blue-500" />;
+}
+
+/**
+ * Bandeja "Selecionadas": responde à pergunta "qual conta vai ser conectada?".
+ * Lista exatamente as contas ativadas agora, com remoção direta por etiqueta.
+ */
+function MetaSelectionTray({
+  selected,
+  onRemove,
+}: {
+  selected: SelectedAccount[];
+  onRemove: (item: SelectedAccount) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (selected.length === 0) return null;
+  const counts = selected.reduce<Record<string, number>>((acc, item) => {
+    acc[item.channel] = (acc[item.channel] ?? 0) + 1;
+    return acc;
+  }, {});
+  const breakdown = (Object.keys(CHANNEL_LABEL) as Array<SelectedAccount["channel"]>)
+    .filter((c) => counts[c])
+    .map((c) => `${counts[c]} ${CHANNEL_LABEL[c]}`)
+    .join(" · ");
+  const collapsed = selected.length > 6 && !expanded;
+  const shown = collapsed ? selected.slice(0, 6) : selected;
+
+  return (
+    <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+          Vão ser conectadas ({selected.length}){breakdown ? ` · ${breakdown}` : ""}
+        </p>
+        {selected.length > 6 ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {collapsed ? `Ver todas (${selected.length})` : "Recolher"}
+          </Button>
+        ) : null}
+      </div>
+      <ul className="flex flex-wrap gap-1.5">
+        {shown.map((item) => (
+          <li key={item.connectionId}>
+            <span className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-full border border-border/60 bg-background px-2 py-1 text-[11px]">
+              <ChannelGlyph channel={item.channel} />
+              <span className="truncate">{item.label}</span>
+              <button
+                type="button"
+                aria-label={`Remover ${item.label}`}
+                title={`Remover ${item.label}`}
+                className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => onRemove(item)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Sessões Meta já varridas nesta aba do navegador. */
 const scannedSessions = new Set<string>();
 
@@ -168,7 +257,7 @@ export function MetaAssetsPanel({
   const startFn = useServerFn(startMetaOAuth);
 
   /** Conexões ativadas nesta passagem pelo painel (para vincular ao cliente). */
-  const [linkedNow, setLinkedNow] = useState<Array<{ connectionId: string; label: string }>>([]);
+  const [linkedNow, setLinkedNow] = useState<SelectedAccount[]>([]);
   useEffect(() => {
     onPendingChange?.(linkedNow.length);
   }, [linkedNow.length, onPendingChange]);
@@ -367,10 +456,15 @@ export function MetaAssetsPanel({
               old.adAccounts?.find((a) => a.adAccountId === vars.targetId)?.name ??
               vars.targetId;
             const connectionId = result.connectionId;
+            const entry: SelectedAccount = {
+              connectionId,
+              label,
+              channel: vars.channel,
+              targetId: vars.targetId,
+              lookupId,
+            };
             setLinkedNow((prev) =>
-              prev.some((x) => x.connectionId === connectionId)
-                ? prev
-                : [...prev, { connectionId, label }],
+              prev.some((x) => x.connectionId === connectionId) ? prev : [...prev, entry],
             );
           }
         } else {
@@ -489,15 +583,31 @@ export function MetaAssetsPanel({
    * consulta extra à Meta e nenhuma alteração no fluxo de seleção.
    */
   const [assetQuery, setAssetQuery] = useState("");
+  /** Mostra apenas as contas ativadas nesta passagem (revisão final). */
+  const [onlySelected, setOnlySelected] = useState(false);
+  const selectedKeys = useMemo(
+    () => new Set(linkedNow.map((item) => `${item.channel}:${item.targetId}`)),
+    [linkedNow],
+  );
+  const keep = (channel: SelectedAccount["channel"], targetId: string) =>
+    !onlySelected || selectedKeys.has(`${channel}:${targetId}`);
   const q = assetQuery.trim().toLowerCase();
   const match = (...parts: Array<string | null | undefined>) =>
     !q || parts.filter(Boolean).join(" ").toLowerCase().includes(q);
-  const visibleFb = fbPages.filter((p) => match(p.pageName, p.category, p.pageId));
-  const visibleIg = igPages.filter((p) =>
-    match(p.pageName, p.instagramUsername, p.instagramBusinessId, p.pageId),
+  const visibleFb = fbPages.filter(
+    (p) => keep("facebook", p.pageId) && match(p.pageName, p.category, p.pageId),
   );
-  const visibleThreads = threadsAccounts.filter((t) => match(t.username, t.name, t.threadsUserId));
-  const visibleAds = adAccounts.filter((a) => match(a.name, a.adAccountId, a.businessName));
+  const visibleIg = igPages.filter(
+    (p) =>
+      keep("instagram", p.pageId) &&
+      match(p.pageName, p.instagramUsername, p.instagramBusinessId, p.pageId),
+  );
+  const visibleThreads = threadsAccounts.filter(
+    (t) => keep("threads", t.threadsUserId) && match(t.username, t.name, t.threadsUserId),
+  );
+  const visibleAds = adAccounts.filter(
+    (a) => keep("ads", a.adAccountId) && match(a.name, a.adAccountId, a.businessName),
+  );
 
   const showNotLoadedState = data?.portfolioStatus === "not_loaded";
   const showStoredRateLimitState = data?.portfolioStatus === "rate_limited";
@@ -706,6 +816,22 @@ export function MetaAssetsPanel({
                 className="h-9 pl-8 text-xs"
               />
             </div>
+            {linkedNow.length > 0 ? (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <Button
+                  size="sm"
+                  variant={onlySelected ? "secondary" : "ghost"}
+                  className="h-7 gap-1.5 text-[11px]"
+                  onClick={() => setOnlySelected((v) => !v)}
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                  {onlySelected ? "Mostrar todas" : "Só as selecionadas"}
+                </Button>
+                <span className="text-[11px] text-muted-foreground">
+                  {linkedNow.length} selecionada{linkedNow.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            ) : null}
             {!channel && (
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="facebook" className="gap-2 text-xs">
@@ -740,7 +866,7 @@ export function MetaAssetsPanel({
             )}
 
             <TabsContent value="facebook" className="mt-3">
-              <ScrollArea className="h-[420px] rounded-lg border border-border/60">
+              <ScrollArea className="h-[min(420px,42vh)] rounded-lg border border-border/60">
                 <ul className="divide-y divide-border/60">
                   {visibleFb.length === 0 ? (
                     <li className="p-6 text-center text-xs text-muted-foreground">
@@ -812,7 +938,7 @@ export function MetaAssetsPanel({
                   onReauthorize={() => reauthorize("instagram")}
                 />
               ) : (
-                <ScrollArea className="h-[420px] rounded-lg border border-border/60">
+                <ScrollArea className="h-[min(420px,42vh)] rounded-lg border border-border/60">
                   <ul className="divide-y divide-border/60">
                     {visibleIg.map((p) => {
                       const key = `instagram:${p.pageId}`;
@@ -886,7 +1012,7 @@ export function MetaAssetsPanel({
             </TabsContent>
 
             <TabsContent value="threads" className="mt-3">
-              <ScrollArea className="h-[420px] rounded-lg border border-border/60">
+              <ScrollArea className="h-[min(420px,42vh)] rounded-lg border border-border/60">
                 <ul className="divide-y divide-border/60">
                   {visibleThreads.length === 0 ? (
                     <li className="p-6 text-center text-xs text-muted-foreground">
@@ -949,7 +1075,7 @@ export function MetaAssetsPanel({
             </TabsContent>
 
             <TabsContent value="ads" className="mt-3">
-              <ScrollArea className="h-[420px] rounded-lg border border-border/60">
+              <ScrollArea className="h-[min(420px,42vh)] rounded-lg border border-border/60">
                 <ul className="divide-y divide-border/60">
                   {visibleAds.length === 0 ? (
                     <li className="p-6 text-center text-xs text-muted-foreground">
@@ -1013,7 +1139,13 @@ export function MetaAssetsPanel({
       </div>
 
       {assign ? (
-        <div className="sticky bottom-0 z-10 -mx-1 mt-2 bg-background/95 px-1 backdrop-blur">
+        <div className="-mx-1 mt-3 border-t border-border/60 bg-background px-1 pt-3">
+          <MetaSelectionTray
+            selected={linkedNow}
+            onRemove={(item) =>
+              void handleToggle(item.channel, item.targetId, item.lookupId, false)
+            }
+          />
           <MetaAssignFooter
             brandId={brandId}
             clientId={clientId}
@@ -1041,7 +1173,7 @@ function MetaAssignFooter({
 }: {
   brandId: string;
   clientId?: string;
-  linked: Array<{ connectionId: string; label: string }>;
+  linked: SelectedAccount[];
   onDone: () => void;
 }) {
   const qc = useQueryClient();
@@ -1088,16 +1220,22 @@ function MetaAssignFooter({
     }
   }
 
+  const channels = linked.reduce<Record<string, number>>((acc, item) => {
+    acc[item.channel] = (acc[item.channel] ?? 0) + 1;
+    return acc;
+  }, {});
   const state = assignFinishState({
     activated: linked.map((l) => l.label),
     clientId,
     target: target || undefined,
+    clientName: clients.find((c) => c.id === target)?.name,
+    channels,
   });
   const count = state.count;
 
   return (
-    <div className="mt-4 space-y-3 border-t border-border/60 pt-3">
-      <p className="text-[11px] leading-snug text-muted-foreground">{state.message}</p>
+    <div className="space-y-3">
+      <p className="text-[11px] leading-snug text-muted-foreground">{state.destination}</p>
       {clientId ? (
         <div className="flex justify-end">
           <Button size="sm" onClick={() => void finish(false)} disabled={saving}>

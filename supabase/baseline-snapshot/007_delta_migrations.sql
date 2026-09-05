@@ -2423,3 +2423,404 @@ BEGIN
   RETURN v_profile || v_override;
 END;
 $function$;
+
+-- ---------------------------------------------------------------------------
+-- 20260905131425_0f1a6890-11c3-4fa8-ade5-3eceb0d8e84e.sql
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.client_portal_access (
+  client_id uuid PRIMARY KEY REFERENCES public.clients(id) ON DELETE CASCADE,
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  permissions jsonb NOT NULL DEFAULT '{"approvals":"interact","pauta":"interact","calendar":"view","briefing":"interact","files":"view","brand":"view"}'::jsonb,
+  owner_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.client_portal_access TO authenticated;
+GRANT ALL ON public.client_portal_access TO service_role;
+
+ALTER TABLE public.client_portal_access ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS cpa_select ON public.client_portal_access;
+CREATE POLICY cpa_select ON public.client_portal_access
+  FOR SELECT TO authenticated
+  USING (
+    public.can_access_client(client_id, auth.uid())
+    OR public.is_portal_client_of(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS cpa_write ON public.client_portal_access;
+CREATE POLICY cpa_write ON public.client_portal_access
+  FOR ALL TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR (public.is_brand_admin_level(brand_id, auth.uid()) AND public.can_access_client(client_id, auth.uid()))
+  )
+  WITH CHECK (
+    public.is_super_admin(auth.uid())
+    OR (public.is_brand_admin_level(brand_id, auth.uid()) AND public.can_access_client(client_id, auth.uid()))
+  );
+
+CREATE OR REPLACE FUNCTION public.client_portal_access_touch()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_client_portal_access_touch ON public.client_portal_access;
+CREATE TRIGGER trg_client_portal_access_touch
+  BEFORE UPDATE ON public.client_portal_access
+  FOR EACH ROW EXECUTE FUNCTION public.client_portal_access_touch();
+
+-- Permissões efetivas do portal, lidas tanto pela agência quanto pelo cliente final.
+CREATE OR REPLACE FUNCTION public.portal_permissions(_client_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _default jsonb := '{"approvals":"interact","pauta":"interact","calendar":"view","briefing":"interact","files":"view","brand":"view"}'::jsonb;
+  _perms jsonb;
+BEGIN
+  IF NOT (
+    public.can_access_client(_client_id, auth.uid())
+    OR public.is_portal_client_of(_client_id, auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'client_not_allowed';
+  END IF;
+
+  SELECT permissions INTO _perms FROM public.client_portal_access WHERE client_id = _client_id;
+  RETURN _default || COALESCE(_perms, '{}'::jsonb);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.portal_permissions(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.portal_permissions(uuid) TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260905134315_fe6d8235-dc34-4e9e-8596-f61b4681a0a7.sql
+-- ---------------------------------------------------------------------------
+-- =========================================================
+-- Portal do cliente: pedidos, conversa de aprovação, prazos
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS public.client_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  project_id uuid REFERENCES public.projects(id) ON DELETE SET NULL,
+  task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  description text,
+  desired_due_at timestamptz,
+  status text NOT NULL DEFAULT 'submitted'
+    CHECK (status IN ('submitted','info_needed','accepted','in_production','done','rejected','cancelled')),
+  owner_user_id uuid,
+  created_by uuid,
+  created_by_name text,
+  attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
+  decision_note text,
+  decided_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS client_requests_client_idx ON public.client_requests (client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS client_requests_brand_idx ON public.client_requests (brand_id, status);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.client_requests TO authenticated;
+GRANT ALL ON public.client_requests TO service_role;
+ALTER TABLE public.client_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "client_requests_select" ON public.client_requests;
+CREATE POLICY "client_requests_select" ON public.client_requests
+  FOR SELECT TO authenticated
+  USING (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "client_requests_insert" ON public.client_requests;
+CREATE POLICY "client_requests_insert" ON public.client_requests
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "client_requests_update" ON public.client_requests;
+CREATE POLICY "client_requests_update" ON public.client_requests
+  FOR UPDATE TO authenticated
+  USING (
+    public.can_access_client(client_id, auth.uid())
+    OR (
+      public.is_portal_client_of(client_id, auth.uid())
+      AND created_by = auth.uid()
+      AND status IN ('submitted','info_needed')
+    )
+  )
+  WITH CHECK (
+    public.can_access_client(client_id, auth.uid())
+    OR (
+      public.is_portal_client_of(client_id, auth.uid())
+      AND created_by = auth.uid()
+      AND status IN ('submitted','info_needed','cancelled')
+    )
+  );
+
+DROP POLICY IF EXISTS "client_requests_delete" ON public.client_requests;
+CREATE POLICY "client_requests_delete" ON public.client_requests
+  FOR DELETE TO authenticated
+  USING (public.can_access_client(client_id, auth.uid()));
+
+CREATE OR REPLACE FUNCTION public.client_requests_touch()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
+
+DROP TRIGGER IF EXISTS client_requests_touch_updated_at ON public.client_requests;
+CREATE TRIGGER client_requests_touch_updated_at
+  BEFORE UPDATE ON public.client_requests
+  FOR EACH ROW EXECUTE FUNCTION public.client_requests_touch();
+
+-- ---------------------------------------------------------
+-- Histórico do pedido
+-- ---------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.client_request_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL REFERENCES public.client_requests(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  actor_id uuid,
+  actor_name text,
+  actor_side text NOT NULL DEFAULT 'team' CHECK (actor_side IN ('client','team')),
+  kind text NOT NULL CHECK (kind IN ('created','status','comment','info_needed','cancelled')),
+  note text,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS client_request_events_request_idx
+  ON public.client_request_events (request_id, created_at);
+
+GRANT SELECT, INSERT ON public.client_request_events TO authenticated;
+GRANT ALL ON public.client_request_events TO service_role;
+ALTER TABLE public.client_request_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "client_request_events_select" ON public.client_request_events;
+CREATE POLICY "client_request_events_select" ON public.client_request_events
+  FOR SELECT TO authenticated
+  USING (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "client_request_events_insert" ON public.client_request_events;
+CREATE POLICY "client_request_events_insert" ON public.client_request_events
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+-- ---------------------------------------------------------
+-- Conversa e marcação nos conteúdos em aprovação
+-- ---------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.post_client_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  author_user_id uuid,
+  author_name text,
+  author_side text NOT NULL DEFAULT 'client' CHECK (author_side IN ('client','team')),
+  body text,
+  attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
+  anchor jsonb,
+  resolved_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS post_client_comments_post_idx
+  ON public.post_client_comments (post_id, created_at);
+
+GRANT SELECT, INSERT, UPDATE ON public.post_client_comments TO authenticated;
+GRANT ALL ON public.post_client_comments TO service_role;
+ALTER TABLE public.post_client_comments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "post_client_comments_select" ON public.post_client_comments;
+CREATE POLICY "post_client_comments_select" ON public.post_client_comments
+  FOR SELECT TO authenticated
+  USING (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "post_client_comments_insert" ON public.post_client_comments;
+CREATE POLICY "post_client_comments_insert" ON public.post_client_comments
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_portal_client_of(client_id, auth.uid())
+    OR public.can_access_client(client_id, auth.uid())
+  );
+
+DROP POLICY IF EXISTS "post_client_comments_update" ON public.post_client_comments;
+CREATE POLICY "post_client_comments_update" ON public.post_client_comments
+  FOR UPDATE TO authenticated
+  USING (public.can_access_client(client_id, auth.uid()))
+  WITH CHECK (public.can_access_client(client_id, auth.uid()));
+
+-- ---------------------------------------------------------
+-- Prazo do cliente no conteúdo
+-- ---------------------------------------------------------
+
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS client_due_at timestamptz;
+
+-- ---------------------------------------------------------
+-- Preferências de aviso do contato do portal
+-- ---------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.portal_notification_prefs (
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  email_enabled boolean NOT NULL DEFAULT true,
+  kinds jsonb NOT NULL DEFAULT '{"approvals":true,"deadlines":true,"requests":true,"comments":true}'::jsonb,
+  daily_digest boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (client_id, user_id)
+);
+
+GRANT SELECT, INSERT, UPDATE ON public.portal_notification_prefs TO authenticated;
+GRANT ALL ON public.portal_notification_prefs TO service_role;
+ALTER TABLE public.portal_notification_prefs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "portal_notification_prefs_own" ON public.portal_notification_prefs;
+CREATE POLICY "portal_notification_prefs_own" ON public.portal_notification_prefs
+  FOR ALL TO authenticated
+  USING (user_id = auth.uid() OR public.can_access_client(client_id, auth.uid()))
+  WITH CHECK (user_id = auth.uid() OR public.can_access_client(client_id, auth.uid()));
+
+DROP TRIGGER IF EXISTS portal_notification_prefs_touch ON public.portal_notification_prefs;
+CREATE TRIGGER portal_notification_prefs_touch
+  BEFORE UPDATE ON public.portal_notification_prefs
+  FOR EACH ROW EXECUTE FUNCTION public.client_requests_touch();
+
+-- ---------------------------------------------------------------------------
+-- 20260905192300_0f13e28b-c1a2-46b5-9c4e-08ada00b0b88.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS email text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_profiles_email_lower_key
+  ON public.user_profiles (lower(email)) WHERE email IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS user_profiles_email_lower_idx
+  ON public.user_profiles (lower(email));
+
+UPDATE public.user_profiles up
+SET email = u.email
+FROM auth.users u
+WHERE u.id = up.id
+  AND up.email IS DISTINCT FROM u.email;
+
+CREATE OR REPLACE FUNCTION public.sync_user_profile_email()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.user_profiles SET email = NEW.email, updated_at = now()
+  WHERE id = NEW.id AND email IS DISTINCT FROM NEW.email;
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sync_user_profile_email: %', SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS sync_user_profile_email_trg ON auth.users;
+CREATE TRIGGER sync_user_profile_email_trg
+AFTER INSERT OR UPDATE OF email ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.sync_user_profile_email();
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_role text;
+  v_full_name text;
+  v_brand uuid;
+  v_is_first boolean;
+  v_ws_name text;
+  v_ws_slug text;
+  v_is_test boolean;
+BEGIN
+  v_role := lower(coalesce(NEW.raw_user_meta_data->>'role', ''));
+  IF v_role NOT IN ('admin', 'manager', 'user', 'super_admin', 'portal_client') THEN
+    v_role := 'user';
+  END IF;
+
+  v_is_test := coalesce(NEW.email, '') ~* '@(unitos-tests\.dev|unitos-qa\.test)$';
+
+  SELECT NOT EXISTS (SELECT 1 FROM public.user_profiles) INTO v_is_first;
+  IF v_is_first AND v_role <> 'portal_client' AND NOT v_is_test THEN
+    v_role := 'super_admin';
+  END IF;
+
+  v_full_name := NULLIF(trim(coalesce(NEW.raw_user_meta_data->>'full_name', '')), '');
+
+  BEGIN
+    INSERT INTO public.user_profiles (id, full_name, email, role)
+    VALUES (
+      NEW.id,
+      v_full_name,
+      NEW.email,
+      CASE WHEN v_role = 'portal_client' THEN 'user' ELSE v_role END
+    )
+    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user: falha ao criar perfil para %: %', NEW.id, SQLERRM;
+  END;
+
+  IF v_role <> 'portal_client' AND NOT v_is_test THEN
+    BEGIN
+      SELECT id INTO v_brand FROM public.brands ORDER BY created_at LIMIT 1;
+
+      IF v_brand IS NULL AND v_is_first THEN
+        v_ws_name := coalesce(
+          NULLIF(trim(NEW.raw_user_meta_data->>'workspace_name'), ''),
+          'Workspace'
+        );
+        v_ws_slug := regexp_replace(lower(v_ws_name), '[^a-z0-9]+', '-', 'g');
+        v_ws_slug := NULLIF(trim(both '-' from v_ws_slug), '');
+        v_ws_slug := coalesce(v_ws_slug, 'workspace') || '-' || substr(NEW.id::text, 1, 8);
+
+        INSERT INTO public.brands (name, slug, created_by)
+        VALUES (left(v_ws_name, 80), v_ws_slug, NEW.id)
+        RETURNING id INTO v_brand;
+      END IF;
+
+      IF v_brand IS NOT NULL THEN
+        INSERT INTO public.brand_members (brand_id, user_id, role)
+        VALUES (v_brand, NEW.id, CASE WHEN v_role = 'super_admin' THEN 'admin' ELSE v_role END::app_role)
+        ON CONFLICT (brand_id, user_id) DO NOTHING;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'handle_new_user: falha ao vincular workspace para %: %', NEW.id, SQLERRM;
+    END;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;

@@ -240,6 +240,7 @@ export function PortalCalendar() {
       ) : q.isError ? (
         <ErrorState
           description="Não conseguimos carregar o calendário deste mês agora."
+          message={(q.error as Error)?.message}
           onRetry={() => q.refetch()}
         />
       ) : items.length === 0 ? (

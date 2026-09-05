@@ -147,6 +147,7 @@ export function PortalFiles() {
       ) : q.isError ? (
         <ErrorState
           description="Não conseguimos carregar seus arquivos agora."
+          message={(q.error as Error)?.message}
           onRetry={() => q.refetch()}
         />
       ) : visible.length === 0 ? (

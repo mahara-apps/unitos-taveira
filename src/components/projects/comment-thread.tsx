@@ -22,6 +22,7 @@ import {
 import { addTaskCommentFn, deleteTaskCommentFn, listTaskCommentsFn } from "@/lib/tasks.functions";
 import { listBrandAssigneesFn } from "@/lib/content.functions";
 import { APP_TIMEZONE } from "@/lib/timezone";
+import { displayName, initialsOf } from "@/lib/identity";
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
@@ -108,6 +109,11 @@ export function CommentThread({
     staleTime: 60_000,
   });
   const people = peopleQ.data ?? [];
+  /** Identidade do autor: usa o perfil da equipe quando disponível. */
+  const authorOf = (c: Entry) => {
+    const p = people.find((x) => x.id === c.author_id);
+    return { full_name: c.author_name ?? p?.name ?? null, email: p?.email ?? null };
+  };
 
   const addMut = useMutation({
     mutationFn: async (text: string) => {
@@ -163,11 +169,11 @@ export function CommentThread({
             <div key={c.id} className="flex gap-2.5">
               <Avatar className="h-7 w-7 shrink-0">
                 {c.author_avatar ? <AvatarImage src={c.author_avatar} alt="" /> : null}
-                <AvatarFallback className="text-[10px]">{initials(c.author_name)}</AvatarFallback>
+                <AvatarFallback className="text-[10px]">{initialsOf(authorOf(c))}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-xs font-medium">{c.author_name ?? "Usuário"}</span>
+                  <span className="truncate text-xs font-medium">{displayName(authorOf(c), "Usuário")}</span>
                   <span className="text-[10px] text-muted-foreground">
                     {formatWhen(c.created_at)}
                   </span>

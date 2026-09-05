@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolvePortalSessionScope } from "@/lib/portal-permissions.server";
 import {
   resolveSessionScope,
   resolveTokenScope,
@@ -195,9 +196,10 @@ export const listPortalBriefingRequestsFn = createServerFn({ method: "POST" })
 
 export const submitPortalBriefingProposalFn = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => AnswerIn.extend({ token: z.string().min(10) }).parse(i))
-  .handler(async ({ data }) =>
-    submitProposal(await resolveTokenScope(data.token), data, "portal_token", null),
-  );
+  .handler(async () => {
+    // Link sem senha é somente leitura: responder briefing exige login.
+    throw new Error("portal_token_read_only");
+  });
 
 /* ------------------------------ modo SESSÃO ------------------------------- */
 
@@ -206,7 +208,9 @@ export const listPortalSessionBriefingRequestsFn = createServerFn({ method: "POS
   .inputValidator((i: unknown) => z.object({ clientId: z.string().uuid() }).parse(i ?? {}))
   .handler(
     async ({ context, data }): Promise<PortalBriefingRequest[]> =>
-      listRequests(await resolveSessionScope(context.supabase, data.clientId)),
+      listRequests(
+        await resolvePortalSessionScope(context.supabase, data.clientId, "briefing", "view"),
+      ),
   );
 
 export const submitPortalSessionBriefingProposalFn = createServerFn({ method: "POST" })
@@ -214,7 +218,7 @@ export const submitPortalSessionBriefingProposalFn = createServerFn({ method: "P
   .inputValidator((i: unknown) => AnswerIn.extend({ clientId: z.string().uuid() }).parse(i))
   .handler(async ({ context, data }) =>
     submitProposal(
-      await resolveSessionScope(context.supabase, data.clientId),
+      await resolvePortalSessionScope(context.supabase, data.clientId, "briefing", "interact"),
       data,
       "portal_session",
       context.userId,

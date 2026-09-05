@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyPasswordFlag, clearMyPasswordFlag } from "@/lib/password.functions";
+import {
+  getMyPasswordFlag,
+  clearMyPasswordFlag,
+  setMyFullName,
+} from "@/lib/password.functions";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +24,7 @@ export function MandatoryPasswordReset() {
   const qc = useQueryClient();
   const fetchFlag = useServerFn(getMyPasswordFlag);
   const clearFlag = useServerFn(clearMyPasswordFlag);
+  const saveName = useServerFn(setMyFullName);
   const { data } = useQuery({
     queryKey: ["me", "password-flag"],
     queryFn: () => fetchFlag(),
@@ -28,8 +33,11 @@ export function MandatoryPasswordReset() {
   });
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const open = Boolean(data?.requiresChange);
+  const needsPassword = Boolean(data?.requiresChange);
+  const needsName = Boolean(data?.requiresName);
+  const open = needsPassword || needsName;
 
   // Prevent accidental close during forced reset.
   useEffect(() => {
@@ -43,20 +51,27 @@ export function MandatoryPasswordReset() {
   }, [open]);
 
   const submit = async () => {
-    if (pw.length < 8) {
+    if (needsName && (name.trim().length < 3 || !/\s/.test(name.trim()))) {
+      toast.error("Informe seu nome e sobrenome");
+      return;
+    }
+    if (needsPassword && pw.length < 8) {
       toast.error("A senha deve ter ao menos 8 caracteres");
       return;
     }
-    if (pw !== confirm) {
+    if (needsPassword && pw !== confirm) {
       toast.error("As senhas não coincidem");
       return;
     }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: pw });
-      if (error) throw error;
-      await clearFlag();
-      toast.success("Senha atualizada com sucesso");
+      if (needsName) await saveName({ data: { fullName: name.trim() } });
+      if (needsPassword) {
+        const { error } = await supabase.auth.updateUser({ password: pw });
+        if (error) throw error;
+        await clearFlag();
+      }
+      toast.success(needsPassword ? "Senha atualizada com sucesso" : "Nome salvo");
       qc.invalidateQueries({ queryKey: ["me", "password-flag"] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -77,9 +92,13 @@ export function MandatoryPasswordReset() {
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
             <ShieldCheck className="h-5 w-5" />
           </div>
-          <DialogTitle className="text-center">Defina sua nova senha</DialogTitle>
+          <DialogTitle className="text-center">
+            {needsPassword ? "Complete seu primeiro acesso" : "Confirme seu nome"}
+          </DialogTitle>
           <DialogDescription className="text-center">
-            Por segurança, você precisa criar uma senha pessoal antes de continuar.
+            {needsPassword
+              ? "Confirme como seu nome deve aparecer para a equipe e crie uma senha pessoal."
+              : "Confirme como seu nome deve aparecer para a equipe."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -89,6 +108,26 @@ export function MandatoryPasswordReset() {
             submit();
           }}
         >
+          {needsName ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="full-name">
+                Nome completo
+              </Label>
+              <Input
+                id="full-name"
+                autoFocus
+                value={name}
+                placeholder="Ex.: Maria Souza"
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              {data?.email ? (
+                <p className="text-[11px] text-muted-foreground">{data.email}</p>
+              ) : null}
+            </div>
+          ) : null}
+          {needsPassword ? (
+          <>
           <div className="space-y-1.5">
             <Label className="text-xs" htmlFor="new-pw">
               Nova senha
@@ -96,7 +135,7 @@ export function MandatoryPasswordReset() {
             <Input
               id="new-pw"
               type="password"
-              autoFocus
+              autoFocus={!needsName}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               minLength={8}
@@ -116,6 +155,8 @@ export function MandatoryPasswordReset() {
               required
             />
           </div>
+          </>
+          ) : null}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Salvar e continuar

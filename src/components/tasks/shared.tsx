@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MentionTextarea, resolveMentions } from "@/components/ui/mention-textarea";
 import { MentionText } from "@/components/ui/mention-text";
+import { displayName } from "@/lib/identity";
 import {
   Select,
   SelectContent,
@@ -1027,7 +1028,7 @@ export function TaskDrawer({
                       <TaskAssignee name={c.author_name} avatarUrl={c.author_avatar} size={28} />
                       <div className="flex-1 rounded-md border bg-muted/30 px-3 py-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium">{c.author_name ?? "Alguém"}</span>
+                          <span className="text-xs font-medium">{displayName({ full_name: c.author_name, email: members.find((m) => m.id === c.author_id)?.email ?? null }, "Alguém")}</span>
                           <span className="text-[10px] text-muted-foreground">
                             {format(new Date(c.created_at), "d 'de' MMM · HH:mm", { locale: ptBR })}
                             {c.author_id === currentUserId ? (

@@ -10,23 +10,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { displayName, initialsOf as identityInitials } from "@/lib/identity";
 
 export type TeamOption = {
   user_id: string;
   full_name: string | null;
+  email?: string | null;
   avatar_url?: string | null;
 };
 
 const NONE = "__none__";
 
+/** Reexport da identidade canônica (mantido para os imports existentes). */
 export function initialsOf(name: string | null | undefined) {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
+  return identityInitials(name ?? null);
+}
+
+/** Nome exibido de uma opção de equipe. */
+export function optionName(o: TeamOption) {
+  return displayName({ full_name: o.full_name, email: o.email ?? null });
 }
 
 export function AssigneePicker({
@@ -60,9 +62,9 @@ export function AssigneePicker({
             <span className="flex items-center gap-2">
               <Avatar className="h-5 w-5">
                 {o.avatar_url ? <AvatarImage src={o.avatar_url} alt="" /> : null}
-                <AvatarFallback className="text-[9px]">{initialsOf(o.full_name)}</AvatarFallback>
+                <AvatarFallback className="text-[9px]">{identityInitials({ full_name: o.full_name, email: o.email ?? null })}</AvatarFallback>
               </Avatar>
-              <span className="truncate">{o.full_name ?? "Usuário"}</span>
+              <span className="truncate">{optionName(o)}</span>
             </span>
           </SelectItem>
         ))}
@@ -84,9 +86,9 @@ export function AssigneeAvatar({
   if (!userId) return null;
   const person = options.find((o) => o.user_id === userId);
   return (
-    <Avatar className={className} title={person?.full_name ?? "Responsável"}>
+    <Avatar className={className} title={person ? optionName(person) : "Responsável"}>
       {person?.avatar_url ? <AvatarImage src={person.avatar_url} alt="" /> : null}
-      <AvatarFallback className="text-[9px]">{initialsOf(person?.full_name)}</AvatarFallback>
+      <AvatarFallback className="text-[9px]">{identityInitials(person ? { full_name: person.full_name, email: person.email ?? null } : null)}</AvatarFallback>
     </Avatar>
   );
 }

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { initialsOf } from "@/lib/identity";
 import { grantableBrandRoles } from "@/lib/access-guard";
 import type { BrandRole } from "@/lib/team-admin.functions";
 
@@ -67,15 +68,9 @@ export const ROLE_SCOPE: Record<BrandRole, string> = {
   client: "Somente o próprio cliente (portal)",
 };
 
+/** Iniciais do nome exibido (delegado à identidade canônica). */
 export function memberInitials(name?: string | null, email?: string | null) {
-  const src = (name || email || "?").trim();
-  return (
-    src
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((s) => s[0]?.toUpperCase() ?? "")
-      .join("") || "?"
-  );
+  return initialsOf({ full_name: name ?? null, email: email ?? null });
 }
 
 type StatusKind = "active" | "pending" | "inactive" | "revoked" | "expired";

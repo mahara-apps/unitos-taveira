@@ -1,6 +1,7 @@
 import { normalizeContentFormat } from "@/lib/content-formats";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { displayName } from "@/lib/identity";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // Brain-First: acessos ao Brain só via API pública. Este módulo consome o
 // helper de ingest via `@/lib/brain/api` — nunca toca `brain_*` diretamente.
@@ -56,10 +57,16 @@ export const listBrandAssigneesFn = createServerFn({ method: "GET" })
     if (error) throw error;
     const ids = (members ?? []).map((m) => m.user_id as string);
     if (ids.length === 0)
-      return [] as Array<{ id: string; name: string; avatar_url: string | null; role: string }>;
+      return [] as Array<{
+        id: string;
+        name: string;
+        email: string | null;
+        avatar_url: string | null;
+        role: string;
+      }>;
     const { data: profiles } = await context.supabase
       .from("user_profiles")
-      .select("id, full_name, avatar_url")
+      .select("id, full_name, email, avatar_url")
       .in("id", ids);
     const profMap = new Map((profiles ?? []).map((p) => [p.id as string, p]));
     return (members ?? [])
@@ -67,7 +74,11 @@ export const listBrandAssigneesFn = createServerFn({ method: "GET" })
         const p = profMap.get(m.user_id as string);
         return {
           id: m.user_id as string,
-          name: (p?.full_name as string) || "Sem nome",
+          name: displayName({
+            full_name: (p?.full_name as string | null) ?? null,
+            email: (p?.email as string | null) ?? null,
+          }),
+          email: (p?.email as string | null) ?? null,
           avatar_url: (p?.avatar_url as string | null) ?? null,
           role: (m.role as string) ?? "member",
         };

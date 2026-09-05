@@ -3690,6 +3690,205 @@ export type Database = {
           },
         ]
       }
+      client_portal_access: {
+        Row: {
+          brand_id: string
+          client_id: string
+          owner_user_id: string | null
+          permissions: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          client_id: string
+          owner_user_id?: string | null
+          permissions?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          client_id?: string
+          owner_user_id?: string | null
+          permissions?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_access_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_portal_access_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_access_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_request_events: {
+        Row: {
+          actor_id: string | null
+          actor_name: string | null
+          actor_side: string
+          client_id: string
+          created_at: string
+          id: string
+          kind: string
+          note: string | null
+          payload: Json
+          request_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_side?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          note?: string | null
+          payload?: Json
+          request_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_side?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          payload?: Json
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_request_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "client_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_requests: {
+        Row: {
+          attachments: Json
+          brand_id: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          decided_at: string | null
+          decision_note: string | null
+          description: string | null
+          desired_due_at: string | null
+          id: string
+          owner_user_id: string | null
+          project_id: string | null
+          status: string
+          task_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          brand_id: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          description?: string | null
+          desired_due_at?: string | null
+          id?: string
+          owner_user_id?: string | null
+          project_id?: string | null
+          status?: string
+          task_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+          description?: string | null
+          desired_due_at?: string | null
+          id?: string
+          owner_user_id?: string | null
+          project_id?: string | null
+          status?: string
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_requests_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_requests_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_requests_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_social_accounts: {
         Row: {
           brand_id: string
@@ -5260,6 +5459,44 @@ export type Database = {
           },
         ]
       }
+      portal_notification_prefs: {
+        Row: {
+          client_id: string
+          created_at: string
+          daily_digest: boolean
+          email_enabled: boolean
+          kinds: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          daily_digest?: boolean
+          email_enabled?: boolean
+          kinds?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          daily_digest?: boolean
+          email_enabled?: boolean
+          kinds?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_notification_prefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_rate_limit: {
         Row: {
           blocked_until: string | null
@@ -5375,6 +5612,80 @@ export type Database = {
           },
         ]
       }
+      post_client_comments: {
+        Row: {
+          anchor: Json | null
+          attachments: Json
+          author_name: string | null
+          author_side: string
+          author_user_id: string | null
+          body: string | null
+          brand_id: string
+          client_id: string
+          created_at: string
+          id: string
+          post_id: string
+          resolved_at: string | null
+        }
+        Insert: {
+          anchor?: Json | null
+          attachments?: Json
+          author_name?: string | null
+          author_side?: string
+          author_user_id?: string | null
+          body?: string | null
+          brand_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+          post_id: string
+          resolved_at?: string | null
+        }
+        Update: {
+          anchor?: Json | null
+          attachments?: Json
+          author_name?: string | null
+          author_side?: string
+          author_user_id?: string | null
+          body?: string | null
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_client_comments_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "post_client_comments_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_client_comments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_client_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_placements: {
         Row: {
           brand_id: string
@@ -5476,6 +5787,7 @@ export type Database = {
           brand_id: string
           channels: Database["public"]["Enums"]["post_channel"][]
           client_briefing: string | null
+          client_due_at: string | null
           client_id: string
           copy: string | null
           cover_url: string | null
@@ -5525,6 +5837,7 @@ export type Database = {
           brand_id: string
           channels?: Database["public"]["Enums"]["post_channel"][]
           client_briefing?: string | null
+          client_due_at?: string | null
           client_id: string
           copy?: string | null
           cover_url?: string | null
@@ -5574,6 +5887,7 @@ export type Database = {
           brand_id?: string
           channels?: Database["public"]["Enums"]["post_channel"][]
           client_briefing?: string | null
+          client_due_at?: string | null
           client_id?: string
           copy?: string | null
           cover_url?: string | null
@@ -6637,6 +6951,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          email: string | null
           full_name: string
           id: string
           is_super_admin: boolean
@@ -6655,6 +6970,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email?: string | null
           full_name: string
           id: string
           is_super_admin?: boolean
@@ -6673,6 +6989,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string
           id?: string
           is_super_admin?: boolean
@@ -7407,6 +7724,7 @@ export type Database = {
         Returns: Json
       }
       portal_my_clients: { Args: never; Returns: Json }
+      portal_permissions: { Args: { _client_id: string }; Returns: Json }
       portal_post: {
         Args: { _client_id?: string; _post_id?: string; _token?: string }
         Returns: Json

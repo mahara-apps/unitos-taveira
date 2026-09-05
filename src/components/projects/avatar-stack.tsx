@@ -1,7 +1,8 @@
 /** Pilha de avatares sobrepostos — leitura rápida de quem está envolvido. */
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { initialsOf, type TeamOption } from "./assignee-picker";
+import { optionName, type TeamOption } from "./assignee-picker";
+import { initialsOf } from "@/lib/identity";
 
 export function AvatarStack({
   people,
@@ -20,10 +21,10 @@ export function AvatarStack({
         <Avatar
           key={p.user_id}
           className="-ml-1.5 h-7 w-7 ring-2 ring-background first:ml-0"
-          title={p.full_name ?? "Usuário"}
+          title={optionName(p)}
         >
           {p.avatar_url ? <AvatarImage src={p.avatar_url} alt="" /> : null}
-          <AvatarFallback className="text-[9px]">{initialsOf(p.full_name)}</AvatarFallback>
+          <AvatarFallback className="text-[9px]">{initialsOf({ full_name: p.full_name, email: p.email ?? null })}</AvatarFallback>
         </Avatar>
       ))}
       {rest > 0 ? (

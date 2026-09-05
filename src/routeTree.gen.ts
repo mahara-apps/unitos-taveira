@@ -57,11 +57,14 @@ import { Route as ApiJobsCopilotRouteImport } from './routes/api/jobs/copilot'
 import { Route as ApiJobsAnalyzeDocumentRouteImport } from './routes/api/jobs/analyze-document'
 import { Route as ApiJobsAnalyzeBriefingTextRouteImport } from './routes/api/jobs/analyze-briefing-text'
 import { Route as ApiChatStreamRouteImport } from './routes/api/chat.stream'
+import { Route as PortalAreaPedidosRouteImport } from './routes/_portal/area.pedidos'
 import { Route as PortalAreaPautaRouteImport } from './routes/_portal/area.pauta'
 import { Route as PortalAreaMinhaMarcaRouteImport } from './routes/_portal/area.minha-marca'
 import { Route as PortalAreaInicioRouteImport } from './routes/_portal/area.inicio'
+import { Route as PortalAreaContaRouteImport } from './routes/_portal/area.conta'
 import { Route as PortalAreaCalendarioRouteImport } from './routes/_portal/area.calendario'
 import { Route as PortalAreaBriefingRouteImport } from './routes/_portal/area.briefing'
+import { Route as PortalAreaAvisosRouteImport } from './routes/_portal/area.avisos'
 import { Route as PortalAreaArquivosRouteImport } from './routes/_portal/area.arquivos'
 import { Route as PortalAreaAprovacoesRouteImport } from './routes/_portal/area.aprovacoes'
 import { Route as AuthenticatedSuperAdminFeaturesRouteImport } from './routes/_authenticated/super-admin.features'
@@ -361,6 +364,11 @@ const ApiChatStreamRoute = ApiChatStreamRouteImport.update({
   path: '/api/chat/stream',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalAreaPedidosRoute = PortalAreaPedidosRouteImport.update({
+  id: '/pedidos',
+  path: '/pedidos',
+  getParentRoute: () => PortalAreaRoute,
+} as any)
 const PortalAreaPautaRoute = PortalAreaPautaRouteImport.update({
   id: '/pauta',
   path: '/pauta',
@@ -376,6 +384,11 @@ const PortalAreaInicioRoute = PortalAreaInicioRouteImport.update({
   path: '/inicio',
   getParentRoute: () => PortalAreaRoute,
 } as any)
+const PortalAreaContaRoute = PortalAreaContaRouteImport.update({
+  id: '/conta',
+  path: '/conta',
+  getParentRoute: () => PortalAreaRoute,
+} as any)
 const PortalAreaCalendarioRoute = PortalAreaCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
@@ -384,6 +397,11 @@ const PortalAreaCalendarioRoute = PortalAreaCalendarioRouteImport.update({
 const PortalAreaBriefingRoute = PortalAreaBriefingRouteImport.update({
   id: '/briefing',
   path: '/briefing',
+  getParentRoute: () => PortalAreaRoute,
+} as any)
+const PortalAreaAvisosRoute = PortalAreaAvisosRouteImport.update({
+  id: '/avisos',
+  path: '/avisos',
   getParentRoute: () => PortalAreaRoute,
 } as any)
 const PortalAreaArquivosRoute = PortalAreaArquivosRouteImport.update({
@@ -743,11 +761,14 @@ export interface FileRoutesByFullPath {
   '/super-admin/features': typeof AuthenticatedSuperAdminFeaturesRoute
   '/area/aprovacoes': typeof PortalAreaAprovacoesRoute
   '/area/arquivos': typeof PortalAreaArquivosRoute
+  '/area/avisos': typeof PortalAreaAvisosRoute
   '/area/briefing': typeof PortalAreaBriefingRoute
   '/area/calendario': typeof PortalAreaCalendarioRoute
+  '/area/conta': typeof PortalAreaContaRoute
   '/area/inicio': typeof PortalAreaInicioRoute
   '/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/area/pauta': typeof PortalAreaPautaRoute
+  '/area/pedidos': typeof PortalAreaPedidosRoute
   '/api/chat/stream': typeof ApiChatStreamRoute
   '/api/jobs/analyze-briefing-text': typeof ApiJobsAnalyzeBriefingTextRoute
   '/api/jobs/analyze-document': typeof ApiJobsAnalyzeDocumentRoute
@@ -840,11 +861,14 @@ export interface FileRoutesByTo {
   '/super-admin/features': typeof AuthenticatedSuperAdminFeaturesRoute
   '/area/aprovacoes': typeof PortalAreaAprovacoesRoute
   '/area/arquivos': typeof PortalAreaArquivosRoute
+  '/area/avisos': typeof PortalAreaAvisosRoute
   '/area/briefing': typeof PortalAreaBriefingRoute
   '/area/calendario': typeof PortalAreaCalendarioRoute
+  '/area/conta': typeof PortalAreaContaRoute
   '/area/inicio': typeof PortalAreaInicioRoute
   '/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/area/pauta': typeof PortalAreaPautaRoute
+  '/area/pedidos': typeof PortalAreaPedidosRoute
   '/api/chat/stream': typeof ApiChatStreamRoute
   '/api/jobs/analyze-briefing-text': typeof ApiJobsAnalyzeBriefingTextRoute
   '/api/jobs/analyze-document': typeof ApiJobsAnalyzeDocumentRoute
@@ -948,11 +972,14 @@ export interface FileRoutesById {
   '/_authenticated/super-admin/features': typeof AuthenticatedSuperAdminFeaturesRoute
   '/_portal/area/aprovacoes': typeof PortalAreaAprovacoesRoute
   '/_portal/area/arquivos': typeof PortalAreaArquivosRoute
+  '/_portal/area/avisos': typeof PortalAreaAvisosRoute
   '/_portal/area/briefing': typeof PortalAreaBriefingRoute
   '/_portal/area/calendario': typeof PortalAreaCalendarioRoute
+  '/_portal/area/conta': typeof PortalAreaContaRoute
   '/_portal/area/inicio': typeof PortalAreaInicioRoute
   '/_portal/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/_portal/area/pauta': typeof PortalAreaPautaRoute
+  '/_portal/area/pedidos': typeof PortalAreaPedidosRoute
   '/api/chat/stream': typeof ApiChatStreamRoute
   '/api/jobs/analyze-briefing-text': typeof ApiJobsAnalyzeBriefingTextRoute
   '/api/jobs/analyze-document': typeof ApiJobsAnalyzeDocumentRoute
@@ -1055,11 +1082,14 @@ export interface FileRouteTypes {
     | '/super-admin/features'
     | '/area/aprovacoes'
     | '/area/arquivos'
+    | '/area/avisos'
     | '/area/briefing'
     | '/area/calendario'
+    | '/area/conta'
     | '/area/inicio'
     | '/area/minha-marca'
     | '/area/pauta'
+    | '/area/pedidos'
     | '/api/chat/stream'
     | '/api/jobs/analyze-briefing-text'
     | '/api/jobs/analyze-document'
@@ -1152,11 +1182,14 @@ export interface FileRouteTypes {
     | '/super-admin/features'
     | '/area/aprovacoes'
     | '/area/arquivos'
+    | '/area/avisos'
     | '/area/briefing'
     | '/area/calendario'
+    | '/area/conta'
     | '/area/inicio'
     | '/area/minha-marca'
     | '/area/pauta'
+    | '/area/pedidos'
     | '/api/chat/stream'
     | '/api/jobs/analyze-briefing-text'
     | '/api/jobs/analyze-document'
@@ -1259,11 +1292,14 @@ export interface FileRouteTypes {
     | '/_authenticated/super-admin/features'
     | '/_portal/area/aprovacoes'
     | '/_portal/area/arquivos'
+    | '/_portal/area/avisos'
     | '/_portal/area/briefing'
     | '/_portal/area/calendario'
+    | '/_portal/area/conta'
     | '/_portal/area/inicio'
     | '/_portal/area/minha-marca'
     | '/_portal/area/pauta'
+    | '/_portal/area/pedidos'
     | '/api/chat/stream'
     | '/api/jobs/analyze-briefing-text'
     | '/api/jobs/analyze-document'
@@ -1694,6 +1730,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_portal/area/pedidos': {
+      id: '/_portal/area/pedidos'
+      path: '/pedidos'
+      fullPath: '/area/pedidos'
+      preLoaderRoute: typeof PortalAreaPedidosRouteImport
+      parentRoute: typeof PortalAreaRoute
+    }
     '/_portal/area/pauta': {
       id: '/_portal/area/pauta'
       path: '/pauta'
@@ -1715,6 +1758,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAreaInicioRouteImport
       parentRoute: typeof PortalAreaRoute
     }
+    '/_portal/area/conta': {
+      id: '/_portal/area/conta'
+      path: '/conta'
+      fullPath: '/area/conta'
+      preLoaderRoute: typeof PortalAreaContaRouteImport
+      parentRoute: typeof PortalAreaRoute
+    }
     '/_portal/area/calendario': {
       id: '/_portal/area/calendario'
       path: '/calendario'
@@ -1727,6 +1777,13 @@ declare module '@tanstack/react-router' {
       path: '/briefing'
       fullPath: '/area/briefing'
       preLoaderRoute: typeof PortalAreaBriefingRouteImport
+      parentRoute: typeof PortalAreaRoute
+    }
+    '/_portal/area/avisos': {
+      id: '/_portal/area/avisos'
+      path: '/avisos'
+      fullPath: '/area/avisos'
+      preLoaderRoute: typeof PortalAreaAvisosRouteImport
       parentRoute: typeof PortalAreaRoute
     }
     '/_portal/area/arquivos': {
@@ -2314,21 +2371,27 @@ const AuthenticatedRouteRouteWithChildren =
 interface PortalAreaRouteChildren {
   PortalAreaAprovacoesRoute: typeof PortalAreaAprovacoesRoute
   PortalAreaArquivosRoute: typeof PortalAreaArquivosRoute
+  PortalAreaAvisosRoute: typeof PortalAreaAvisosRoute
   PortalAreaBriefingRoute: typeof PortalAreaBriefingRoute
   PortalAreaCalendarioRoute: typeof PortalAreaCalendarioRoute
+  PortalAreaContaRoute: typeof PortalAreaContaRoute
   PortalAreaInicioRoute: typeof PortalAreaInicioRoute
   PortalAreaMinhaMarcaRoute: typeof PortalAreaMinhaMarcaRoute
   PortalAreaPautaRoute: typeof PortalAreaPautaRoute
+  PortalAreaPedidosRoute: typeof PortalAreaPedidosRoute
 }
 
 const PortalAreaRouteChildren: PortalAreaRouteChildren = {
   PortalAreaAprovacoesRoute: PortalAreaAprovacoesRoute,
   PortalAreaArquivosRoute: PortalAreaArquivosRoute,
+  PortalAreaAvisosRoute: PortalAreaAvisosRoute,
   PortalAreaBriefingRoute: PortalAreaBriefingRoute,
   PortalAreaCalendarioRoute: PortalAreaCalendarioRoute,
+  PortalAreaContaRoute: PortalAreaContaRoute,
   PortalAreaInicioRoute: PortalAreaInicioRoute,
   PortalAreaMinhaMarcaRoute: PortalAreaMinhaMarcaRoute,
   PortalAreaPautaRoute: PortalAreaPautaRoute,
+  PortalAreaPedidosRoute: PortalAreaPedidosRoute,
 }
 
 const PortalAreaRouteWithChildren = PortalAreaRoute._addFileChildren(

@@ -3,6 +3,8 @@ import { getRequestHeader } from "@tanstack/react-start/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizePortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { fillPortalCovers, signPortalDocument, signPortalRefs } from "@/lib/portal-media.server";
+import { assertPortalAccess } from "@/lib/portal-permissions.server";
+import type { PortalModuleId } from "@/lib/portal-permissions";
 import {
   hasServiceKey,
   resolveSessionScope,
@@ -238,8 +240,16 @@ async function tokenScope(token: string) {
   return resolveTokenScope(token);
 }
 
-async function sessionScope(context: SessionContext, clientId?: string) {
-  return resolveSessionScope(context.supabase, clientId);
+async function sessionScope(
+  context: SessionContext,
+  clientId?: string,
+  guard?: { module: PortalModuleId; need?: "view" | "interact" },
+) {
+  const scope = await resolveSessionScope(context.supabase, clientId);
+  if (guard) {
+    await assertPortalAccess(context.supabase, scope.clientId, guard.module, guard.need ?? "view");
+  }
+  return scope;
 }
 
 export async function tokenMetrics(token: string): Promise<PortalMetrics> {
@@ -275,7 +285,7 @@ export async function sessionApprovals(
   clientId: string | undefined,
   status: string,
 ): Promise<PortalPost[]> {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, { module: "approvals" });
   const rows = await sessionRpc<PortalPost[]>(context, "portal_approvals", {
     _client_id: scope.clientId,
     _status: status,
@@ -312,7 +322,7 @@ export async function sessionPost(
   clientId: string | undefined,
   postId: string,
 ) {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, { module: "approvals" });
   const result = await sessionRpc<{ post: PortalPost; approval: PortalApproval | null }>(
     context,
     "portal_post",
@@ -324,18 +334,11 @@ export async function sessionPost(
   return postResult(result, scope.clientId, scope.brandId);
 }
 
-export async function tokenDecide(token: string, postId: string, decision: string, note?: string) {
-  const resolved = await resolveTokenPortal(token);
-  if (!resolved.client) throw new Error(resolved.error ?? "invalid_token");
-  const identity = resolved.client.contact_name?.trim() || resolved.client.name;
-  return publicRpc<{ ok: boolean }>("portal_decide", {
-    _token: token,
-    _post_id: postId,
-    _decision: decision,
-    _note: note ?? null,
-    _identity: identity,
-  });
+export async function tokenDecide(): Promise<never> {
+  // Link sem senha é somente leitura: decidir exige login do contato.
+  throw new Error("portal_token_read_only");
 }
+
 
 export async function sessionDecide(
   context: SessionContext,
@@ -344,7 +347,10 @@ export async function sessionDecide(
   decision: string,
   note?: string,
 ) {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, {
+    module: "approvals",
+    need: "interact",
+  });
   return sessionRpc<{ ok: boolean }>(context, "portal_decide", {
     _client_id: scope.clientId,
     _post_id: postId,
@@ -366,7 +372,7 @@ export async function sessionCalendar(
   clientId: string | undefined,
   month?: string,
 ): Promise<PortalPost[]> {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, { module: "calendar" });
   const rows = await sessionRpc<PortalPost[]>(context, "portal_calendar", {
     _client_id: scope.clientId,
     _month: month ?? null,
@@ -392,7 +398,7 @@ export async function sessionFiles(
   clientId: string | undefined,
   search?: string,
 ) {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, { module: "files" });
   const rows = await sessionRpc<PortalFile[]>(context, "portal_files", {
     _client_id: scope.clientId,
     _search: search?.trim() || null,
@@ -410,6 +416,6 @@ export function tokenBriefings(token: string) {
 }
 
 export async function sessionBriefings(context: SessionContext, clientId?: string) {
-  const scope = await sessionScope(context, clientId);
+  const scope = await sessionScope(context, clientId, { module: "briefing" });
   return sessionRpc<PortalBriefing[]>(context, "portal_briefings", { _client_id: scope.clientId });
 }

@@ -41,6 +41,7 @@ export function PortalBrand() {
     return (
       <ErrorState
         description="Não conseguimos carregar as informações da sua marca agora."
+        message={(q.error as Error)?.message}
         onRetry={() => q.refetch()}
       />
     );

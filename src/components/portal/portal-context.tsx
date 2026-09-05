@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -18,6 +19,7 @@ import {
   listPortalSessionCalendarFn,
   listPortalSessionFilesFn,
   listPortalSessionBriefingsFn,
+  getPortalSessionPermissionsFn,
 } from "@/lib/portal-session.functions";
 import {
   listPortalBriefingRequestsFn,
@@ -41,6 +43,13 @@ import {
   decidePortalSessionPlanFn,
 } from "@/lib/portal-pauta.functions";
 import { sessionTabPath, tokenTabRoute, type PortalTabId } from "./portal-nav";
+import {
+  DEFAULT_PORTAL_PERMISSIONS,
+  normalizePortalPermissions,
+  portalCanInteract,
+  PORTAL_MODULES,
+  type PortalPermissions,
+} from "@/lib/portal-permissions";
 
 /**
  * Camada única de dados do Portal do Cliente.
@@ -68,7 +77,56 @@ export function PortalModeProvider({
   value: PortalMode;
   children: ReactNode;
 }) {
-  return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>;
+  return (
+    <ModeContext.Provider value={value}>
+      <PortalCapabilities>{children}</PortalCapabilities>
+    </ModeContext.Provider>
+  );
+}
+
+/* --------------------------- capacidades do modo -------------------------- */
+
+type PortalCaps = { permissions: PortalPermissions; readOnly: boolean };
+const CapsContext = createContext<PortalCaps | null>(null);
+
+/**
+ * Permissões efetivas do cliente + modo somente leitura.
+ *
+ * Login: vem de `portal_permissions` (mesma fonte usada no servidor).
+ * Link sem senha: tudo apenas visível — nenhuma decisão é aceita no servidor.
+ */
+function PortalCapabilities({ children }: { children: ReactNode }) {
+  const mode = usePortalMode();
+  const loadPerms = useServerFn(getPortalSessionPermissionsFn);
+  const permsQ = useQuery({
+    queryKey: ["portal", "permissions", portalScopeKey(mode)],
+    queryFn: () => loadPerms({ data: { clientId: (mode as { clientId: string }).clientId } }),
+    enabled: mode.kind === "session",
+    staleTime: 5 * 60_000,
+  });
+
+  const value = useMemo<PortalCaps>(() => {
+    if (mode.kind === "token") {
+      return {
+        permissions: Object.fromEntries(
+          PORTAL_MODULES.map((m) => [m.id, "view"]),
+        ) as PortalPermissions,
+        readOnly: true,
+      };
+    }
+    return {
+      permissions: normalizePortalPermissions(permsQ.data ?? DEFAULT_PORTAL_PERMISSIONS),
+      readOnly: false,
+    };
+  }, [mode.kind, permsQ.data]);
+
+  return <CapsContext.Provider value={value}>{children}</CapsContext.Provider>;
+}
+
+export function usePortalCaps(): PortalCaps {
+  return (
+    useContext(CapsContext) ?? { permissions: DEFAULT_PORTAL_PERMISSIONS, readOnly: false }
+  );
 }
 
 export function usePortalMode(): PortalMode {
@@ -242,4 +300,11 @@ export function PortalLink({
       {children}
     </Link>
   );
+}
+
+/** O cliente pode agir neste módulo? Link sem senha nunca pode. */
+export function usePortalCanInteract(id: PortalTabId): boolean {
+  const { permissions, readOnly } = usePortalCaps();
+  if (readOnly) return false;
+  return portalCanInteract(permissions, id as never);
 }

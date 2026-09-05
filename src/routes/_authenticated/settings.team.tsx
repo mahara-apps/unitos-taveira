@@ -1,3 +1,4 @@
+import { displayName } from "@/lib/identity";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -310,7 +311,7 @@ function MemberRow({
         </Avatar>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{member.fullName || "Sem nome"}</span>
+            <span className="truncate text-sm font-medium">{displayName({ full_name: member.fullName, email: member.email })}</span>
             {member.isSuperAdmin && (
               <Badge variant="secondary" className="text-[10px]">
                 Super admin
@@ -381,7 +382,7 @@ function MemberRow({
             <AlertDialogHeader>
               <AlertDialogTitle>Remover membro da marca?</AlertDialogTitle>
               <AlertDialogDescription>
-                <strong>{member.fullName || member.email}</strong> perde o acesso a esta marca e a
+                <strong>{displayName({ full_name: member.fullName, email: member.email })}</strong> perde o acesso a esta marca e a
                 todos os clientes dela, incluindo os vínculos por cliente. A conta de login continua
                 existindo, mas sem acesso aqui. Para suspender temporariamente, use “Desativar
                 acesso”.

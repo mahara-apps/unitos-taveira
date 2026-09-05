@@ -10,7 +10,7 @@ import { CalendarCheck2, Check, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { usePortalApi } from "./portal-context";
+import { usePortalApi, usePortalCanInteract } from "./portal-context";
 import { ListSkeleton } from "./portal-shared";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -46,9 +46,10 @@ export function PortalSchedule({ month }: { month: string }) {
   const key = ["portal", "schedule", api.scopeKey, month];
   const q = useQuery({ queryKey: key, queryFn: () => api.schedule(from, to) });
 
+  const canAct = usePortalCanInteract("calendar");
   const decide = useMutation({
     mutationFn: (input: { postIds: string[]; decision: "approve" | "changes"; comment?: string }) =>
-      api.decideSchedule(input),
+      canAct ? api.decideSchedule(input) : Promise.reject(new Error("Este acesso é somente de acompanhamento.")),
     onSuccess: (_r, vars) => {
       toast.success(
         vars.decision === "approve" ? "Data confirmada!" : "Pedido de nova data enviado.",

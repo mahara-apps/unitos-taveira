@@ -76,11 +76,16 @@ export const listBrandTeam = createServerFn({ method: "GET" })
 
     const members = membersRes.data ?? [];
     const userIds = members.map((m) => m.user_id);
-    let profiles: Array<{ id: string; full_name: string | null; avatar_url: string | null }> = [];
+    let profiles: Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    }> = [];
     if (userIds.length > 0) {
       const { data: profs } = await supabase
         .from("user_profiles")
-        .select("id, full_name, avatar_url")
+        .select("id, full_name, email, avatar_url")
         .in("id", userIds);
       profiles = (profs ?? []) as typeof profiles;
     }
@@ -95,7 +100,7 @@ export const listBrandTeam = createServerFn({ method: "GET" })
           module_permissions: normalizeModulePermissions(m.module_permissions),
           created_at: m.created_at,
           full_name: p?.full_name ?? null,
-          email: null as string | null,
+          email: p?.email ?? null,
           avatar_url: p?.avatar_url ?? null,
         };
       }),
@@ -277,7 +282,7 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
             email,
             password: tempPassword,
             email_confirm: true,
-            user_metadata: { full_name: email.split("@")[0] },
+            // Sem nome inventado: a pessoa confirma o nome real no primeiro acesso.
           });
           if (createErr) {
             results.push({ email, status: "error", error: `provision_${createErr.message}` });

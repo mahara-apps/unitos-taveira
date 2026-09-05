@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { usePortalApi } from "./portal-context";
+import { usePortalApi, usePortalCanInteract } from "./portal-context";
 import { EmptyState, ErrorState, ListSkeleton, formatDate } from "./portal-shared";
 import {
   BRIEFING_BLOCKS,
@@ -112,6 +112,7 @@ export function PortalBriefing() {
     return (
       <ErrorState
         description="Não conseguimos carregar seus pedidos de briefing agora."
+        message={(q.error as Error)?.message}
         onRetry={() => q.refetch()}
       />
     );
@@ -202,9 +203,12 @@ function RequestForm({ request }: { request: PortalBriefingRequest }) {
     fields: fields.filter((f) => f.block === b.id),
   })).filter((b) => b.fields.length > 0);
 
+  const canAct = usePortalCanInteract("briefing");
   const submit = useMutation({
     mutationFn: () =>
-      api.submitBriefing({
+      !canAct
+        ? Promise.reject(new Error("Este acesso é somente de acompanhamento."))
+        : api.submitBriefing({
         requestId: request.id,
         answers: Object.fromEntries(
           fields.map((f) => [

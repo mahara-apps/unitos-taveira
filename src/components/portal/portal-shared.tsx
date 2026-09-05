@@ -89,13 +89,39 @@ export function EmptyState({
  * que dava ao cliente a informação errada. Agora todo bloco de dados mostra
  * este aviso com a opção de tentar novamente.
  */
+/** Mensagem amigável para bloqueios de permissão do portal. */
+export function portalErrorMessage(message?: string | null): string | null {
+  if (!message) return null;
+  if (message.includes("portal_permission_denied"))
+    return "Este item não está liberado para o seu acesso. Fale com a equipe responsável.";
+  if (message.includes("portal_token_read_only"))
+    return "Este link é somente de acompanhamento: para decidir, entre com seu login.";
+  return null;
+}
+
 export function ErrorState({
   description = "Não conseguimos carregar estas informações agora.",
+  message,
   onRetry,
 }: {
   description?: string;
+  /** Erro cru do servidor — traduzido quando é bloqueio de permissão. */
+  message?: string | null;
   onRetry?: () => void;
 }) {
+  const friendly = portalErrorMessage(message);
+  if (friendly) {
+    return (
+      <div
+        role="alert"
+        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-card px-6 py-14 text-center"
+      >
+        <AlertTriangle className="h-6 w-6 text-severity-warning" />
+        <div className="text-sm font-medium">Sem acesso a esta área</div>
+        <div className="text-xs text-muted-foreground">{friendly}</div>
+      </div>
+    );
+  }
   return (
     <div
       role="alert"

@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { usePortalApi } from "./portal-context";
+import { usePortalApi, usePortalCanInteract } from "./portal-context";
 import { EmptyState, ErrorState, ListSkeleton, formatDate } from "./portal-shared";
 import type { PlanDecisionItem, PublicPlanTopic } from "@/lib/monthly-plan-client.types";
 import { PLAN_PENDING_CLIENT_STATUS } from "@/lib/monthly-plan-client.types";
@@ -88,6 +88,7 @@ export function PautaApprovals() {
     return (
       <ErrorState
         description="Não conseguimos carregar suas pautas agora."
+        message={(q.error as Error)?.message}
         onRetry={() => q.refetch()}
       />
     );
@@ -210,8 +211,10 @@ function PautaDetail({ planId, onBack }: { planId: string; onBack: () => void })
   const decided = counts.total - counts.pending;
   const progress = counts.total ? Math.round((decided / counts.total) * 100) : 0;
 
+  const canAct = usePortalCanInteract("pauta");
   const decide = useMutation({
-    mutationFn: (payload: Parameters<typeof api.decidePlan>[0]) => api.decidePlan(payload),
+    mutationFn: (payload: Parameters<typeof api.decidePlan>[0]) =>
+      canAct ? api.decidePlan(payload) : Promise.reject(new Error("Este acesso é somente de acompanhamento.")),
     onSuccess: (res) => {
       toast.success(
         res.changes > 0
@@ -255,6 +258,7 @@ function PautaDetail({ planId, onBack }: { planId: string; onBack: () => void })
       ) : q.isError ? (
         <ErrorState
           description="Não conseguimos carregar esta pauta agora."
+          message={(q.error as Error)?.message}
           onRetry={() => q.refetch()}
         />
       ) : !q.data ? (

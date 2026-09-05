@@ -62,14 +62,8 @@ export const decidePortalApprovalFn = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) =>
-    (await import("@/lib/portal-data.server")).tokenDecide(
-      data.token,
-      data.postId,
-      data.decision,
-      data.note,
-    ),
-  );
+  .handler(async () => (await import("@/lib/portal-data.server")).tokenDecide());
+
 
 export const listPortalCalendarFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
