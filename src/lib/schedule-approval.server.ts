@@ -21,18 +21,30 @@ export type ScheduleActionResult = { updated: number; skipped: number };
 
 const INTERNAL_APPROVABLE: ScheduleStatus[] = ["proposed", "client_changes"];
 
-/** Aprovação interna: valida a proposta e a envia para o cliente decidir. */
+/**
+ * Aprovação interna: valida a proposta e a envia para o cliente decidir.
+ * Se a regra do cliente dispensa a aprovação da agenda, a data é RESERVADA
+ * direto — nada fica pendente no portal.
+ */
 export async function internalApproveSchedule(
   sb: SupabaseClient,
   args: { brandId: string; clientId: string; postIds: string[]; userId: string },
-): Promise<ScheduleActionResult> {
+): Promise<ScheduleActionResult & { waived?: boolean }> {
   if (args.postIds.length === 0) return { updated: 0, skipped: 0 };
+  const { requiresClientApproval } = await import("@/lib/client-policy.server");
+  const needsClient = await requiresClientApproval(
+    sb,
+    { brandId: args.brandId, clientId: args.clientId },
+    "schedule",
+  );
+  const now = new Date().toISOString();
   const { data, error } = await sb
     .from("posts")
     .update({
-      schedule_status: "client_pending",
-      schedule_approved_at: new Date().toISOString(),
+      schedule_status: needsClient ? "client_pending" : "reserved",
+      schedule_approved_at: now,
       schedule_approved_by: args.userId,
+      ...(needsClient ? {} : { schedule_client_decision_at: now }),
     } as never)
     .in("id", args.postIds)
     .eq("brand_id", args.brandId)
@@ -42,8 +54,9 @@ export async function internalApproveSchedule(
     .select("id");
   if (error) throw new Error(error.message);
   const updated = (data ?? []).length;
-  return { updated, skipped: args.postIds.length - updated };
+  return { updated, skipped: args.postIds.length - updated, waived: !needsClient };
 }
+
 
 /** Edição do slot proposto: volta ao início do fluxo de aprovação. */
 export async function updateProposedSlot(

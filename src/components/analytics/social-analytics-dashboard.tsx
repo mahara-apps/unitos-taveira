@@ -349,23 +349,56 @@ function NoChannelsEmpty({ clientId }: { clientId: string | null }) {
   );
 }
 
+/** Avisos de token ilegível não são "erro de métrica": pedem reconexão. */
+function needsReconnect(warning: string): boolean {
+  return /reconect/i.test(warning) || /decriptar/i.test(warning);
+}
+
 function _WarningsBanner({ warnings }: { warnings: string[] }) {
   if (!warnings?.length) return null;
+  const reconnect = Array.from(new Set(warnings.filter(needsReconnect)));
+  const others = warnings.filter((w) => !needsReconnect(w));
   return (
-    <details className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-      <summary className="flex cursor-pointer items-center gap-2 font-medium">
-        <AlertTriangle className="h-4 w-4" />
-        {warnings.length === 1
-          ? "1 métrica não pôde ser carregada"
-          : `${warnings.length} métricas não puderam ser carregadas`}
-        <span className="ml-auto text-xs opacity-70">clique para detalhes</span>
-      </summary>
-      <ul className="mt-2 space-y-1 pl-6 text-xs font-mono text-amber-800/80 dark:text-amber-200/80">
-        {warnings.map((w, i) => (
-          <li key={i}>• {w}</li>
-        ))}
-      </ul>
-    </details>
+    <div className="space-y-2">
+      {reconnect.length > 0 ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4" />
+            {reconnect.length === 1
+              ? "1 conta precisa ser reconectada"
+              : `${reconnect.length} contas precisam ser reconectadas`}
+          </div>
+          <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/80">
+            O acesso salvo dessas contas não pode mais ser lido. Reconecte em Integrações para as
+            métricas voltarem — nenhum dado histórico é perdido.
+          </p>
+          <ul className="mt-2 space-y-1 pl-4 text-xs text-amber-800/80 dark:text-amber-200/80">
+            {reconnect.map((w, i) => (
+              <li key={i}>• {w}</li>
+            ))}
+          </ul>
+          <Button asChild size="sm" variant="outline" className="mt-3">
+            <Link to="/connections">Abrir Integrações</Link>
+          </Button>
+        </div>
+      ) : null}
+      {others.length > 0 ? (
+        <details className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          <summary className="flex cursor-pointer items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4" />
+            {others.length === 1
+              ? "1 métrica não pôde ser carregada"
+              : `${others.length} métricas não puderam ser carregadas`}
+            <span className="ml-auto text-xs opacity-70">clique para detalhes</span>
+          </summary>
+          <ul className="mt-2 space-y-1 pl-6 text-xs font-mono text-amber-800/80 dark:text-amber-200/80">
+            {others.map((w, i) => (
+              <li key={i}>• {w}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   );
 }
 

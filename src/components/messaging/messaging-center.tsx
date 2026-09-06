@@ -7,6 +7,7 @@ import { AlertTriangle, Briefcase, CheckCircle2, Loader2, Mail, Send, Trash2 } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -420,9 +421,8 @@ function ManageProviderDialog({
             <Label htmlFor={`key-${provider.id}`}>
               {connected ? "Nova credencial" : "API Key / Token"}
             </Label>
-            <Input
+            <PasswordInput
               id={`key-${provider.id}`}
-              type="password"
               autoComplete="off"
               placeholder="••••••••"
               value={apiKey}

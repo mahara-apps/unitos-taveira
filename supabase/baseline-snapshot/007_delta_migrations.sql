@@ -2824,3 +2824,768 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 20260905203700_d4177db3-7866-4546-aa76-d7e70f6df3ec.sql
+-- ---------------------------------------------------------------------------
+-- 1) Limpeza: contatos de portal que ganharam vínculo de equipe por engano.
+DELETE FROM public.brand_members bm
+WHERE EXISTS (
+  SELECT 1 FROM public.client_members cm
+  WHERE cm.user_id = bm.user_id AND cm.role = 'portal_client'
+);
+
+-- 2) Trava: contato de portal nunca entra em brand_members.
+CREATE OR REPLACE FUNCTION public.block_portal_client_team_link()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.client_members cm
+    WHERE cm.user_id = NEW.user_id AND cm.role = 'portal_client'
+  ) THEN
+    RAISE EXCEPTION 'portal_client_cannot_be_team_member: conta de contato do portal não pode ter vínculo de equipe'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_block_portal_client_team_link ON public.brand_members;
+CREATE TRIGGER trg_block_portal_client_team_link
+BEFORE INSERT OR UPDATE OF user_id ON public.brand_members
+FOR EACH ROW EXECUTE FUNCTION public.block_portal_client_team_link();
+
+-- 3) Trava simétrica: virar contato de portal remove/impede vínculo de equipe.
+CREATE OR REPLACE FUNCTION public.enforce_portal_client_exclusivity()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.role = 'portal_client' THEN
+    DELETE FROM public.brand_members WHERE user_id = NEW.user_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_enforce_portal_client_exclusivity ON public.client_members;
+CREATE TRIGGER trg_enforce_portal_client_exclusivity
+BEFORE INSERT OR UPDATE OF role, user_id ON public.client_members
+FOR EACH ROW EXECUTE FUNCTION public.enforce_portal_client_exclusivity();
+
+-- ---------------------------------------------------------------------------
+-- 20260905203731_cda91113-27e6-4fba-8ba1-5fbfd8d0c998.sql
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.block_portal_client_team_link() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_portal_client_exclusivity() FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 20260905211211_a20d47e3-8d1e-4970-956e-ec6fad149d01.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.client_requests ADD COLUMN IF NOT EXISTS links jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+-- ---------------------------------------------------------------------------
+-- 20260905213133_4c1aa03a-8815-4cfe-8a20-bbefec7e6a22.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.client_requests
+  ADD COLUMN IF NOT EXISTS last_team_reply_at timestamptz;
+
+CREATE OR REPLACE FUNCTION public.portal_decide(_token text DEFAULT NULL::text, _post_id uuid DEFAULT NULL::uuid, _decision text DEFAULT NULL::text, _note text DEFAULT NULL::text, _identity text DEFAULT NULL::text, _client_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  s record; pst record; existing_id uuid; now_ts timestamptz := now();
+  _kind public.notification_kind;
+  _title text;
+  _session_mode boolean := (_token IS NULL OR length(trim(_token)) = 0);
+  _uid uuid;
+  _who text;
+  _dedupe text;
+  _note_clean text := NULLIF(trim(COALESCE(_note, '')), '');
+BEGIN
+  IF _decision NOT IN ('approved','rejected','adjust','comment') THEN RAISE EXCEPTION 'bad_decision'; END IF;
+  IF _post_id IS NULL THEN RAISE EXCEPTION 'post_not_found'; END IF;
+  -- Pedido de ajuste sem explicacao nao e acionavel pela equipe.
+  IF _decision = 'adjust' AND _note_clean IS NULL THEN RAISE EXCEPTION 'note_required'; END IF;
+  SELECT * INTO s FROM public._portal_session_any(_token, _client_id);
+
+  IF _session_mode THEN
+    _uid := auth.uid();
+    SELECT NULLIF(trim(COALESCE(_identity, up.full_name, '')), '') INTO _who
+      FROM public.user_profiles up WHERE up.id = _uid;
+    _who := COALESCE(_who, 'Cliente');
+  ELSE
+    IF _identity IS NULL OR length(trim(_identity)) = 0 THEN RAISE EXCEPTION 'identity_required'; END IF;
+    _who := _identity;
+  END IF;
+
+  SELECT id, title, stage, published_at, deleted_at, visible_in_portal
+    INTO pst
+    FROM public.posts
+   WHERE id = _post_id AND brand_id = s.brand_id AND client_id = s.client_id;
+
+  IF pst.id IS NULL OR pst.deleted_at IS NOT NULL OR pst.visible_in_portal IS NOT TRUE THEN
+    RAISE EXCEPTION 'post_not_found';
+  END IF;
+
+  IF _decision <> 'comment'
+     AND (pst.published_at IS NOT NULL OR pst.stage = 'published') THEN
+    RAISE EXCEPTION 'post_already_published';
+  END IF;
+
+  IF _decision <> 'comment' THEN
+    SELECT id INTO existing_id FROM public.post_approvals WHERE post_id = _post_id;
+    IF existing_id IS NOT NULL THEN
+      UPDATE public.post_approvals SET
+        status = _decision::approval_status,
+        -- Ajuste nunca sobrescreve a nota anterior com vazio.
+        notes = CASE WHEN _decision = 'adjust' THEN COALESCE(_note_clean, notes) ELSE _note END,
+        decided_at = now_ts, decided_by_name = _who,
+        decided_by = _uid
+      WHERE id = existing_id;
+    ELSE
+      INSERT INTO public.post_approvals(post_id, status, notes, decided_at, decided_by_name, decided_by)
+      VALUES (_post_id, _decision::approval_status,
+              CASE WHEN _decision = 'adjust' THEN _note_clean ELSE _note END,
+              now_ts, _who, _uid);
+    END IF;
+    IF _decision = 'approved' THEN
+      UPDATE public.posts SET approved_at = now_ts, review_status = 'approved' WHERE id = _post_id;
+    ELSIF _decision = 'rejected' THEN
+      UPDATE public.posts SET review_status = 'rejected' WHERE id = _post_id;
+    ELSIF _decision = 'adjust' THEN
+      UPDATE public.posts SET review_status = 'rework',
+             rework_notes = COALESCE(_note_clean, rework_notes)
+       WHERE id = _post_id;
+    END IF;
+  END IF;
+
+  INSERT INTO public.activity_events(brand_id, client_id, actor_id, entity_type, entity_id, verb, payload)
+  VALUES (s.brand_id, s.client_id, _uid, 'post', _post_id, 'portal_' || _decision,
+          jsonb_build_object('note', COALESCE(_note,''), 'by', _who, 'title', pst.title,
+                             'mode', CASE WHEN _session_mode THEN 'login' ELSE 'token' END));
+
+  _kind := CASE WHEN _decision = 'comment' THEN 'mention'::public.notification_kind ELSE 'approval_decision'::public.notification_kind END;
+  _title := CASE _decision
+      WHEN 'approved' THEN 'Cliente aprovou um post'
+      WHEN 'rejected' THEN 'Cliente rejeitou um post'
+      WHEN 'adjust'   THEN 'Cliente pediu ajustes'
+      ELSE 'Cliente comentou um post'
+    END;
+
+  _dedupe := 'portal_decision:' || _post_id::text || ':' || _decision;
+
+  -- Destinatarios: responsavel pelo cliente, quem esta ligado ao cliente e
+  -- TODOS os integrantes internos do espaco (owner, admin, manager, user...).
+  -- Contatos do portal jamais recebem avisos internos.
+  INSERT INTO public.notifications(user_id, brand_id, kind, title, body, href, payload, dedupe_key)
+  SELECT DISTINCT t.user_id, s.brand_id, _kind, _title,
+         _who || ': ' || COALESCE(pst.title, 'post'),
+         '/customers/' || s.client_id::text,
+         jsonb_build_object('source','portal_decision','post_id', _post_id,
+                            'client_id', s.client_id, 'decision', _decision, 'by', _who),
+         _dedupe
+    FROM (
+      SELECT c.owner_user_id AS user_id
+        FROM public.clients c
+       WHERE c.id = s.client_id AND c.owner_user_id IS NOT NULL
+      UNION
+      SELECT cm.user_id
+        FROM public.client_members cm
+       WHERE cm.client_id = s.client_id AND cm.role <> 'portal_client'
+      UNION
+      SELECT bm.user_id
+        FROM public.brand_members bm
+       WHERE bm.brand_id = s.brand_id
+         AND bm.role::text <> 'portal_client'
+    ) t
+   WHERE t.user_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM public.brand_members bm2
+                  WHERE bm2.brand_id = s.brand_id AND bm2.user_id = t.user_id
+                    AND bm2.role::text <> 'portal_client')
+  ON CONFLICT (user_id, kind, dedupe_key)
+    WHERE read_at IS NULL AND dedupe_key IS NOT NULL
+    DO NOTHING;
+
+  RETURN jsonb_build_object('ok', true);
+END $function$;
+
+-- ---------------------------------------------------------------------------
+-- 20260906203602_51eb3c43-3c51-4742-83bd-31d535f4790c.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.installation_credentials
+  ADD COLUMN IF NOT EXISTS generated_secrets_ciphertext text;
+
+COMMENT ON COLUMN public.installation_credentials.generated_secrets_ciphertext IS
+  'JSON cifrado (AES-256-GCM) com os secrets exclusivos da instalação (CRON_SECRET, BRAND_CREDENTIALS_SECRET, META_STATE_SECRET, META_WEBHOOK_VERIFY_TOKEN). Gerados uma única vez e reutilizados: regerar invalida tokens já cifrados no destino.';
+
+-- ---------------------------------------------------------------------------
+-- 20260906210808_c9ee612d-0e7a-4161-8a2e-8a9ba4e25f88.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.brand_members
+  ADD COLUMN IF NOT EXISTS hourly_cost_cents integer NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS task_time_entries_brand_started_idx
+  ON public.task_time_entries (brand_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS task_time_entries_brand_user_started_idx
+  ON public.task_time_entries (brand_id, user_id, started_at DESC);
+
+CREATE OR REPLACE FUNCTION public.timesheet_report_entries(
+  _brand_id uuid,
+  _from timestamptz,
+  _to timestamptz
+)
+RETURNS TABLE (
+  entry_id uuid,
+  started_at timestamptz,
+  ended_at timestamptz,
+  seconds integer,
+  is_rework boolean,
+  source text,
+  description text,
+  user_id uuid,
+  user_name text,
+  user_email text,
+  avatar_url text,
+  hourly_cost_cents integer,
+  task_id uuid,
+  task_title text,
+  task_estimated_minutes integer,
+  project_id uuid,
+  project_name text,
+  client_id uuid,
+  client_name text
+)
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _uid uuid := auth.uid();
+  _role text;
+  _can_cost boolean;
+BEGIN
+  IF _uid IS NULL OR _brand_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  _role := public.app_access_role(_uid, _brand_id);
+
+  IF _role IS NULL OR _role = 'client' THEN
+    RETURN;
+  END IF;
+
+  _can_cost := _role IN ('super_admin', 'admin', 'manager');
+
+  RETURN QUERY
+  SELECT
+    e.id,
+    e.started_at,
+    e.ended_at,
+    COALESCE(e.seconds, COALESCE(e.minutes, 0) * 60)::int,
+    COALESCE(e.is_rework, false),
+    COALESCE(e.source, 'timer')::text,
+    e.description,
+    e.user_id,
+    COALESCE(p.full_name, '')::text,
+    COALESCE(p.email, '')::text,
+    p.avatar_url,
+    CASE WHEN _can_cost THEN COALESCE(bm.hourly_cost_cents, 0) ELSE 0 END::int,
+    t.id,
+    t.title,
+    t.estimated_minutes,
+    t.project_id,
+    pr.name,
+    t.client_id,
+    c.name
+  FROM public.task_time_entries e
+  JOIN public.tasks t ON t.id = e.task_id
+  LEFT JOIN public.projects pr ON pr.id = t.project_id
+  LEFT JOIN public.clients c ON c.id = t.client_id
+  LEFT JOIN public.user_profiles p ON p.id = e.user_id
+  LEFT JOIN public.brand_members bm ON bm.brand_id = e.brand_id AND bm.user_id = e.user_id
+  WHERE e.brand_id = _brand_id
+    AND e.ended_at IS NOT NULL
+    AND e.started_at >= _from
+    AND e.started_at <= _to
+    AND (
+      _role IN ('super_admin', 'admin')
+      OR (_role = 'manager' AND t.client_id IS NOT NULL AND public.can_access_client(t.client_id, _uid))
+      OR e.user_id = _uid
+    );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.timesheet_report_entries(uuid, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.timesheet_report_entries(uuid, timestamptz, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.timesheet_report_entries(uuid, timestamptz, timestamptz) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.set_member_hourly_cost(
+  _brand_id uuid,
+  _user_id uuid,
+  _hourly_cost_cents integer
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _uid uuid := auth.uid();
+  _role text;
+BEGIN
+  IF _uid IS NULL THEN
+    RAISE EXCEPTION 'not authenticated';
+  END IF;
+  _role := public.app_access_role(_uid, _brand_id);
+  IF _role NOT IN ('super_admin', 'admin') THEN
+    RAISE EXCEPTION 'not authorized';
+  END IF;
+  IF _hourly_cost_cents IS NULL OR _hourly_cost_cents < 0 THEN
+    RAISE EXCEPTION 'invalid hourly cost';
+  END IF;
+
+  UPDATE public.brand_members
+     SET hourly_cost_cents = _hourly_cost_cents
+   WHERE brand_id = _brand_id AND user_id = _user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'member not found';
+  END IF;
+
+  RETURN _hourly_cost_cents;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.set_member_hourly_cost(uuid, uuid, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.set_member_hourly_cost(uuid, uuid, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.set_member_hourly_cost(uuid, uuid, integer) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260906214241_1d0ca3c8-8d8d-4d11-965b-d2afbe48f811.sql
+-- ---------------------------------------------------------------------------
+-- Regras por cliente: aprovação do cliente por etapa + política de limite de produção.
+ALTER TABLE public.clients
+  ADD COLUMN IF NOT EXISTS approval_policy jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS scope_policy jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.brands
+  ADD COLUMN IF NOT EXISTS approval_policy jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS scope_policy jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN public.clients.approval_policy IS
+  'Etapas que exigem aprovação do cliente: {plan|content|schedule: "client"|"internal"}. Vazio herda do workspace; workspace vazio = comportamento histórico (cliente aprova).';
+COMMENT ON COLUMN public.clients.scope_policy IS
+  'Limite de produção: {"mode":"warn"|"block","applies":["ai","manual"]}. Vazio herda do workspace e depois de overage_policy.';
+
+-- Autoridade: só Owner/Admin do workspace (ou Super Admin) muda essas regras.
+CREATE OR REPLACE FUNCTION public.guard_client_policy_authority()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _brand uuid;
+  _role text;
+BEGIN
+  IF NEW.approval_policy IS DISTINCT FROM OLD.approval_policy
+     OR NEW.scope_policy IS DISTINCT FROM OLD.scope_policy THEN
+    -- Automação/serviço (sem usuário autenticado) segue permitido.
+    IF auth.uid() IS NULL THEN
+      RETURN NEW;
+    END IF;
+    _brand := CASE WHEN TG_TABLE_NAME = 'brands' THEN NEW.id ELSE NEW.brand_id END;
+    _role := public.app_access_role(auth.uid(), _brand);
+    IF _role IS NULL OR _role NOT IN ('super_admin', 'admin') THEN
+      RAISE EXCEPTION 'client_policy_forbidden';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_clients_policy_authority ON public.clients;
+CREATE TRIGGER guard_clients_policy_authority
+  BEFORE UPDATE ON public.clients
+  FOR EACH ROW EXECUTE FUNCTION public.guard_client_policy_authority();
+
+DROP TRIGGER IF EXISTS guard_brands_policy_authority ON public.brands;
+CREATE TRIGGER guard_brands_policy_authority
+  BEFORE UPDATE ON public.brands
+  FOR EACH ROW EXECUTE FUNCTION public.guard_client_policy_authority();
+
+-- ---------------------------------------------------------------------------
+-- 20260906215417_069ec94b-7022-41ef-b35e-d5be7c064127.sql
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.guard_client_policy_authority() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.guard_client_policy_authority() FROM anon;
+REVOKE ALL ON FUNCTION public.guard_client_policy_authority() FROM authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 20260906220147_4a12801e-46fe-4f8f-a2dc-8e65e1b729fa.sql
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.user_login_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  brand_id uuid REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid REFERENCES public.clients(id) ON DELETE SET NULL,
+  kind text NOT NULL DEFAULT 'team',
+  event text NOT NULL DEFAULT 'sign_in',
+  provider text,
+  email text,
+  user_agent text,
+  device text,
+  os text,
+  browser text,
+  ip_prefix text,
+  city text,
+  country text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT ON public.user_login_events TO authenticated;
+GRANT ALL ON public.user_login_events TO service_role;
+
+ALTER TABLE public.user_login_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Workspace admins read login events"
+ON public.user_login_events
+FOR SELECT
+TO authenticated
+USING (
+  public.is_super_admin(auth.uid())
+  OR (
+    brand_id IS NOT NULL
+    AND lower(coalesce(public.app_access_role(auth.uid(), brand_id), '')) IN ('owner','admin','super_admin')
+  )
+);
+
+CREATE INDEX user_login_events_brand_created_idx ON public.user_login_events (brand_id, created_at DESC);
+CREATE INDEX user_login_events_user_created_idx ON public.user_login_events (user_id, created_at DESC);
+CREATE INDEX user_login_events_email_idx ON public.user_login_events (lower(email));
+
+-- ---------------------------------------------------------------------------
+-- 20260906221742_07ff5201-ff79-4156-b01f-0f15f22162cc.sql
+-- ---------------------------------------------------------------------------
+-- =========================================================
+-- Comunicador interno (Mensagens): equipe, clientes e portal
+-- =========================================================
+
+ALTER TYPE public.notification_kind ADD VALUE IF NOT EXISTS 'message';
+
+-- ---------- Conversas ----------
+CREATE TABLE public.message_threads (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  scope text NOT NULL CHECK (scope IN ('client', 'team_dm', 'project')),
+  client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  subject text NOT NULL,
+  visibility text NOT NULL DEFAULT 'internal' CHECK (visibility IN ('internal', 'shared_with_client')),
+  created_by uuid,
+  last_message_at timestamptz NOT NULL DEFAULT now(),
+  last_message_preview text,
+  archived_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  -- Coerência estrutural: cada tipo de conversa exige seu vínculo.
+  CONSTRAINT message_threads_scope_link CHECK (
+    (scope = 'client'   AND client_id IS NOT NULL) OR
+    (scope = 'project'  AND project_id IS NOT NULL) OR
+    (scope = 'team_dm'  AND client_id IS NULL AND project_id IS NULL)
+  ),
+  -- Conversa interna nunca é compartilhada com o cliente.
+  CONSTRAINT message_threads_visibility_scope CHECK (
+    visibility = 'internal' OR scope = 'client'
+  )
+);
+
+GRANT SELECT, INSERT, UPDATE ON public.message_threads TO authenticated;
+GRANT ALL ON public.message_threads TO service_role;
+
+CREATE INDEX message_threads_brand_recent_idx
+  ON public.message_threads (brand_id, last_message_at DESC);
+CREATE INDEX message_threads_client_recent_idx
+  ON public.message_threads (client_id, last_message_at DESC) WHERE client_id IS NOT NULL;
+CREATE INDEX message_threads_project_idx
+  ON public.message_threads (project_id) WHERE project_id IS NOT NULL;
+
+-- ---------- Participantes ----------
+CREATE TABLE public.message_thread_participants (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id uuid NOT NULL REFERENCES public.message_threads(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  role_in_thread text NOT NULL DEFAULT 'team' CHECK (role_in_thread IN ('team', 'portal_client')),
+  notify boolean NOT NULL DEFAULT true,
+  last_read_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (thread_id, user_id)
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.message_thread_participants TO authenticated;
+GRANT ALL ON public.message_thread_participants TO service_role;
+
+CREATE INDEX message_thread_participants_user_idx
+  ON public.message_thread_participants (user_id, thread_id);
+
+-- ---------- Mensagens ----------
+CREATE TABLE public.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id uuid NOT NULL REFERENCES public.message_threads(id) ON DELETE CASCADE,
+  author_id uuid NOT NULL,
+  author_kind text NOT NULL DEFAULT 'team' CHECK (author_kind IN ('team', 'portal_client')),
+  body text NOT NULL,
+  links jsonb NOT NULL DEFAULT '[]'::jsonb,
+  mentions uuid[] NOT NULL DEFAULT '{}'::uuid[],
+  removed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE ON public.messages TO authenticated;
+GRANT ALL ON public.messages TO service_role;
+
+CREATE INDEX messages_thread_created_idx ON public.messages (thread_id, created_at DESC);
+
+-- ---------- Guard de acesso (fail-closed, sem recursão) ----------
+CREATE OR REPLACE FUNCTION public.is_message_thread_participant(_thread_id uuid, _user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT _thread_id IS NOT NULL AND _user_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.message_thread_participants p
+     WHERE p.thread_id = _thread_id AND p.user_id = _user_id
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_message_thread_participant(uuid, uuid) FROM public;
+REVOKE ALL ON FUNCTION public.is_message_thread_participant(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.is_message_thread_participant(uuid, uuid) TO authenticated, service_role;
+
+-- Escopo canônico de uma conversa. Cliente do portal só alcança conversa
+-- compartilhada do próprio cliente e na qual foi incluído.
+CREATE OR REPLACE FUNCTION public.can_access_message_thread(_thread_id uuid, _user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  t public.message_threads;
+BEGIN
+  IF _thread_id IS NULL OR _user_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT * INTO t FROM public.message_threads WHERE id = _thread_id;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  -- Contato do portal: só conversa compartilhada, do próprio cliente,
+  -- e somente se estiver na lista de participantes.
+  IF public.is_portal_client_of(t.client_id, _user_id) THEN
+    RETURN t.scope = 'client'
+       AND t.visibility = 'shared_with_client'
+       AND public.is_message_thread_participant(_thread_id, _user_id);
+  END IF;
+
+  -- Equipe: precisa ser membro do workspace.
+  IF NOT public.is_brand_member(t.brand_id, _user_id) THEN
+    RETURN false;
+  END IF;
+
+  IF t.scope = 'client' THEN
+    RETURN public.can_access_client(t.client_id, _user_id);
+  ELSIF t.scope = 'project' THEN
+    RETURN public.can_access_project(t.project_id, _user_id);
+  END IF;
+
+  -- Conversa direta: apenas os participantes.
+  RETURN public.is_message_thread_participant(_thread_id, _user_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.can_access_message_thread(uuid, uuid) FROM public;
+REVOKE ALL ON FUNCTION public.can_access_message_thread(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.can_access_message_thread(uuid, uuid) TO authenticated, service_role;
+
+-- ---------- RLS ----------
+ALTER TABLE public.message_threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.message_thread_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "threads read in scope" ON public.message_threads
+FOR SELECT TO authenticated
+USING (public.can_access_message_thread(id, auth.uid()));
+
+-- Somente equipe cria conversa, e dentro do próprio escopo.
+CREATE POLICY "threads insert by team in scope" ON public.message_threads
+FOR INSERT TO authenticated
+WITH CHECK (
+  created_by = auth.uid()
+  AND public.is_brand_member(brand_id, auth.uid())
+  AND (client_id IS NULL OR public.can_access_client(client_id, auth.uid()))
+  AND (project_id IS NULL OR public.can_access_project(project_id, auth.uid()))
+);
+
+CREATE POLICY "threads update in scope" ON public.message_threads
+FOR UPDATE TO authenticated
+USING (public.can_access_message_thread(id, auth.uid()) AND public.is_brand_member(brand_id, auth.uid()))
+WITH CHECK (public.is_brand_member(brand_id, auth.uid()));
+
+CREATE POLICY "thread participants read in scope" ON public.message_thread_participants
+FOR SELECT TO authenticated
+USING (public.can_access_message_thread(thread_id, auth.uid()));
+
+-- Só equipe com acesso à conversa gerencia participantes.
+CREATE POLICY "thread participants managed by team" ON public.message_thread_participants
+FOR INSERT TO authenticated
+WITH CHECK (
+  public.can_access_message_thread(thread_id, auth.uid())
+  AND EXISTS (
+    SELECT 1 FROM public.message_threads t
+     WHERE t.id = thread_id AND public.is_brand_member(t.brand_id, auth.uid())
+  )
+);
+
+CREATE POLICY "thread participants delete by team" ON public.message_thread_participants
+FOR DELETE TO authenticated
+USING (
+  public.can_access_message_thread(thread_id, auth.uid())
+  AND EXISTS (
+    SELECT 1 FROM public.message_threads t
+     WHERE t.id = thread_id AND public.is_brand_member(t.brand_id, auth.uid())
+  )
+);
+
+-- Cada pessoa atualiza a própria marcação de leitura; equipe ajusta a conversa.
+CREATE POLICY "thread participants update self or team" ON public.message_thread_participants
+FOR UPDATE TO authenticated
+USING (
+  user_id = auth.uid()
+  OR (
+    public.can_access_message_thread(thread_id, auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.message_threads t
+       WHERE t.id = thread_id AND public.is_brand_member(t.brand_id, auth.uid())
+    )
+  )
+)
+WITH CHECK (public.can_access_message_thread(thread_id, auth.uid()));
+
+CREATE POLICY "messages read in scope" ON public.messages
+FOR SELECT TO authenticated
+USING (public.can_access_message_thread(thread_id, auth.uid()));
+
+CREATE POLICY "messages insert by participant" ON public.messages
+FOR INSERT TO authenticated
+WITH CHECK (
+  author_id = auth.uid()
+  AND public.can_access_message_thread(thread_id, auth.uid())
+  AND public.is_message_thread_participant(thread_id, auth.uid())
+);
+
+-- Histórico é preservado: só marcar a própria mensagem como removida.
+CREATE POLICY "messages soft delete by author" ON public.messages
+FOR UPDATE TO authenticated
+USING (author_id = auth.uid() AND public.can_access_message_thread(thread_id, auth.uid()))
+WITH CHECK (author_id = auth.uid());
+
+-- ---------- Atualização automática da conversa ----------
+CREATE OR REPLACE FUNCTION public.bump_message_thread()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.message_threads
+     SET last_message_at = NEW.created_at,
+         last_message_preview = left(NEW.body, 280),
+         updated_at = now()
+   WHERE id = NEW.thread_id;
+
+  -- Autor já leu o que acabou de escrever.
+  UPDATE public.message_thread_participants
+     SET last_read_at = NEW.created_at
+   WHERE thread_id = NEW.thread_id AND user_id = NEW.author_id;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER messages_bump_thread
+AFTER INSERT ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.bump_message_thread();
+
+CREATE TRIGGER message_threads_touch_updated_at
+BEFORE UPDATE ON public.message_threads
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- ---------- Tempo real ----------
+ALTER TABLE public.messages REPLICA IDENTITY FULL;
+ALTER TABLE public.message_threads REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.message_threads;
+
+-- ---------------------------------------------------------------------------
+-- 20260906221905_59be4d6a-bc51-45f0-9d04-535d0265762a.sql
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.bump_message_thread() FROM public;
+REVOKE ALL ON FUNCTION public.bump_message_thread() FROM anon;
+REVOKE ALL ON FUNCTION public.bump_message_thread() FROM authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 20260906222307_f549ee09-e473-4116-afd3-2c13eb350d5a.sql
+-- ---------------------------------------------------------------------------
+-- Não lidas por conversa (só conversas em que a pessoa participa e pode ver).
+CREATE OR REPLACE FUNCTION public.message_unread_counts(_brand_id uuid)
+RETURNS TABLE(thread_id uuid, unread integer)
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.thread_id,
+         COUNT(m.id)::int AS unread
+    FROM public.message_thread_participants p
+    JOIN public.message_threads t ON t.id = p.thread_id
+    LEFT JOIN public.messages m
+           ON m.thread_id = p.thread_id
+          AND m.author_id <> p.user_id
+          AND m.removed_at IS NULL
+          AND m.created_at > COALESCE(p.last_read_at, 'epoch'::timestamptz)
+   WHERE p.user_id = auth.uid()
+     AND (_brand_id IS NULL OR t.brand_id = _brand_id)
+     AND t.archived_at IS NULL
+     AND public.can_access_message_thread(p.thread_id, auth.uid())
+   GROUP BY p.thread_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.message_unread_counts(uuid) FROM public;
+REVOKE ALL ON FUNCTION public.message_unread_counts(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.message_unread_counts(uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.message_unread_total(_brand_id uuid)
+RETURNS integer
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(SUM(unread), 0)::int FROM public.message_unread_counts(_brand_id);
+$$;
+
+REVOKE ALL ON FUNCTION public.message_unread_total(uuid) FROM public;
+REVOKE ALL ON FUNCTION public.message_unread_total(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.message_unread_total(uuid) TO authenticated, service_role;

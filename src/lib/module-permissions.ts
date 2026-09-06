@@ -169,7 +169,7 @@ export const MODULES: ModuleDefinition[] = [
     label: "Chat",
     group: "Inteligência",
     description: "Conversas internas e com a IA.",
-    urls: ["/chat"],
+    urls: ["/chat", "/messages"],
   },
   {
     key: "connections",
@@ -183,8 +183,8 @@ export const MODULES: ModuleDefinition[] = [
     key: "portal",
     label: "Portal do cliente",
     group: "Administração",
-    description: "Acessos do portal e links de aprovação do cliente.",
-    urls: [],
+    description: "Acessos do portal, caixa de entrada e links de aprovação do cliente.",
+    urls: ["/inbox"],
     levels: ["none", "view", "full"],
   },
   {

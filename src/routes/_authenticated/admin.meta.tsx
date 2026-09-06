@@ -9,6 +9,7 @@ import { getMetaAppSettingsFn, saveMetaAppSettingsFn } from "@/lib/meta/app-conf
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -226,9 +227,8 @@ function AdminMetaAppPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="meta-app-secret">App Secret</Label>
-              <Input
+              <PasswordInput
                 id="meta-app-secret"
-                type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
                 placeholder={data?.client.hasSecret ? "•••••••• (mantido)" : "App Secret"}

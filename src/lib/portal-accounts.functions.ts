@@ -214,7 +214,14 @@ export const createPortalContactFn = createServerFn({ method: "POST" })
         email,
         password: tempPassword,
         email_confirm: true,
-        user_metadata: { full_name: fullName, portal_client_id: data.clientId },
+        // `role: 'portal_client'` faz o trigger handle_new_user NÃO vincular a
+        // conta ao workspace como equipe: contato de cliente jamais vê a UI
+        // interna da agência.
+        user_metadata: {
+          full_name: fullName,
+          portal_client_id: data.clientId,
+          role: PORTAL_ROLE,
+        },
       });
       if (createErr || !created?.user?.id) {
         throw new Error(`provision_failed: ${createErr?.message ?? "sem id de usuário"}`);
@@ -237,6 +244,10 @@ export const createPortalContactFn = createServerFn({ method: "POST" })
         await supabaseAdmin.auth.admin.deleteUser(newUserId);
         throw new Error(`link_failed: ${(cmErr as { message: string }).message}`);
       }
+
+      // Defesa em profundidade: se qualquer trigger legado tiver vinculado a
+      // conta à equipe, o vínculo é removido antes do primeiro login.
+      await admin.from("brand_members").delete().eq("user_id", newUserId);
 
       let emailSent = false;
       let emailError: string | undefined;
@@ -295,6 +306,7 @@ export const resetPortalContactPasswordFn = createServerFn({ method: "POST" })
       await admin.from("user_profiles").update({ requires_password_change: true }).eq("id", data.userId);
 
       const email = updated?.user?.email ?? "";
+
       let emailSent = false;
       if (data.sendEmail && email) {
         const res = await sendPortalInvite(supabase, {

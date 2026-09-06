@@ -253,6 +253,11 @@ function fakeClient(detail: Record<string, unknown> = {}) {
           maybeSingle: async () => ({ data: { status: "running", steps: [], detail } }),
         }),
       }),
+      // As chaves próprias da instalação são persistidas para serem reutilizadas.
+      upsert: async (patch: Record<string, unknown>) => {
+        updates.push(patch);
+        return { error: null };
+      },
     }),
   };
   return { api, updates };

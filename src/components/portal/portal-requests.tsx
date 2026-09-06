@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Inbox, Paperclip, Plus, Send, X } from "lucide-react";
+import { Inbox, Link2, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,10 +21,19 @@ import {
   createPortalRequestFn,
   getPortalRequestFn,
   listPortalRequestsFn,
+  MAX_REQUEST_LINKS,
   PORTAL_REQUEST_STATUS_LABEL,
   type PortalRequest,
+  type PortalRequestLink,
   type PortalRequestStatus,
 } from "@/lib/portal-requests.functions";
+import {
+  LINK_SOURCE_LABEL,
+  detectLinkSource,
+  linkFallbackLabel,
+  normalizeLinkUrl,
+  type LinkSource,
+} from "@/lib/link-source";
 import { usePortalCanInteract, usePortalMode } from "./portal-context";
 import { EmptyState, ErrorState, ListSkeleton, formatDate, portalErrorMessage } from "./portal-shared";
 
@@ -56,12 +65,35 @@ function StatusChip({ status }: { status: PortalRequestStatus }) {
   );
 }
 
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
-  return btoa(binary);
+function sourceLabel(source: string): string {
+  return LINK_SOURCE_LABEL[source as LinkSource] ?? LINK_SOURCE_LABEL.link;
+}
+
+/** Lista de links de um pedido, clicáveis e com o serviço reconhecido. */
+function RequestLinkList({ links }: { links: PortalRequestLink[] }) {
+  if (!links.length) return null;
+  return (
+    <ul className="space-y-1.5">
+      {links.map((l) => (
+        <li key={l.url}>
+          <a
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card px-3 py-2 transition-colors hover:bg-muted/50"
+          >
+            <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+              {l.title ?? linkFallbackLabel(l.url)}
+            </span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">
+              {sourceLabel(l.source)}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function PortalRequests() {
@@ -163,6 +195,14 @@ export function PortalRequests() {
                         <span>Prazo desejado {formatDate(r.desiredDueAt)}</span>
                       </>
                     ) : null}
+                    {r.links.length ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Link2 className="h-3 w-3" /> {r.links.length}
+                        </span>
+                      </>
+                    ) : null}
                     {r.attachments.length ? (
                       <>
                         <span aria-hidden>·</span>
@@ -217,24 +257,43 @@ function NewRequestDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [due, setDue] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [links, setLinks] = useState<PortalRequestLink[]>([]);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
+
+  const addLink = () => {
+    if (links.length >= MAX_REQUEST_LINKS) {
+      toast.error(`Você pode enviar até ${MAX_REQUEST_LINKS} links.`);
+      return;
+    }
+    const url = normalizeLinkUrl(linkUrl);
+    if (!url) {
+      toast.error("Cole um endereço completo, como https://drive.google.com/...");
+      return;
+    }
+    if (links.some((l) => l.url === url)) {
+      toast.info("Esse link já está na lista.");
+      setLinkUrl("");
+      setLinkTitle("");
+      return;
+    }
+    setLinks((prev) => [
+      ...prev,
+      { url, title: linkTitle.trim() || null, source: detectLinkSource(url) },
+    ]);
+    setLinkUrl("");
+    setLinkTitle("");
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const attachments = await Promise.all(
-        files.slice(0, 5).map(async (f) => ({
-          name: f.name,
-          mime: f.type || null,
-          dataBase64: await fileToBase64(f),
-        })),
-      );
       return create({
         data: {
           clientId,
           title: title.trim(),
           description: description.trim() || undefined,
           desiredDueAt: due ? new Date(`${due}T12:00:00`).toISOString() : null,
-          attachments,
+          links: links.map((l) => ({ url: l.url, title: l.title ?? undefined })),
         },
       });
     },
@@ -285,18 +344,69 @@ function NewRequestDialog({
               onChange={(e) => setDue(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="req-files">Anexos (até 5)</Label>
-            <Input
-              id="req-files"
-              type="file"
-              multiple
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))}
-            />
-            {files.length ? (
-              <p className="text-xs text-muted-foreground">
-                {files.map((f) => f.name).join(", ")}
-              </p>
+          <div className="space-y-2">
+            <Label htmlFor="req-link">Links de referência (até {MAX_REQUEST_LINKS})</Label>
+            <p className="text-xs text-muted-foreground">
+              Compartilhe pastas ou arquivos por link (Google Drive, Docs, Figma, Dropbox,
+              WeTransfer…). Confira se o link está liberado para a equipe abrir.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="req-link"
+                value={linkUrl}
+                inputMode="url"
+                maxLength={2000}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addLink();
+                  }
+                }}
+                placeholder="https://drive.google.com/..."
+                className="sm:flex-[3]"
+              />
+              <Input
+                value={linkTitle}
+                maxLength={160}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="Nome (opcional)"
+                className="sm:flex-[2]"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0 gap-1.5"
+                onClick={addLink}
+              >
+                <Plus className="h-4 w-4" /> Adicionar
+              </Button>
+            </div>
+            {links.length ? (
+              <ul className="space-y-1.5">
+                {links.map((l) => (
+                  <li
+                    key={l.url}
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2"
+                  >
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[13px]">
+                      {l.title ?? linkFallbackLabel(l.url)}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {sourceLabel(l.source)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remover ${l.title ?? l.url}`}
+                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-destructive"
+                      onClick={() => setLinks((prev) => prev.filter((x) => x.url !== l.url))}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </div>
         </div>
@@ -400,6 +510,15 @@ function RequestDetailDialog({
               <p className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 p-3 text-sm">
                 {request.description}
               </p>
+            ) : null}
+
+            {request.links.length ? (
+              <div className="space-y-2">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Links
+                </div>
+                <RequestLinkList links={request.links} />
+              </div>
             ) : null}
 
             {request.attachments.length ? (

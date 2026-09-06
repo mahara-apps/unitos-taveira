@@ -1250,6 +1250,57 @@ export const saveInstallationCredentialsFn = createServerFn({ method: "POST" })
     return getInstallationCredentialsStatus(context.supabase as never, data.id);
   });
 
+/**
+ * Estado dos segredos próprios da instalação (cron, criptografia, Meta).
+ *
+ * Só informa se cada um já existe: valores nunca voltam para a tela. Eles são
+ * gerados uma única vez no provisionamento e reutilizados nas execuções
+ * seguintes — trocar a chave de criptografia torna ilegíveis os acessos de
+ * redes sociais já salvos, então a troca passou a ser explícita.
+ */
+export const getInstallationSecretsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    await guard(context);
+    const { getInstallationSecretsStatus } = await import("./credentials.server");
+    const { GENERATED_SECRET_VARS } = await import("./automation-contract");
+    return getInstallationSecretsStatus(context.supabase as never, data.id, GENERATED_SECRET_VARS);
+  });
+
+/** Troca um segredo próprio da instalação — ação deliberada, nunca automática. */
+export const rotateInstallationSecretFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), name: z.string().min(3).max(120) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await guard(context);
+    const { GENERATED_SECRET_VARS } = await import("./automation-contract");
+    if (!(GENERATED_SECRET_VARS as readonly string[]).includes(data.name)) {
+      throw new Error("Segredo desconhecido.");
+    }
+    const { rotateInstallationSecret, getInstallationSecretsStatus } = await import(
+      "./credentials.server"
+    );
+    const { generateInstallationSecret } = await import("./automation.server");
+    await rotateInstallationSecret({
+      client: context.supabase as never,
+      installationId: data.id,
+      actorId: context.userId,
+      name: data.name,
+      generate: () => generateInstallationSecret(),
+    });
+    return {
+      status: await getInstallationSecretsStatus(
+        context.supabase as never,
+        data.id,
+        GENERATED_SECRET_VARS,
+      ),
+      applyHint: "Rode a atualização da instalação para publicar o novo valor no deploy.",
+    };
+  });
+
 /** Remove as credenciais próprias: a instalação volta a usar as do MASTER. */
 export const clearInstallationCredentialsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

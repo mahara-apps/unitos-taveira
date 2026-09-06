@@ -14,7 +14,7 @@ import {
 const CID = "11111111-1111-1111-1111-111111111111";
 
 describe("customer panel tabs (fonte única)", () => {
-  it("expõe exatamente as 6 abas canônicas na ordem alvo", () => {
+  it("expõe exatamente as abas canônicas na ordem alvo", () => {
     expect(CUSTOMER_TABS.map((t) => t.value)).toEqual([
       "overview",
       "conta",
@@ -22,8 +22,15 @@ describe("customer panel tabs (fonte única)", () => {
       "pauta",
       "trabalho",
       "publicacoes",
+      "area-cliente",
     ]);
   });
+
+  it("aponta links antigos de pedidos para a Área do cliente", () => {
+    expect(resolveCustomerTab("pedidos")).toBe("area-cliente");
+    expect(resolveCustomerTab("requests")).toBe("area-cliente");
+  });
+
 
   it("resolve todos os aliases legados para uma aba canônica", () => {
     for (const [alias, target] of Object.entries(CUSTOMER_TAB_ALIASES)) {

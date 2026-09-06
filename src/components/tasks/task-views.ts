@@ -14,6 +14,8 @@ export type View = (typeof VIEWS)[number];
 export const searchSchema = z.object({
   view: z.enum(VIEWS).catch("list"),
   taskId: z.string().uuid().optional(),
+  // Alias de links antigos de notificação (`/tasks?task=<id>`).
+  task: z.string().uuid().optional(),
   groupBy: z
     .enum(["none", "status", "priority", "project", "client", "assignee", "due"])
     .catch("status"),

@@ -2,14 +2,17 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { recordFailedSignInFn, recordSignInFn } from "@/lib/login-audit.functions";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccessCaches, getCachedPortalAccess } from "@/lib/access-cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
@@ -54,7 +57,6 @@ const signInSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 
 export function LoginForm() {
-  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Antes da hidratação o React não intercepta o submit: o formulário era
   // enviado nativamente (GET) e as credenciais iam para a URL sem nada
@@ -62,6 +64,8 @@ export function LoginForm() {
   const [ready, setReady] = useState(false);
   const navigate = useNavigate();
   const router = useRouter();
+  const recordSignIn = useServerFn(recordSignInFn);
+  const recordFailedSignIn = useServerFn(recordFailedSignInFn);
 
   function resolveNext(): string {
     if (typeof window === "undefined") return "/dashboard";
@@ -116,9 +120,13 @@ export function LoginForm() {
     });
     setSubmitting(false);
     if (error) {
+      // Auditoria de acessos: registra a tentativa falha (nunca a senha).
+      void recordFailedSignIn({ data: { email: values.email } }).catch(() => null);
       toast.error("Não foi possível entrar", { description: error.message });
       return;
     }
+    // Registro de acesso — não bloqueia a navegação se falhar.
+    void recordSignIn({ data: { provider: "password" } }).catch(() => null);
     toast.success("Bem-vindo de volta");
     // A identidade mudou: o escopo memorizado do usuário anterior não vale mais.
     clearAccessCaches();
@@ -126,7 +134,7 @@ export function LoginForm() {
     // interna (que redirecionaria de novo, gerando um pisca).
     const access = await getCachedPortalAccess().catch(() => null);
     const target =
-      access && access.isPortalUser && !access.isTeamMember ? "/area/inicio" : resolveNext();
+      access?.isPortalUser ? "/area/inicio" : resolveNext();
     await router.invalidate();
     navigate({ to: target, replace: true });
   }
@@ -181,9 +189,10 @@ export function LoginForm() {
                 </div>
                 <FormControl>
                   <PasswordInput
-                    field={field}
-                    show={showPassword}
-                    onToggle={() => setShowPassword((v) => !v)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="h-12 rounded-xl bg-background pr-12 transition-shadow focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-primary)_12%,transparent)]"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -240,32 +249,3 @@ export function LoginForm() {
   );
 }
 
-function PasswordInput({
-  field,
-  show,
-  onToggle,
-}: {
-  field: React.ComponentProps<typeof Input>;
-  show: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="relative">
-      <Input
-        type={show ? "text" : "password"}
-        placeholder="••••••••"
-        autoComplete="current-password"
-        className="h-12 rounded-xl bg-background pr-12 transition-shadow focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-primary)_12%,transparent)]"
-        {...field}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={show ? "Ocultar senha" : "Mostrar senha"}
-        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
-  );
-}

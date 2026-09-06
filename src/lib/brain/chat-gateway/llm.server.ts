@@ -7,6 +7,7 @@ import type { BrainConsolidated } from "./consolidate";
 import { buildMultimodalContent, type ChatAttachmentInput } from "./multimodal.server";
 import { buildChatTools, type ToolCallLog } from "./tools.server";
 import type { BrainContext } from "../core";
+import type { ModulePermissions } from "@/lib/module-permissions";
 
 export interface ChatAttachmentMeta {
   name: string;
@@ -50,8 +51,12 @@ function buildInstructions(brain: BrainConsolidated, user?: ChatUserContext): st
     "",
     "Uso de dados e ferramentas:",
     "- Nunca invente números, prazos ou nomes. Se não souber, use uma ferramenta ou diga que não tem o dado.",
-    "- Só chame ferramentas quando a pergunta pedir dado real (clientes, tarefas, posts, memória do Brain). Não use ferramenta para bater papo.",
+    "- Você consulta dados reais do workspace: clientes, projetos, tarefas, conteúdo, calendário, pautas, aprovações, briefing, pedidos da área do cliente, horas apontadas, equipe e situação das conexões — apenas pelas ferramentas disponíveis neste turno.",
+    "- As ferramentas disponíveis já refletem a permissão do usuário. Se algo não estiver disponível, diga que o acesso dele não cobre esse módulo — nunca tente contornar.",
+    "- Só chame ferramentas quando a pergunta pedir dado real. Não use ferramenta para bater papo.",
+    "- Quando o resultado trouxer `url`, inclua o link para o usuário abrir a tela e resolver.",
     "- Ao criar uma tarefa, confirme em uma frase o que foi criado.",
+
     "",
     "Conhecimento do Brain para esta pergunta (pode estar vazio):",
     brain.markdown ||
@@ -140,7 +145,10 @@ export interface StreamAnswerArgs {
   brain: BrainConsolidated;
   toolCallLog: ToolCallLog[];
   user?: ChatUserContext;
+  /** Permissões efetivas por módulo — definem quais tools existem no turno. */
+  permissions?: ModulePermissions | null;
 }
+
 
 export async function streamAnswer(args: StreamAnswerArgs): Promise<{
   result: ReturnType<typeof streamText>;
@@ -165,7 +173,12 @@ export async function streamAnswer(args: StreamAnswerArgs): Promise<{
     args.question,
     args.attachments,
   );
-  const tools = buildChatTools(args.supabase, args.brainCtx, args.toolCallLog);
+  const tools = buildChatTools(
+    args.supabase,
+    args.brainCtx,
+    args.toolCallLog,
+    args.permissions ?? null,
+  );
 
   const result = streamText({
     model,

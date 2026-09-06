@@ -11,12 +11,22 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, KeyRound, Loader2, MinusCircle, Plug } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  KeyRound,
+  Loader2,
+  MinusCircle,
+  Plug,
+  ShieldCheck,
+} from "lucide-react";
 
 import {
   adoptInstallationRepositoryFn,
   clearInstallationCredentialsFn,
   getInstallationCredentialsFn,
+  getInstallationSecretsFn,
+  rotateInstallationSecretFn,
   saveInstallationCredentialsFn,
   testInstallationCredentialsFn,
 } from "@/lib/installation/manager.functions";
@@ -325,7 +335,134 @@ export function InstallationCredentialsCard({ installationId }: { installationId
           </p>
         </div>
 
+        <InstallationSecretsSection installationId={installationId} />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Chaves internas da instalação. Ficam guardadas e são reaproveitadas em toda
+ * atualização; trocar a chave de criptografia obriga a reconectar as redes
+ * sociais, então a troca só acontece por clique consciente.
+ */
+const SECRET_LABELS: Record<string, { label: string; hint: string; warn?: string }> = {
+  CRON_SECRET: {
+    label: "Chave das rotinas automáticas",
+    hint: "Protege as tarefas agendadas da instalação.",
+  },
+  BRAND_CREDENTIALS_SECRET: {
+    label: "Chave de criptografia dos acessos",
+    hint: "Protege os acessos das redes sociais guardados no banco.",
+    warn: "Ao trocar, todas as contas de redes sociais precisarão ser reconectadas.",
+  },
+  META_STATE_SECRET: {
+    label: "Chave da conexão Meta",
+    hint: "Garante a segurança do vai e volta da autorização do Meta.",
+  },
+  META_WEBHOOK_VERIFY_TOKEN: {
+    label: "Token de verificação do Meta",
+    hint: "Usado pelo Meta para confirmar os avisos recebidos.",
+  },
+};
+
+function InstallationSecretsSection({ installationId }: { installationId: string }) {
+  const qc = useQueryClient();
+  const listFn = useServerFn(getInstallationSecretsFn);
+  const rotateFn = useServerFn(rotateInstallationSecretFn);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const secrets = useQuery({
+    queryKey: ["installation-secrets", installationId],
+    queryFn: () => listFn({ data: { id: installationId } }),
+    retry: false,
+  });
+
+  const rotate = useMutation({
+    mutationFn: (name: string) => rotateFn({ data: { id: installationId, name } }),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ["installation-secrets", installationId] });
+      toast.success(result.applyHint);
+    },
+    onError: (error: unknown) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível trocar a chave."),
+    onSettled: () => setPending(null),
+  });
+
+  if (secrets.isError) return null;
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs font-medium">Chaves internas da instalação</span>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Criadas uma única vez e reaproveitadas em toda atualização. Troque apenas se souber o
+        impacto.
+      </p>
+      {secrets.isPending ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {(secrets.data ?? []).map((item) => {
+            const meta = SECRET_LABELS[item.name] ?? { label: item.name, hint: "" };
+            return (
+              <li
+                key={item.name}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-t pt-2 first:border-t-0 first:pt-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium">{meta.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{meta.hint}</p>
+                  {meta.warn && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">{meta.warn}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    {item.configured ? (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 text-severity-success" />
+                        guardada
+                      </>
+                    ) : (
+                      <>
+                        <MinusCircle className="h-3 w-3" />
+                        será criada
+                      </>
+                    )}
+                  </span>
+                  {item.configured && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={rotate.isPending}
+                      onClick={() => {
+                        if (
+                          meta.warn &&
+                          !window.confirm(`${meta.warn}\n\nDeseja trocar esta chave?`)
+                        ) {
+                          return;
+                        }
+                        setPending(item.name);
+                        rotate.mutate(item.name);
+                      }}
+                    >
+                      {rotate.isPending && pending === item.name && (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      )}
+                      Trocar
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

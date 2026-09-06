@@ -182,10 +182,14 @@ export const addPlanLinkPublic = createServerFn({ method: "POST" })
       );
       const { data: plan } = await sb
         .from("monthly_plans")
-        .select("title, created_by")
+        .select("title, created_by, client_id")
         .eq("id", session.monthly_plan_id)
         .maybeSingle();
-      const ownerId = (plan as { created_by?: string | null } | null)?.created_by ?? null;
+      const planRow = plan as
+        | { created_by?: string | null; title?: string | null; client_id?: string | null }
+        | null;
+      const ownerId = planRow?.created_by ?? null;
+      const planClientId = planRow?.client_id ?? null;
       if (ownerId) {
         const linkId = (row as { id: string }).id;
         await insertNotificationsDeduped(sb as never, [
@@ -194,9 +198,16 @@ export const addPlanLinkPublic = createServerFn({ method: "POST" })
             brand_id: session.brand_id,
             kind: "system",
             title: "Cliente anexou um link na pauta",
-            body: (plan as { title?: string | null } | null)?.title ?? null,
-            href: `/content/plans/${session.monthly_plan_id}`,
-            payload: { topic_id: data.topicId, url },
+            body: planRow?.title ?? null,
+            href: planClientId
+              ? `/customers/${planClientId}?tab=pauta&planId=${session.monthly_plan_id}`
+              : `/content`,
+            payload: {
+              topic_id: data.topicId,
+              url,
+              monthly_plan_id: session.monthly_plan_id,
+              ...(planClientId ? { client_id: planClientId } : {}),
+            },
             dedupe_key: notificationDedupeKey("plan_client_link", linkId),
           },
         ]);

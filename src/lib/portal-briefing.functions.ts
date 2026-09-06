@@ -182,6 +182,18 @@ async function submitProposal(
     .eq("id", scope.clientId)
     .eq("brand_id", scope.brandId);
 
+  // Aviso interno: briefing respondido pelo cliente precisa chegar na equipe.
+  const { notifyInternalTeam } = await import("@/lib/client-comms.server");
+  await notifyInternalTeam({
+    brandId: scope.brandId,
+    clientId: scope.clientId,
+    title: "Briefing enviado pelo cliente",
+    body: input.note?.trim() || "As respostas estão prontas para revisão",
+    href: `/inbox?cliente=${scope.clientId}&tipo=briefing`,
+    dedupeParts: ["briefing_submitted", row.id, (proposal as { id: string }).id],
+    payload: { request_id: row.id, inbox_type: "briefing" },
+  });
+
   return { ok: true, proposalId: (proposal as { id: string }).id };
 }
 

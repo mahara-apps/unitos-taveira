@@ -25,8 +25,11 @@ import { CustomerOverview } from "@/components/customer/overview/customer-overvi
 import { CustomerHeader } from "@/components/customer/customer-header";
 import { PanelGroup } from "@/components/customer/ui/panel-section";
 import { WorkTab } from "@/components/customer/work/work-tab";
+import { ClientHoursTab } from "@/components/analytics/timesheet/client-hours-tab";
+
 import { PublicationsTab } from "@/components/customer/publications/publications-tab";
 import { BasicInfoTab } from "@/components/customer/basic-info-tab";
+import { ClientInbox } from "@/components/client-inbox/client-inbox";
 import { AccountManagementTab } from "@/components/customer/account-management-tab";
 import { BriefingWorkspace } from "@/components/brand-hub/briefing-workspace";
 import { QuickOnboardingWizard } from "@/components/brand-hub/quick-onboarding-wizard";
@@ -35,11 +38,10 @@ import { computeBriefingCompletion } from "@/lib/briefing-progress";
 import { usePageHeader } from "@/hooks/use-page-header";
 import {
   CUSTOMER_TABS,
-  CUSTOMER_TAB_SEARCH_VALUES,
-  isCustomerTabAlias,
   resolveCustomerTab,
   type CustomerTab,
 } from "@/lib/customer-tabs";
+
 import {
   CUSTOMER_QUERY_KEYS,
   customerCoreQuery,
@@ -55,12 +57,18 @@ export const Route = createFileRoute("/_authenticated/customers/$customerId")({
   validateSearch: (s) =>
     z
       .object({
-        onboarding: z.union([z.literal("1"), z.literal(1), z.boolean()]).optional(),
-        planId: z.string().uuid().optional(),
-        // Aceita as 6 abas canônicas + aliases legados (normalizados no guard).
-        tab: z.enum(CUSTOMER_TAB_SEARCH_VALUES).optional(),
+        onboarding: z
+          .union([z.literal("1"), z.literal(1), z.boolean()])
+          .optional()
+          .catch(undefined),
+        planId: z.string().uuid().optional().catch(undefined),
+        // Qualquer valor é aceito na URL e normalizado no guard — link antigo
+        // ou aba inexistente nunca derruba a página.
+        tab: z.string().optional().catch(undefined),
       })
+      .catch({})
       .parse(s),
+
   // Guard de rota: valida o customerId e normaliza a aba ANTES de montar
   // qualquer conteúdo protegido. A autorização definitiva continua na RLS
   // (server functions) — este guard é apenas de rota/navegação.
@@ -68,15 +76,17 @@ export const Route = createFileRoute("/_authenticated/customers/$customerId")({
     if (!isUuid(params.customerId)) {
       throw redirect({ to: "/customers", replace: true });
     }
-    if (isCustomerTabAlias(search.tab)) {
+    const resolved = resolveCustomerTab(search.tab);
+    if (search.tab !== resolved) {
       throw redirect({
         to: "/customers/$customerId",
         params: { customerId: params.customerId },
-        search: { ...search, tab: resolveCustomerTab(search.tab) },
+        search: { ...search, tab: resolved },
         replace: true,
       });
     }
   },
+
   component: CustomerDetail,
 });
 
@@ -401,6 +411,10 @@ function CustomerDetailReady({
                 </PanelGroup>
               </TabsContent>
 
+              <TabsContent value="area-cliente" className="mt-0">
+                <ClientInbox brandId={brandId} clientId={customerId} embedded />
+              </TabsContent>
+
               <TabsContent value="pauta" className="mt-0">
                 <MonthlyPlanView
                   brandId={brandId}
@@ -414,6 +428,11 @@ function CustomerDetailReady({
               <TabsContent value="trabalho" className="mt-0">
                 <WorkTab brandId={brandId} clientId={customerId} />
               </TabsContent>
+
+              <TabsContent value="horas" className="mt-0">
+                <ClientHoursTab brandId={brandId} clientId={customerId} />
+              </TabsContent>
+
 
               {/* Aba única "Conta": cadastro (identidade/contato/redes) +
                   gestão (contrato/jornada). Cada informação tem uma só fonte. */}

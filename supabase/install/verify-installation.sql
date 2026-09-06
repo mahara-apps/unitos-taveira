@@ -33,9 +33,9 @@ WITH checks AS (
 
   -- --------------------------------------------------------------- contagens base
   UNION ALL
-  SELECT 10, 'baseline: tabelas em public (esperado 95)',
+  SELECT 10, 'baseline: tabelas em public (esperado >= 98)',
          (SELECT count(*)::text FROM pg_tables WHERE schemaname = 'public'),
-         CASE WHEN (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') >= 95 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') >= 98 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 11, 'baseline: enums em public (esperado 10)',
          (SELECT count(*)::text FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
@@ -49,9 +49,42 @@ WITH checks AS (
          CASE WHEN (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                     WHERE n.nspname = 'public') >= 250 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
-  SELECT 13, 'baseline: policies em public (esperado >= 215)',
+  SELECT 13, 'baseline: policies em public (esperado >= 225)',
          (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public'),
-         CASE WHEN (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') >= 215 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') >= 225 THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 131, 'módulo Mensagens: tabelas + função de acesso',
+         (SELECT count(*)::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public'
+            AND c.relname IN ('message_threads','message_thread_participants','messages'))
+         || ' tabelas / '
+         || (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = 'public' AND p.proname = 'can_access_message_thread'),
+         CASE WHEN (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relname IN ('message_threads','message_thread_participants','messages')) = 3
+                   AND EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                               WHERE n.nspname = 'public' AND p.proname = 'can_access_message_thread')
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 132, 'módulo Mensagens: tempo real (publicação supabase_realtime)',
+         coalesce((SELECT string_agg(tablename, ', ' ORDER BY tablename) FROM pg_publication_tables
+                   WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
+                     AND tablename IN ('messages','message_threads')), '(nenhuma)'),
+         CASE WHEN (SELECT count(*) FROM pg_publication_tables
+                    WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
+                      AND tablename IN ('messages','message_threads')) = 2
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 133, 'módulo Mensagens: aviso de mensagem no notification_kind',
+         CASE WHEN EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                           JOIN pg_namespace n ON n.oid = t.typnamespace
+                           WHERE n.nspname = 'public' AND t.typname = 'notification_kind'
+                             AND e.enumlabel = 'message') THEN 'presente' ELSE 'ausente' END,
+         CASE WHEN EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                           JOIN pg_namespace n ON n.oid = t.typnamespace
+                           WHERE n.nspname = 'public' AND t.typname = 'notification_kind'
+                             AND e.enumlabel = 'message') THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 14, 'baseline: triggers próprios em public (esperado >= 100)',
          (SELECT count(*)::text FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid

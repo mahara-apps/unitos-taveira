@@ -58,9 +58,10 @@ export const Route = createFileRoute("/_authenticated")({
           : "/dashboard";
       throw redirect({ to: "/login", search: { next } });
     }
-    // Cliente final (client_members.role = 'portal_client') sem vínculo de
-    // equipe não entra na UI interna — vai para a área do portal.
-    if (access && access.isPortalUser && !access.isTeamMember) {
+    // Cliente final (client_members.role = 'portal_client') NUNCA entra na UI
+    // interna. O banco garante exclusividade (trigger
+    // block_portal_client_team_link), então o vínculo de portal basta.
+    if (access?.isPortalUser) {
       throw redirect({ to: "/area/inicio" });
     }
     return { user };

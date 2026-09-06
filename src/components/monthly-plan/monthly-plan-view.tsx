@@ -537,11 +537,21 @@ function ApprovalView({
     onSuccess: (link) => {
       invalidate();
       void qc.invalidateQueries({ queryKey: ["monthly-plan-link", planId] });
+      // Cliente que não aprova pauta: seguiu direto para produção.
+      if (link.waived || !link.url) {
+        toast.success("Pauta liberada para produção.", {
+          description: `Este cliente não aprova pauta.${
+            link.cardsCreated ? ` ${link.cardsCreated} card(s) criado(s) no Kanban.` : ""
+          }`,
+        });
+        return;
+      }
       toast.success("Pauta enviada para aprovação do cliente.", {
         description: "Copie o link de aprovação e envie ao cliente.",
       });
       void navigator.clipboard?.writeText(`${window.location.origin}${link.url}`).catch(() => {});
     },
+
     onError: (e) => {
       const m = describeError(e);
       if (m.includes("project_required")) {

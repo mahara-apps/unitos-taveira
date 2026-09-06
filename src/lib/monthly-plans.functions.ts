@@ -757,10 +757,16 @@ function randomToken(len = 40): string {
 }
 
 export type PlanClientLink = {
-  token: string;
-  url: string;
+  /** Nulo quando o cliente não aprova pauta (etapa dispensada na regra do cliente). */
+  token: string | null;
+  url: string | null;
   expires_at: string | null;
+  /** true = seguiu direto para produção, sem espera pelo cliente. */
+  waived?: boolean;
+  /** Cards criados no Kanban quando a etapa é dispensada. */
+  cardsCreated?: number;
 };
+
 
 export const submitPlanToClientFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -802,8 +808,42 @@ export const submitPlanToClientFn = createServerFn({ method: "POST" })
     if (approved.length === 0) throw new Error("no_approved_topics");
     if (approved.some((t) => !isTopicComplete(t))) throw new Error("topics_incomplete");
 
+    // Regra do cliente: se a pauta não exige aprovação do cliente, o time
+    // avança direto — sem link, sem pendência no portal, sem espera.
+    const { requiresClientApproval } = await import("@/lib/client-policy.server");
+    const needsClient = await requiresClientApproval(
+      context.supabase,
+      { brandId: plan.brand_id, clientId: plan.client_id },
+      "plan",
+    );
+    if (!needsClient) {
+      const now = new Date().toISOString();
+      await context.supabase
+        .from("monthly_plans" as never)
+        .update({
+          internal_approved_at: now,
+          client_decision_at: now,
+          client_decision_mode: "internal_waived",
+        } as never)
+        .eq("id", plan.id);
+      const { materializePlanToKanban } = await import("@/lib/monthly-plan-kanban.server");
+      const res = await materializePlanToKanban(context.supabase, {
+        planId: plan.id,
+        brandId: plan.brand_id,
+        clientId: plan.client_id,
+        userId: context.userId,
+      });
+      return {
+        token: null,
+        url: null,
+        expires_at: null,
+        waived: true,
+        cardsCreated: res.created,
+      };
+    }
 
     // Reaproveita um link válido, se existir.
+
     const { data: existing } = await context.supabase
       .from("monthly_plan_tokens" as never)
       .select("token, expires_at, revoked_at")
