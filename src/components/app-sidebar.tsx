@@ -14,28 +14,20 @@ import {
   KanbanSquare,
   BarChart3,
   Plug,
-  UserPlus,
   User as UserIcon,
   ChevronsUpDown,
-  Link2,
   ListChecks,
   CalendarDays,
   FolderKanban,
-  FileBarChart,
-  Workflow,
   Bot,
-  Gift,
   Megaphone,
   Users,
   Settings as SettingsIcon,
   ScrollText,
   Target,
-  Gauge,
   Brain,
-  BrainCircuit,
   MessageSquare,
   MessagesSquare,
-  Activity,
   Palette,
   Info,
 } from "lucide-react";
@@ -50,6 +42,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -67,6 +60,7 @@ import { useBrandFeatures } from "@/hooks/use-feature-access";
 import { useIsSuperAdmin } from "@/hooks/use-feature-access";
 import { ShieldAlert } from "lucide-react";
 import { resetIdentityState } from "@/lib/session-reset";
+import { cn } from "@/lib/utils";
 
 type NavItem = {
   title: string;
@@ -74,23 +68,34 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   featureKey?: string;
   badge?: "tasks-pending" | "inbox-awaiting" | "messages-unread" | "beta";
+  /** Subitem aninhado (sem ícone, recuado, oculto no modo rail). */
+  sub?: boolean;
+};
+
+/** Inbox fixo no topo: Mensagens (fora de qualquer grupo). */
+const messagesItem: NavItem = {
+  title: "Mensagens",
+  url: "/messages",
+  icon: MessagesSquare,
+  featureKey: "chat",
+  badge: "messages-unread",
 };
 
 const groups: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: "Visão Geral",
+    label: "Visão",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Analytics", url: "/analytics", icon: BarChart3, featureKey: "analytics" },
     ],
   },
   {
-    label: "Operação",
+    label: "Trabalho",
     items: [
-      { title: "Projetos", url: "/projects", icon: FolderKanban, featureKey: "projects" },
-      { title: "Pauta", url: "/monthly-plan", icon: ScrollText, featureKey: "monthly_plan" },
-      { title: "Conteúdo", url: "/content", icon: KanbanSquare, featureKey: "blog_post" },
       { title: "Calendário", url: "/calendar", icon: CalendarDays, featureKey: "calendar" },
+      { title: "Projetos", url: "/projects", icon: FolderKanban, featureKey: "projects" },
+      { title: "Pautas", url: "/monthly-plan", icon: ScrollText, featureKey: "monthly_plan" },
+      { title: "Conteúdo", url: "/content", icon: KanbanSquare, featureKey: "blog_post" },
       {
         title: "Tarefas",
         url: "/tasks",
@@ -107,36 +112,62 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
       { title: "Agentes IA", url: "/agents", icon: Bot, featureKey: "agents" },
       { title: "Brain", url: "/brain", icon: Brain, featureKey: "brain", badge: "beta" },
       {
-        title: "Brain Diagnostics",
+        title: "Diagnostics",
         url: "/brain/diagnostics",
-        icon: Activity,
+        icon: Brain,
         featureKey: "brain",
+        sub: true,
       },
       { title: "Chat", url: "/chat", icon: MessageSquare, featureKey: "chat" },
-      {
-        title: "Mensagens",
-        url: "/messages",
-        icon: MessagesSquare,
-        featureKey: "chat",
-        badge: "messages-unread",
-      },
-    ],
-  },
-  {
-    label: "Gestão & Configurações",
-    items: [
-      { title: "Clientes", url: "/customers", icon: Users, featureKey: "customers" },
-      { title: "Área do cliente", url: "/inbox", icon: Inbox, badge: "inbox-awaiting" },
-      { title: "Integrações", url: "/connections", icon: Plug, featureKey: "connections" },
-      { title: "Notificações", url: "/notifications", icon: Bell, featureKey: "notifications" },
-      { title: "Configurações", url: "/settings", icon: SettingsIcon },
     ],
   },
 ];
 
+/** Grupo recessivo fixo no rodapé — fora do fluxo diário. */
+const agencyGroup: { label: string; items: NavItem[] } = {
+  label: "Agência",
+  items: [
+    { title: "Clientes", url: "/customers", icon: Users, featureKey: "customers" },
+    { title: "Área do cliente", url: "/inbox", icon: Inbox, badge: "inbox-awaiting" },
+    { title: "Integrações", url: "/connections", icon: Plug, featureKey: "connections" },
+    { title: "Notificações", url: "/notifications", icon: Bell, featureKey: "notifications" },
+    { title: "Configurações", url: "/settings", icon: SettingsIcon },
+  ],
+};
+
+/** Itens exclusivos de Super Admin — entram no grupo Agência. */
+const superAdminItems: NavItem[] = [
+  { title: "Recursos", url: "/admin/recursos", icon: ShieldAlert },
+  { title: "Identidade", url: "/admin/identidade", icon: Palette },
+  { title: "Ambiente", url: "/admin/ambiente", icon: Info },
+];
+
+/** Badge de contador — estilo único para todos os contadores acionáveis. */
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold leading-none text-destructive-foreground group-data-[collapsible=icon]:hidden">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+/** Ponto indicador no modo rail (só ícones), quando há contador ativo. */
+function RailDot({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span
+      aria-hidden
+      className="absolute right-1 top-1 hidden h-2 w-2 rounded-full bg-destructive ring-2 ring-sidebar group-data-[collapsible=icon]:block"
+    />
+  );
+}
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (u: string) => pathname === u || pathname.startsWith(u + "/");
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const { role, authorityRole } = useAccessRole();
   const { permissions: modulePerms, isReady: permsReady } = useModulePermissions();
   const featuresQ = useBrandFeatures();
@@ -144,11 +175,6 @@ export function AppSidebar() {
   const isSuper = !!superQ.data?.isSuperAdmin;
   const { brandId } = useActiveContextOptional();
   const { clientId } = useActiveContextOptional();
-  const qc = useQueryClient();
-  const clientsCache = qc.getQueryData<
-    Array<{ id: string; name: string; logo_url?: string | null }>
-  >(["clients", brandId]);
-  const activeClient = clientId ? (clientsCache?.find((c) => c.id === clientId) ?? null) : null;
   const countPending = useServerFn(countMyPendingTasksFn);
   const pendingQ = useQuery({
     queryKey: ["tasks-pending-count", brandId, clientId ?? null],
@@ -225,27 +251,87 @@ export function AppSidebar() {
     const allowed = allowedSidebarUrls(modulePerms);
     return [...allowed].some((u) => url === u || url.startsWith(u + "/"));
   };
+  const itemVisible = (i: NavItem) =>
+    (isSuper || (canAccessSidebarUrl(role, i.url) && moduleAllowsUrl(i.url))) &&
+    featureEnabled(i.featureKey);
   const visibleGroups = groups
-    .map((g) => ({
-      ...g,
-      items: g.items.filter(
-        (i) =>
-          (isSuper || (canAccessSidebarUrl(role, i.url) && moduleAllowsUrl(i.url))) &&
-          featureEnabled(i.featureKey),
-      ),
-    }))
+    .map((g) => ({ ...g, items: g.items.filter(itemVisible) }))
     .filter((g) => g.items.length > 0);
-  if (isSuper) {
-    // Área exclusiva de Super Admin dentro do próprio ambiente do cliente.
-    visibleGroups.push({
-      label: "Administração do Cliente",
-      items: [
-        { title: "Recursos", url: "/admin/recursos", icon: ShieldAlert },
-        { title: "Identidade", url: "/admin/identidade", icon: Palette },
-        { title: "Ambiente", url: "/admin/ambiente", icon: Info },
-      ],
-    });
-  }
+  const visibleAgencyItems = agencyGroup.items.filter(itemVisible);
+  if (isSuper) visibleAgencyItems.push(...superAdminItems);
+  const showMessages = itemVisible(messagesItem);
+
+  const badgeCount = (badge?: NavItem["badge"]): number => {
+    if (badge === "tasks-pending") return pendingCount;
+    if (badge === "messages-unread") return messagesUnread;
+    if (badge === "inbox-awaiting") return inboxAwaiting;
+    return 0;
+  };
+
+  const renderItem = (item: NavItem, recessive = false) => {
+    const active = isActive(item.url);
+    const count = badgeCount(item.badge);
+    if (item.sub) {
+      // Subitem aninhado: recuado, sem ícone, oculto no modo rail.
+      return (
+        <SidebarMenuItem key={item.url}>
+          <SidebarMenuButton
+            asChild
+            isActive={active}
+            className="group-data-[collapsible=icon]:hidden"
+          >
+            <Link
+              to={item.url}
+              preload="intent"
+              className="flex items-center gap-3 pl-[42px] text-[12.5px]"
+            >
+              <span className={cn("text-muted-foreground", active && "font-semibold text-foreground")}>
+                {item.title}
+              </span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    }
+    return (
+      <SidebarMenuItem key={item.url}>
+        <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+          <Link
+            to={item.url}
+            preload="intent"
+            className="group/nav relative flex items-center gap-3"
+          >
+            {active ? (
+              <span
+                aria-hidden
+                className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-lime group-data-[collapsible=icon]:hidden"
+              />
+            ) : null}
+            <item.icon
+              className={cn("h-[19px] w-[19px] shrink-0", recessive && !active && "opacity-60")}
+              strokeWidth={active ? 2 : 1.8}
+            />
+            <span
+              className={cn(
+                active ? "font-semibold" : "font-medium",
+                recessive && !active && "text-muted-foreground",
+              )}
+            >
+              {item.title}
+            </span>
+            <CountBadge count={count} />
+            <RailDot show={collapsed && count > 0} />
+            {item.badge === "beta" ? (
+              <span className="ml-auto inline-flex items-center rounded-md bg-brand-lime/15 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-brand-lime-foreground group-data-[collapsible=icon]:hidden dark:text-brand-lime">
+                beta
+              </span>
+            ) : null}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="group/brand h-[68px] flex-row items-center justify-between gap-1 border-b border-sidebar-border/60 !bg-transparent p-0 px-2 group-data-[collapsible=icon]:relative group-data-[collapsible=icon]:px-1">
@@ -264,7 +350,6 @@ export function AppSidebar() {
             align="center"
             className="hidden h-11 w-11 transition-opacity group-data-[collapsible=icon]:block group-data-[collapsible=icon]:group-hover/brand:opacity-0"
           />
-
         </Link>
         <SidebarTrigger className="h-7 w-7 shrink-0 text-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:inset-0 group-data-[collapsible=icon]:m-auto group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:group-hover/brand:opacity-100 transition-opacity" />
       </SidebarHeader>
@@ -278,98 +363,35 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {showMessages ? (
+          <>
+            <SidebarGroup className="py-0">
+              <SidebarGroupContent>
+                <SidebarMenu>{renderItem(messagesItem)}</SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarSeparator className="mx-3 my-1 w-auto" />
+          </>
+        ) : null}
         {visibleGroups.map((g, idx) => (
-          <SidebarGroup key={g.label} className={idx === 0 ? "mt-2.5" : "mt-4"}>
+          <SidebarGroup key={g.label} className={idx === 0 ? "mt-1.5" : "mt-3"}>
             <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {g.items.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link
-                        to={item.url}
-                        preload="intent"
-                        className="group/nav relative flex items-center gap-3"
-                      >
-                        {isActive(item.url) ? (
-                          <span
-                            aria-hidden
-                            className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-lime group-data-[collapsible=icon]:hidden"
-                          />
-                        ) : null}
-                        <item.icon
-                          className="h-[19px] w-[19px] shrink-0"
-                          strokeWidth={isActive(item.url) ? 2 : 1.8}
-                        />
-                        <span className={isActive(item.url) ? "font-semibold" : "font-medium"}>
-                          {item.title}
-                        </span>
-                        {item.badge === "tasks-pending" && pendingCount > 0 ? (
-                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold leading-none text-destructive-foreground group-data-[collapsible=icon]:hidden">
-                            {pendingCount > 99 ? "99+" : pendingCount}
-                          </span>
-                        ) : null}
-                        {item.badge === "messages-unread" && messagesUnread > 0 ? (
-                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold leading-none text-destructive-foreground group-data-[collapsible=icon]:hidden">
-                            {messagesUnread > 99 ? "99+" : messagesUnread}
-                          </span>
-                        ) : null}
-                        {item.badge === "inbox-awaiting" && inboxAwaiting > 0 ? (
-                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-severity-warning px-1.5 text-[10px] font-semibold leading-none text-background group-data-[collapsible=icon]:hidden">
-                            {inboxAwaiting > 99 ? "99+" : inboxAwaiting}
-                          </span>
-                        ) : null}
-                        {item.badge === "beta" ? (
-                          <span className="ml-auto inline-flex items-center rounded-md bg-brand-lime/15 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-brand-lime-foreground group-data-[collapsible=icon]:hidden dark:text-brand-lime">
-                            beta
-                          </span>
-                        ) : null}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-                {idx === 0 && activeClient ? (
-                  <>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive(`/customers/${activeClient.id}`)}
-                        tooltip={activeClient.name}
-                      >
-                        <Link
-                          to="/customers/$customerId"
-                          params={{ customerId: activeClient.id }}
-                          preload="intent"
-                          className="group/nav relative flex items-center gap-3"
-                        >
-                          {isActive(`/customers/${activeClient.id}`) ? (
-                            <span
-                              aria-hidden
-                              className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-lime group-data-[collapsible=icon]:hidden"
-                            />
-                          ) : null}
-                          <UserIcon
-                            className="h-[19px] w-[19px] shrink-0"
-                            strokeWidth={isActive(`/customers/${activeClient.id}`) ? 2 : 1.8}
-                          />
-                          <span
-                            className={
-                              isActive(`/customers/${activeClient.id}`)
-                                ? "font-semibold"
-                                : "font-medium"
-                            }
-                          >
-                            Perfil
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </>
-                ) : null}
-              </SidebarMenu>
+              <SidebarMenu>{g.items.map((item) => renderItem(item))}</SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+        {visibleAgencyItems.length > 0 ? (
+          <SidebarGroup className="mt-auto pt-4">
+            <SidebarSeparator className="mx-3 mb-1 w-auto" />
+            <SidebarGroupLabel className="opacity-70">{agencyGroup.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleAgencyItems.map((item) => renderItem(item, true))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
