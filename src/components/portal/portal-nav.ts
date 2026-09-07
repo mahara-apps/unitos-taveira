@@ -123,3 +123,28 @@ export function activePortalTab(pathname: string, base: string): PortalTabId {
   if (rest === "inicio") return "home";
   return ALL_TABS.find((t) => t.segment && t.segment === rest)?.id ?? "home";
 }
+
+/**
+ * Abas principais da barra (celular: barra inferior; desktop: barra superior).
+ * O excedente vive no item "Mais" — a barra nunca ganha rolagem horizontal.
+ */
+export const PORTAL_PRIMARY_TABS: PortalTabId[] = ["home", "approvals", "calendar", "files"];
+
+export type PortalNavItem = {
+  id: PortalTabId;
+  label: string;
+  icon: typeof Home;
+  segment: string;
+};
+
+/** Divide as abas visíveis em principais (na barra) e excedente (em "Mais"). */
+export function splitPortalTabs(tabs: PortalNavItem[]): {
+  primary: PortalNavItem[];
+  more: PortalNavItem[];
+} {
+  const primary = PORTAL_PRIMARY_TABS.map((id) => tabs.find((t) => t.id === id)).filter(
+    (t): t is PortalNavItem => Boolean(t),
+  );
+  const more = tabs.filter((t) => !PORTAL_PRIMARY_TABS.includes(t.id));
+  return { primary, more };
+}

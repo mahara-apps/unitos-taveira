@@ -907,7 +907,7 @@ function InstallationDetailPage() {
             <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pb-3">
               <CardTitle className="truncate text-sm">Versão publicada</CardTitle>
               <VersionPair
-                installed={inst.currentVersion}
+                installed={inst.pinnedRelease ?? inst.currentVersion}
                 available={inst.availableVersion}
                 compact
               />
@@ -956,6 +956,9 @@ function InstallationDetailPage() {
                     !!activeOp ||
                     autoUpdate.isPending ||
                     masterVersion.data?.masterPublished === false ||
+                    // Sem saber a versão dentro do pacote publicado, atualizar é
+                    // às cegas: pode repetir o mesmo código sem avisar.
+                    !masterVersion.data?.repoRelease ||
                     !canStartOperation("update", inst.status)
                   }
                   onClick={() =>
@@ -972,9 +975,11 @@ function InstallationDetailPage() {
                 <span className="text-xs text-muted-foreground">
                   {masterVersion.data?.masterPublished === false
                     ? "Publique o MASTER primeiro — não há código novo no pacote."
-                    : updatePending
-                      ? "Publica exatamente a versão listada como disponível."
-                      : "Instalação já está na versão do MASTER."}
+                    : !masterVersion.isPending && !masterVersion.data?.repoRelease
+                      ? `Não foi possível ler a versão publicada no MASTER (${masterVersion.data?.repoReleaseError ?? masterVersion.data?.error ?? "leitura do repositório indisponível"}). Configure o acesso ao repositório do MASTER para liberar a atualização.`
+                      : updatePending
+                        ? "Publica exatamente a versão listada como disponível."
+                        : "Instalação já está na versão do MASTER."}
                 </span>
               </div>
             </CardContent>

@@ -74,7 +74,11 @@ export function InstallationCard({
           </Button>
         </header>
 
-        <VersionPair installed={i.currentVersion} available={i.availableVersion} />
+        {/* Versão instalada = release do código realmente publicado (pinned). */}
+        <VersionPair
+          installed={i.pinnedRelease ?? i.currentVersion}
+          available={i.availableVersion}
+        />
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-3">
           <LifecycleTrail activeIndex={lifecycleIndex(i)} complete={i.status === "up_to_date"} />
