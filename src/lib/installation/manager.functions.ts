@@ -109,6 +109,7 @@ export type InstallationOperationRecord = {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function mapInstallation(row: any): InstallationRecord {
   const status: InstallationStatus = isInstallationStatus(row.status) ? row.status : "preparing";
+  const installedVersion = row.pinned_release ?? row.current_version ?? null;
   return {
     id: row.id,
     name: row.name,
@@ -128,7 +129,7 @@ function mapInstallation(row: any): InstallationRecord {
     // A versão disponível é SEMPRE a do MASTER em execução: valores antigos
     // gravados no banco (formato ano.mês) não devem aparecer na tela.
     availableVersion: MASTER_RELEASE_VERSION,
-    updateAvailable: isUpdateAvailable(row.current_version, MASTER_RELEASE_VERSION),
+    updateAvailable: isUpdateAvailable(installedVersion, MASTER_RELEASE_VERSION),
     lastProvisionedAt: row.last_provisioned_at ?? null,
     lastValidatedAt: row.last_validated_at ?? null,
     lastError: row.last_error ?? null,

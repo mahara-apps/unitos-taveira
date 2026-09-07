@@ -134,7 +134,6 @@ export async function probeInstallationHealth(input: {
   };
 }
 
-
 /* ------------------------------------------------------- report / finalize */
 
 type AnyClient = {
@@ -251,9 +250,7 @@ export async function finalizeOperation(
     .maybeSingle();
   const persisted = readSteps(fresh?.steps ?? op.steps);
   const steps = (persisted.length > 0 ? persisted : readSteps(op.steps)).map((s) =>
-    s.state === "running"
-      ? { ...s, state: report.ok ? ("done" as const) : ("error" as const) }
-      : s,
+    s.state === "running" ? { ...s, state: report.ok ? ("done" as const) : ("error" as const) } : s,
   );
   const finalSteps = report.ok ? steps.map((s) => ({ ...s, state: "done" as const })) : steps;
 
@@ -272,7 +269,7 @@ export async function finalizeOperation(
       summary,
       error_kind: report.ok ? null : (sanitize(report.errorKind) ?? "operation_failed"),
       detail: {
-        ...(((fresh?.detail ?? op.detail) ?? {}) as Record<string, unknown>),
+        ...((fresh?.detail ?? op.detail ?? {}) as Record<string, unknown>),
         executed: true,
         warnings: outcome.warnings,
         releaseVersion: MASTER_RELEASE_VERSION,
@@ -286,7 +283,7 @@ export async function finalizeOperation(
 
   const { data: installation } = await client
     .from("installations")
-    .select("health_checks")
+    .select("health_checks, pinned_release, current_version")
     .eq("id", op.installation_id)
     .maybeSingle();
 
@@ -295,14 +292,22 @@ export async function finalizeOperation(
     if (state) checks[id as HealthCheckId] = { state, detail: null };
   }
 
+  // Validar mede a saúde do ambiente; não publica código. Portanto, uma
+  // validação nunca pode promover a instalação para a versão do processo
+  // MASTER. A fonte da versão instalada é a release fixada pela última
+  // publicação (com current_version apenas como fallback legado).
+  const installedVersion =
+    (installation?.pinned_release ?? installation?.current_version ?? "").trim() || null;
+  const statusOutcome = kind === "validate" ? { ...outcome, version: installedVersion } : outcome;
+
   const patch: Record<string, unknown> = {
-    status: statusAfterOperation(kind, outcome),
+    status: statusAfterOperation(kind, statusOutcome),
     health: healthFromChecks(checks),
     health_checks: checks,
     health_checked_at: nowIso,
     active_operation_id: null,
     last_error: report.ok ? null : (summary ?? "Falha registrada na operação."),
-    ...(outcome.version ? { current_version: outcome.version } : {}),
+    ...(kind !== "validate" && outcome.version ? { current_version: outcome.version } : {}),
     ...(kind !== "validate" && report.ok ? { last_provisioned_at: nowIso } : {}),
     ...(kind === "validate" ? { last_validated_at: nowIso } : {}),
   };
