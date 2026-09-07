@@ -26,7 +26,6 @@ import { AlertTriangle, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -918,8 +917,9 @@ function ToolCredentialCard({
           <div className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor={`tool-key-${tool.id}`}>API Key / Token</Label>
-              <PasswordInput
+              <Input
                 id={`tool-key-${tool.id}`}
+                type="password"
                 autoComplete="off"
                 placeholder="••••"
                 value={apiKey}

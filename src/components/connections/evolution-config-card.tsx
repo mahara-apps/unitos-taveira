@@ -17,7 +17,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   saveEvolutionConfig,
@@ -214,8 +213,9 @@ function CredentialsDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="evo-api-key">API Key</Label>
-            <PasswordInput
+            <Input
               id="evo-api-key"
+              type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={hasApiKey ? "Manter a credencial atual" : "Chave da Evolution"}

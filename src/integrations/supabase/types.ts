@@ -2337,7 +2337,6 @@ export type Database = {
           created_at: string
           deactivated_at: string | null
           deactivated_by: string | null
-          hourly_cost_cents: number
           id: string
           is_active: boolean
           module_permissions: Json | null
@@ -2351,7 +2350,6 @@ export type Database = {
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
-          hourly_cost_cents?: number
           id?: string
           is_active?: boolean
           module_permissions?: Json | null
@@ -2365,7 +2363,6 @@ export type Database = {
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
-          hourly_cost_cents?: number
           id?: string
           is_active?: boolean
           module_permissions?: Json | null
@@ -2644,7 +2641,6 @@ export type Database = {
       brands: {
         Row: {
           app_url: string | null
-          approval_policy: Json
           bairro: string | null
           cep: string | null
           cidade: string | null
@@ -2668,13 +2664,11 @@ export type Database = {
           overage_policy: string
           razao_social: string | null
           rua: string | null
-          scope_policy: Json
           slug: string
           updated_at: string
         }
         Insert: {
           app_url?: string | null
-          approval_policy?: Json
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -2698,13 +2692,11 @@ export type Database = {
           overage_policy?: string
           razao_social?: string | null
           rua?: string | null
-          scope_policy?: Json
           slug: string
           updated_at?: string
         }
         Update: {
           app_url?: string | null
-          approval_policy?: Json
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -2728,7 +2720,6 @@ export type Database = {
           overage_policy?: string
           razao_social?: string | null
           rua?: string | null
-          scope_policy?: Json
           slug?: string
           updated_at?: string
         }
@@ -3815,8 +3806,6 @@ export type Database = {
           description: string | null
           desired_due_at: string | null
           id: string
-          last_team_reply_at: string | null
-          links: Json
           owner_user_id: string | null
           project_id: string | null
           status: string
@@ -3836,8 +3825,6 @@ export type Database = {
           description?: string | null
           desired_due_at?: string | null
           id?: string
-          last_team_reply_at?: string | null
-          links?: Json
           owner_user_id?: string | null
           project_id?: string | null
           status?: string
@@ -3857,8 +3844,6 @@ export type Database = {
           description?: string | null
           desired_due_at?: string | null
           id?: string
-          last_team_reply_at?: string | null
-          links?: Json
           owner_user_id?: string | null
           project_id?: string | null
           status?: string
@@ -3963,7 +3948,6 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
-          approval_policy: Json
           archived_at: string | null
           brand_hub: Json
           brand_id: string
@@ -3996,7 +3980,6 @@ export type Database = {
           owner_user_id: string | null
           palette: Json | null
           portal_theme: Json
-          scope_policy: Json
           socials: Json | null
           tone_of_voice: string | null
           updated_at: string
@@ -4004,7 +3987,6 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          approval_policy?: Json
           archived_at?: string | null
           brand_hub?: Json
           brand_id: string
@@ -4037,7 +4019,6 @@ export type Database = {
           owner_user_id?: string | null
           palette?: Json | null
           portal_theme?: Json
-          scope_policy?: Json
           socials?: Json | null
           tone_of_voice?: string | null
           updated_at?: string
@@ -4045,7 +4026,6 @@ export type Database = {
         }
         Update: {
           address?: string | null
-          approval_policy?: Json
           archived_at?: string | null
           brand_hub?: Json
           brand_id?: string
@@ -4078,7 +4058,6 @@ export type Database = {
           owner_user_id?: string | null
           palette?: Json | null
           portal_theme?: Json
-          scope_policy?: Json
           socials?: Json | null
           tone_of_voice?: string | null
           updated_at?: string
@@ -4470,7 +4449,6 @@ export type Database = {
       installation_credentials: {
         Row: {
           created_at: string
-          generated_secrets_ciphertext: string | null
           github_token_ciphertext: string | null
           installation_id: string
           supabase_management_token_ciphertext: string | null
@@ -4481,7 +4459,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          generated_secrets_ciphertext?: string | null
           github_token_ciphertext?: string | null
           installation_id: string
           supabase_management_token_ciphertext?: string | null
@@ -4492,7 +4469,6 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          generated_secrets_ciphertext?: string | null
           github_token_ciphertext?: string | null
           installation_id?: string
           supabase_management_token_ciphertext?: string | null
@@ -4699,29 +4675,18 @@ export type Database = {
           benchmark: string | null
           budget_amount: number
           budget_pct: number
-          campaign_subtype: string | null
           campaign_type: string | null
           channel: string | null
-          conversion_event: string | null
           created_at: string
-          creative_brief: Json
-          daily_budget: number
-          estimates: Json
           funnel_stage: string | null
           id: string
           keywords: string[]
           main_kpi: string | null
           objective: string | null
-          optimization_goal: string | null
           other_refs: string | null
-          placements: string[]
           plan_id: string
-          platform: string | null
           position: number
-          prerequisites: string[]
           product_service: string | null
-          rationale: string | null
-          targeting: Json
           updated_at: string
         }
         Insert: {
@@ -4729,29 +4694,18 @@ export type Database = {
           benchmark?: string | null
           budget_amount?: number
           budget_pct?: number
-          campaign_subtype?: string | null
           campaign_type?: string | null
           channel?: string | null
-          conversion_event?: string | null
           created_at?: string
-          creative_brief?: Json
-          daily_budget?: number
-          estimates?: Json
           funnel_stage?: string | null
           id?: string
           keywords?: string[]
           main_kpi?: string | null
           objective?: string | null
-          optimization_goal?: string | null
           other_refs?: string | null
-          placements?: string[]
           plan_id: string
-          platform?: string | null
           position?: number
-          prerequisites?: string[]
           product_service?: string | null
-          rationale?: string | null
-          targeting?: Json
           updated_at?: string
         }
         Update: {
@@ -4759,29 +4713,18 @@ export type Database = {
           benchmark?: string | null
           budget_amount?: number
           budget_pct?: number
-          campaign_subtype?: string | null
           campaign_type?: string | null
           channel?: string | null
-          conversion_event?: string | null
           created_at?: string
-          creative_brief?: Json
-          daily_budget?: number
-          estimates?: Json
           funnel_stage?: string | null
           id?: string
           keywords?: string[]
           main_kpi?: string | null
           objective?: string | null
-          optimization_goal?: string | null
           other_refs?: string | null
-          placements?: string[]
           plan_id?: string
-          platform?: string | null
           position?: number
-          prerequisites?: string[]
           product_service?: string | null
-          rationale?: string | null
-          targeting?: Json
           updated_at?: string
         }
         Relationships: [
@@ -4801,15 +4744,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
-          interview: Json
           monthly_budget: number
           period_end: string | null
           period_start: string | null
-          plan_version: number
           share_expires_at: string | null
           share_token: string | null
           status: string
-          strategy: Json
           title: string
           updated_at: string
         }
@@ -4819,15 +4759,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          interview?: Json
           monthly_budget?: number
           period_end?: string | null
           period_start?: string | null
-          plan_version?: number
           share_expires_at?: string | null
           share_token?: string | null
           status?: string
-          strategy?: Json
           title?: string
           updated_at?: string
         }
@@ -4837,15 +4774,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          interview?: Json
           monthly_budget?: number
           period_end?: string | null
           period_start?: string | null
-          plan_version?: number
           share_expires_at?: string | null
           share_token?: string | null
           status?: string
-          strategy?: Json
           title?: string
           updated_at?: string
         }
@@ -4996,165 +4930,6 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_thread_participants: {
-        Row: {
-          created_at: string
-          id: string
-          last_read_at: string | null
-          notify: boolean
-          role_in_thread: string
-          thread_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          last_read_at?: string | null
-          notify?: boolean
-          role_in_thread?: string
-          thread_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          last_read_at?: string | null
-          notify?: boolean
-          role_in_thread?: string
-          thread_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_thread_participants_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "message_threads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_threads: {
-        Row: {
-          archived_at: string | null
-          brand_id: string
-          client_id: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          last_message_at: string
-          last_message_preview: string | null
-          project_id: string | null
-          scope: string
-          subject: string
-          updated_at: string
-          visibility: string
-        }
-        Insert: {
-          archived_at?: string | null
-          brand_id: string
-          client_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          last_message_at?: string
-          last_message_preview?: string | null
-          project_id?: string | null
-          scope: string
-          subject: string
-          updated_at?: string
-          visibility?: string
-        }
-        Update: {
-          archived_at?: string | null
-          brand_id?: string
-          client_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          last_message_at?: string
-          last_message_preview?: string | null
-          project_id?: string | null
-          scope?: string
-          subject?: string
-          updated_at?: string
-          visibility?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_threads_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brain_stats_mv"
-            referencedColumns: ["brand_id"]
-          },
-          {
-            foreignKeyName: "message_threads_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brands"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_threads_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_threads_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      messages: {
-        Row: {
-          author_id: string
-          author_kind: string
-          body: string
-          created_at: string
-          id: string
-          links: Json
-          mentions: string[]
-          removed_at: string | null
-          thread_id: string
-        }
-        Insert: {
-          author_id: string
-          author_kind?: string
-          body: string
-          created_at?: string
-          id?: string
-          links?: Json
-          mentions?: string[]
-          removed_at?: string | null
-          thread_id: string
-        }
-        Update: {
-          author_id?: string
-          author_kind?: string
-          body?: string
-          created_at?: string
-          id?: string
-          links?: Json
-          mentions?: string[]
-          removed_at?: string | null
-          thread_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "message_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -7171,85 +6946,6 @@ export type Database = {
           },
         ]
       }
-      user_login_events: {
-        Row: {
-          brand_id: string | null
-          browser: string | null
-          city: string | null
-          client_id: string | null
-          country: string | null
-          created_at: string
-          device: string | null
-          email: string | null
-          event: string
-          id: string
-          ip_prefix: string | null
-          kind: string
-          os: string | null
-          provider: string | null
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          brand_id?: string | null
-          browser?: string | null
-          city?: string | null
-          client_id?: string | null
-          country?: string | null
-          created_at?: string
-          device?: string | null
-          email?: string | null
-          event?: string
-          id?: string
-          ip_prefix?: string | null
-          kind?: string
-          os?: string | null
-          provider?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          brand_id?: string | null
-          browser?: string | null
-          city?: string | null
-          client_id?: string | null
-          country?: string | null
-          created_at?: string
-          device?: string | null
-          email?: string | null
-          event?: string
-          id?: string
-          ip_prefix?: string | null
-          kind?: string
-          os?: string | null
-          provider?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_login_events_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brain_stats_mv"
-            referencedColumns: ["brand_id"]
-          },
-          {
-            foreignKeyName: "user_login_events_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brands"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_login_events_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_profiles: {
         Row: {
           avatar_url: string | null
@@ -7758,10 +7454,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      can_access_message_thread: {
-        Args: { _thread_id: string; _user_id: string }
-        Returns: boolean
-      }
       can_access_project: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
@@ -7923,10 +7615,6 @@ export type Database = {
         Returns: boolean
       }
       is_global_admin: { Args: { _user_id: string }; Returns: boolean }
-      is_message_thread_participant: {
-        Args: { _thread_id: string; _user_id: string }
-        Returns: boolean
-      }
       is_portal_client_of: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
@@ -7996,14 +7684,6 @@ export type Database = {
       }
       media_plan_public_items: { Args: { _token: string }; Returns: Json }
       media_plan_public_resolve: { Args: { _token: string }; Returns: Json }
-      message_unread_counts: {
-        Args: { _brand_id: string }
-        Returns: {
-          thread_id: string
-          unread: number
-        }[]
-      }
-      message_unread_total: { Args: { _brand_id: string }; Returns: number }
       module_level_rank: { Args: { _level: string }; Returns: number }
       my_access: { Args: { _brand_id?: string }; Returns: Json }
       notification_pref_for_kind: { Args: { _kind: string }; Returns: string }
@@ -8094,14 +7774,6 @@ export type Database = {
       safe_uuid: { Args: { _txt: string }; Returns: string }
       seed_access_profiles: { Args: { _brand_id: string }; Returns: number }
       set_cron_secret: { Args: { _value: string }; Returns: undefined }
-      set_member_hourly_cost: {
-        Args: {
-          _brand_id: string
-          _hourly_cost_cents: number
-          _user_id: string
-        }
-        Returns: number
-      }
       start_timer: {
         Args: { _brand_id: string; _task_id: string }
         Returns: string
@@ -8117,30 +7789,6 @@ export type Database = {
       sync_post_publication_state: {
         Args: { p_post_id: string }
         Returns: undefined
-      }
-      timesheet_report_entries: {
-        Args: { _brand_id: string; _from: string; _to: string }
-        Returns: {
-          avatar_url: string
-          client_id: string
-          client_name: string
-          description: string
-          ended_at: string
-          entry_id: string
-          hourly_cost_cents: number
-          is_rework: boolean
-          project_id: string
-          project_name: string
-          seconds: number
-          source: string
-          started_at: string
-          task_estimated_minutes: number
-          task_id: string
-          task_title: string
-          user_email: string
-          user_id: string
-          user_name: string
-        }[]
       }
       upsert_brain_relationship: {
         Args: {
@@ -8204,7 +7852,6 @@ export type Database = {
         | "system"
         | "sla_overdue"
         | "sla_overdue_manager"
-        | "message"
       post_channel:
         | "instagram"
         | "tiktok"
@@ -8382,7 +8029,6 @@ export const Constants = {
         "system",
         "sla_overdue",
         "sla_overdue_manager",
-        "message",
       ],
       post_channel: ["instagram", "tiktok", "linkedin", "x", "youtube", "blog"],
       post_stage: [

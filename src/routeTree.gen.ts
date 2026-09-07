@@ -27,9 +27,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedMonthlyPlanRouteImport } from './routes/_authenticated/monthly-plan'
-import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedMediaPlansRouteImport } from './routes/_authenticated/media-plans'
-import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
 import { Route as AuthenticatedContentRouteImport } from './routes/_authenticated/content'
@@ -44,7 +42,6 @@ import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token.ind
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedMonthlyPlanIndexRouteImport } from './routes/_authenticated/monthly-plan.index'
-import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages.index'
 import { Route as AuthenticatedCustomersIndexRouteImport } from './routes/_authenticated/customers.index'
 import { Route as AuthenticatedChatIndexRouteImport } from './routes/_authenticated/chat.index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
@@ -63,7 +60,6 @@ import { Route as ApiChatStreamRouteImport } from './routes/api/chat.stream'
 import { Route as PortalAreaPedidosRouteImport } from './routes/_portal/area.pedidos'
 import { Route as PortalAreaPautaRouteImport } from './routes/_portal/area.pauta'
 import { Route as PortalAreaMinhaMarcaRouteImport } from './routes/_portal/area.minha-marca'
-import { Route as PortalAreaMensagensRouteImport } from './routes/_portal/area.mensagens'
 import { Route as PortalAreaInicioRouteImport } from './routes/_portal/area.inicio'
 import { Route as PortalAreaContaRouteImport } from './routes/_portal/area.conta'
 import { Route as PortalAreaCalendarioRouteImport } from './routes/_portal/area.calendario'
@@ -83,10 +79,8 @@ import { Route as AuthenticatedSettingsLogsRouteImport } from './routes/_authent
 import { Route as AuthenticatedSettingsIdentityRouteImport } from './routes/_authenticated/settings.identity'
 import { Route as AuthenticatedSettingsBrandingRouteImport } from './routes/_authenticated/settings.branding'
 import { Route as AuthenticatedSettingsAiLimitsRouteImport } from './routes/_authenticated/settings.ai-limits'
-import { Route as AuthenticatedSettingsAccessLogRouteImport } from './routes/_authenticated/settings.access-log'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedMonthlyPlanPlanIdRouteImport } from './routes/_authenticated/monthly-plan.$planId'
-import { Route as AuthenticatedMessagesThreadIdRouteImport } from './routes/_authenticated/messages.$threadId'
 import { Route as AuthenticatedCustomersCustomerIdRouteImport } from './routes/_authenticated/customers.$customerId'
 import { Route as AuthenticatedChatConversationIdRouteImport } from './routes/_authenticated/chat.$conversationId'
 import { Route as AuthenticatedBrainDiagnosticsRouteImport } from './routes/_authenticated/brain.diagnostics'
@@ -214,19 +208,9 @@ const AuthenticatedMonthlyPlanRoute =
     path: '/monthly-plan',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedMessagesRoute = AuthenticatedMessagesRouteImport.update({
-  id: '/messages',
-  path: '/messages',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedMediaPlansRoute = AuthenticatedMediaPlansRouteImport.update({
   id: '/media-plans',
   path: '/media-plans',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedInboxRoute = AuthenticatedInboxRouteImport.update({
-  id: '/inbox',
-  path: '/inbox',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -302,12 +286,6 @@ const AuthenticatedMonthlyPlanIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedMonthlyPlanRoute,
-  } as any)
-const AuthenticatedMessagesIndexRoute =
-  AuthenticatedMessagesIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedMessagesRoute,
   } as any)
 const AuthenticatedCustomersIndexRoute =
   AuthenticatedCustomersIndexRouteImport.update({
@@ -399,11 +377,6 @@ const PortalAreaPautaRoute = PortalAreaPautaRouteImport.update({
 const PortalAreaMinhaMarcaRoute = PortalAreaMinhaMarcaRouteImport.update({
   id: '/minha-marca',
   path: '/minha-marca',
-  getParentRoute: () => PortalAreaRoute,
-} as any)
-const PortalAreaMensagensRoute = PortalAreaMensagensRouteImport.update({
-  id: '/mensagens',
-  path: '/mensagens',
   getParentRoute: () => PortalAreaRoute,
 } as any)
 const PortalAreaInicioRoute = PortalAreaInicioRouteImport.update({
@@ -513,12 +486,6 @@ const AuthenticatedSettingsAiLimitsRoute =
     path: '/ai-limits',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
-const AuthenticatedSettingsAccessLogRoute =
-  AuthenticatedSettingsAccessLogRouteImport.update({
-    id: '/access-log',
-    path: '/access-log',
-    getParentRoute: () => AuthenticatedSettingsRoute,
-  } as any)
 const AuthenticatedProjectsProjectIdRoute =
   AuthenticatedProjectsProjectIdRouteImport.update({
     id: '/$projectId',
@@ -530,12 +497,6 @@ const AuthenticatedMonthlyPlanPlanIdRoute =
     id: '/$planId',
     path: '/$planId',
     getParentRoute: () => AuthenticatedMonthlyPlanRoute,
-  } as any)
-const AuthenticatedMessagesThreadIdRoute =
-  AuthenticatedMessagesThreadIdRouteImport.update({
-    id: '/$threadId',
-    path: '/$threadId',
-    getParentRoute: () => AuthenticatedMessagesRoute,
   } as any)
 const AuthenticatedCustomersCustomerIdRoute =
   AuthenticatedCustomersCustomerIdRouteImport.update({
@@ -764,9 +725,7 @@ export interface FileRoutesByFullPath {
   '/content': typeof AuthenticatedContentRoute
   '/customers': typeof AuthenticatedCustomersRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/inbox': typeof AuthenticatedInboxRoute
   '/media-plans': typeof AuthenticatedMediaPlansRoute
-  '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/monthly-plan': typeof AuthenticatedMonthlyPlanRouteWithChildren
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/projects': typeof AuthenticatedProjectsRouteWithChildren
@@ -786,10 +745,8 @@ export interface FileRoutesByFullPath {
   '/brain/diagnostics': typeof AuthenticatedBrainDiagnosticsRoute
   '/chat/$conversationId': typeof AuthenticatedChatConversationIdRoute
   '/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRouteWithChildren
-  '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/monthly-plan/$planId': typeof AuthenticatedMonthlyPlanPlanIdRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
-  '/settings/access-log': typeof AuthenticatedSettingsAccessLogRoute
   '/settings/ai-limits': typeof AuthenticatedSettingsAiLimitsRoute
   '/settings/branding': typeof AuthenticatedSettingsBrandingRoute
   '/settings/identity': typeof AuthenticatedSettingsIdentityRoute
@@ -809,7 +766,6 @@ export interface FileRoutesByFullPath {
   '/area/calendario': typeof PortalAreaCalendarioRoute
   '/area/conta': typeof PortalAreaContaRoute
   '/area/inicio': typeof PortalAreaInicioRoute
-  '/area/mensagens': typeof PortalAreaMensagensRoute
   '/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/area/pauta': typeof PortalAreaPautaRoute
   '/area/pedidos': typeof PortalAreaPedidosRoute
@@ -828,7 +784,6 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/chat/': typeof AuthenticatedChatIndexRoute
   '/customers/': typeof AuthenticatedCustomersIndexRoute
-  '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/monthly-plan/': typeof AuthenticatedMonthlyPlanIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -875,7 +830,6 @@ export interface FileRoutesByTo {
   '/connections': typeof AuthenticatedConnectionsRoute
   '/content': typeof AuthenticatedContentRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/inbox': typeof AuthenticatedInboxRoute
   '/media-plans': typeof AuthenticatedMediaPlansRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/tasks': typeof AuthenticatedTasksRoute
@@ -891,10 +845,8 @@ export interface FileRoutesByTo {
   '/brain/diagnostics': typeof AuthenticatedBrainDiagnosticsRoute
   '/chat/$conversationId': typeof AuthenticatedChatConversationIdRoute
   '/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRouteWithChildren
-  '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/monthly-plan/$planId': typeof AuthenticatedMonthlyPlanPlanIdRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
-  '/settings/access-log': typeof AuthenticatedSettingsAccessLogRoute
   '/settings/ai-limits': typeof AuthenticatedSettingsAiLimitsRoute
   '/settings/branding': typeof AuthenticatedSettingsBrandingRoute
   '/settings/identity': typeof AuthenticatedSettingsIdentityRoute
@@ -914,7 +866,6 @@ export interface FileRoutesByTo {
   '/area/calendario': typeof PortalAreaCalendarioRoute
   '/area/conta': typeof PortalAreaContaRoute
   '/area/inicio': typeof PortalAreaInicioRoute
-  '/area/mensagens': typeof PortalAreaMensagensRoute
   '/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/area/pauta': typeof PortalAreaPautaRoute
   '/area/pedidos': typeof PortalAreaPedidosRoute
@@ -933,7 +884,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/chat': typeof AuthenticatedChatIndexRoute
   '/customers': typeof AuthenticatedCustomersIndexRoute
-  '/messages': typeof AuthenticatedMessagesIndexRoute
   '/monthly-plan': typeof AuthenticatedMonthlyPlanIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
@@ -986,9 +936,7 @@ export interface FileRoutesById {
   '/_authenticated/content': typeof AuthenticatedContentRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/inbox': typeof AuthenticatedInboxRoute
   '/_authenticated/media-plans': typeof AuthenticatedMediaPlansRoute
-  '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/_authenticated/monthly-plan': typeof AuthenticatedMonthlyPlanRouteWithChildren
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
@@ -1008,10 +956,8 @@ export interface FileRoutesById {
   '/_authenticated/brain/diagnostics': typeof AuthenticatedBrainDiagnosticsRoute
   '/_authenticated/chat/$conversationId': typeof AuthenticatedChatConversationIdRoute
   '/_authenticated/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRouteWithChildren
-  '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/monthly-plan/$planId': typeof AuthenticatedMonthlyPlanPlanIdRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
-  '/_authenticated/settings/access-log': typeof AuthenticatedSettingsAccessLogRoute
   '/_authenticated/settings/ai-limits': typeof AuthenticatedSettingsAiLimitsRoute
   '/_authenticated/settings/branding': typeof AuthenticatedSettingsBrandingRoute
   '/_authenticated/settings/identity': typeof AuthenticatedSettingsIdentityRoute
@@ -1031,7 +977,6 @@ export interface FileRoutesById {
   '/_portal/area/calendario': typeof PortalAreaCalendarioRoute
   '/_portal/area/conta': typeof PortalAreaContaRoute
   '/_portal/area/inicio': typeof PortalAreaInicioRoute
-  '/_portal/area/mensagens': typeof PortalAreaMensagensRoute
   '/_portal/area/minha-marca': typeof PortalAreaMinhaMarcaRoute
   '/_portal/area/pauta': typeof PortalAreaPautaRoute
   '/_portal/area/pedidos': typeof PortalAreaPedidosRoute
@@ -1050,7 +995,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/chat/': typeof AuthenticatedChatIndexRoute
   '/_authenticated/customers/': typeof AuthenticatedCustomersIndexRoute
-  '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/monthly-plan/': typeof AuthenticatedMonthlyPlanIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -1102,9 +1046,7 @@ export interface FileRouteTypes {
     | '/content'
     | '/customers'
     | '/dashboard'
-    | '/inbox'
     | '/media-plans'
-    | '/messages'
     | '/monthly-plan'
     | '/notifications'
     | '/projects'
@@ -1124,10 +1066,8 @@ export interface FileRouteTypes {
     | '/brain/diagnostics'
     | '/chat/$conversationId'
     | '/customers/$customerId'
-    | '/messages/$threadId'
     | '/monthly-plan/$planId'
     | '/projects/$projectId'
-    | '/settings/access-log'
     | '/settings/ai-limits'
     | '/settings/branding'
     | '/settings/identity'
@@ -1147,7 +1087,6 @@ export interface FileRouteTypes {
     | '/area/calendario'
     | '/area/conta'
     | '/area/inicio'
-    | '/area/mensagens'
     | '/area/minha-marca'
     | '/area/pauta'
     | '/area/pedidos'
@@ -1166,7 +1105,6 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/chat/'
     | '/customers/'
-    | '/messages/'
     | '/monthly-plan/'
     | '/projects/'
     | '/settings/'
@@ -1213,7 +1151,6 @@ export interface FileRouteTypes {
     | '/connections'
     | '/content'
     | '/dashboard'
-    | '/inbox'
     | '/media-plans'
     | '/notifications'
     | '/tasks'
@@ -1229,10 +1166,8 @@ export interface FileRouteTypes {
     | '/brain/diagnostics'
     | '/chat/$conversationId'
     | '/customers/$customerId'
-    | '/messages/$threadId'
     | '/monthly-plan/$planId'
     | '/projects/$projectId'
-    | '/settings/access-log'
     | '/settings/ai-limits'
     | '/settings/branding'
     | '/settings/identity'
@@ -1252,7 +1187,6 @@ export interface FileRouteTypes {
     | '/area/calendario'
     | '/area/conta'
     | '/area/inicio'
-    | '/area/mensagens'
     | '/area/minha-marca'
     | '/area/pauta'
     | '/area/pedidos'
@@ -1271,7 +1205,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chat'
     | '/customers'
-    | '/messages'
     | '/monthly-plan'
     | '/projects'
     | '/settings'
@@ -1323,9 +1256,7 @@ export interface FileRouteTypes {
     | '/_authenticated/content'
     | '/_authenticated/customers'
     | '/_authenticated/dashboard'
-    | '/_authenticated/inbox'
     | '/_authenticated/media-plans'
-    | '/_authenticated/messages'
     | '/_authenticated/monthly-plan'
     | '/_authenticated/notifications'
     | '/_authenticated/projects'
@@ -1345,10 +1276,8 @@ export interface FileRouteTypes {
     | '/_authenticated/brain/diagnostics'
     | '/_authenticated/chat/$conversationId'
     | '/_authenticated/customers/$customerId'
-    | '/_authenticated/messages/$threadId'
     | '/_authenticated/monthly-plan/$planId'
     | '/_authenticated/projects/$projectId'
-    | '/_authenticated/settings/access-log'
     | '/_authenticated/settings/ai-limits'
     | '/_authenticated/settings/branding'
     | '/_authenticated/settings/identity'
@@ -1368,7 +1297,6 @@ export interface FileRouteTypes {
     | '/_portal/area/calendario'
     | '/_portal/area/conta'
     | '/_portal/area/inicio'
-    | '/_portal/area/mensagens'
     | '/_portal/area/minha-marca'
     | '/_portal/area/pauta'
     | '/_portal/area/pedidos'
@@ -1387,7 +1315,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/_authenticated/chat/'
     | '/_authenticated/customers/'
-    | '/_authenticated/messages/'
     | '/_authenticated/monthly-plan/'
     | '/_authenticated/projects/'
     | '/_authenticated/settings/'
@@ -1593,25 +1520,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMonthlyPlanRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/messages': {
-      id: '/_authenticated/messages'
-      path: '/messages'
-      fullPath: '/messages'
-      preLoaderRoute: typeof AuthenticatedMessagesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/media-plans': {
       id: '/_authenticated/media-plans'
       path: '/media-plans'
       fullPath: '/media-plans'
       preLoaderRoute: typeof AuthenticatedMediaPlansRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/inbox': {
-      id: '/_authenticated/inbox'
-      path: '/inbox'
-      fullPath: '/inbox'
-      preLoaderRoute: typeof AuthenticatedInboxRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -1711,13 +1624,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/monthly-plan/'
       preLoaderRoute: typeof AuthenticatedMonthlyPlanIndexRouteImport
       parentRoute: typeof AuthenticatedMonthlyPlanRoute
-    }
-    '/_authenticated/messages/': {
-      id: '/_authenticated/messages/'
-      path: '/'
-      fullPath: '/messages/'
-      preLoaderRoute: typeof AuthenticatedMessagesIndexRouteImport
-      parentRoute: typeof AuthenticatedMessagesRoute
     }
     '/_authenticated/customers/': {
       id: '/_authenticated/customers/'
@@ -1843,13 +1749,6 @@ declare module '@tanstack/react-router' {
       path: '/minha-marca'
       fullPath: '/area/minha-marca'
       preLoaderRoute: typeof PortalAreaMinhaMarcaRouteImport
-      parentRoute: typeof PortalAreaRoute
-    }
-    '/_portal/area/mensagens': {
-      id: '/_portal/area/mensagens'
-      path: '/mensagens'
-      fullPath: '/area/mensagens'
-      preLoaderRoute: typeof PortalAreaMensagensRouteImport
       parentRoute: typeof PortalAreaRoute
     }
     '/_portal/area/inicio': {
@@ -1985,13 +1884,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsAiLimitsRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
-    '/_authenticated/settings/access-log': {
-      id: '/_authenticated/settings/access-log'
-      path: '/access-log'
-      fullPath: '/settings/access-log'
-      preLoaderRoute: typeof AuthenticatedSettingsAccessLogRouteImport
-      parentRoute: typeof AuthenticatedSettingsRoute
-    }
     '/_authenticated/projects/$projectId': {
       id: '/_authenticated/projects/$projectId'
       path: '/$projectId'
@@ -2005,13 +1897,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/monthly-plan/$planId'
       preLoaderRoute: typeof AuthenticatedMonthlyPlanPlanIdRouteImport
       parentRoute: typeof AuthenticatedMonthlyPlanRoute
-    }
-    '/_authenticated/messages/$threadId': {
-      id: '/_authenticated/messages/$threadId'
-      path: '/$threadId'
-      fullPath: '/messages/$threadId'
-      preLoaderRoute: typeof AuthenticatedMessagesThreadIdRouteImport
-      parentRoute: typeof AuthenticatedMessagesRoute
     }
     '/_authenticated/customers/$customerId': {
       id: '/_authenticated/customers/$customerId'
@@ -2372,21 +2257,6 @@ const AuthenticatedCustomersRouteWithChildren =
     AuthenticatedCustomersRouteChildren,
   )
 
-interface AuthenticatedMessagesRouteChildren {
-  AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
-  AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
-}
-
-const AuthenticatedMessagesRouteChildren: AuthenticatedMessagesRouteChildren = {
-  AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
-  AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
-}
-
-const AuthenticatedMessagesRouteWithChildren =
-  AuthenticatedMessagesRoute._addFileChildren(
-    AuthenticatedMessagesRouteChildren,
-  )
-
 interface AuthenticatedMonthlyPlanRouteChildren {
   AuthenticatedMonthlyPlanPlanIdRoute: typeof AuthenticatedMonthlyPlanPlanIdRoute
   AuthenticatedMonthlyPlanIndexRoute: typeof AuthenticatedMonthlyPlanIndexRoute
@@ -2419,7 +2289,6 @@ const AuthenticatedProjectsRouteWithChildren =
   )
 
 interface AuthenticatedSettingsRouteChildren {
-  AuthenticatedSettingsAccessLogRoute: typeof AuthenticatedSettingsAccessLogRoute
   AuthenticatedSettingsAiLimitsRoute: typeof AuthenticatedSettingsAiLimitsRoute
   AuthenticatedSettingsBrandingRoute: typeof AuthenticatedSettingsBrandingRoute
   AuthenticatedSettingsIdentityRoute: typeof AuthenticatedSettingsIdentityRoute
@@ -2435,7 +2304,6 @@ interface AuthenticatedSettingsRouteChildren {
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
-  AuthenticatedSettingsAccessLogRoute: AuthenticatedSettingsAccessLogRoute,
   AuthenticatedSettingsAiLimitsRoute: AuthenticatedSettingsAiLimitsRoute,
   AuthenticatedSettingsBrandingRoute: AuthenticatedSettingsBrandingRoute,
   AuthenticatedSettingsIdentityRoute: AuthenticatedSettingsIdentityRoute,
@@ -2468,9 +2336,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedContentRoute: typeof AuthenticatedContentRoute
   AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedInboxRoute: typeof AuthenticatedInboxRoute
   AuthenticatedMediaPlansRoute: typeof AuthenticatedMediaPlansRoute
-  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
   AuthenticatedMonthlyPlanRoute: typeof AuthenticatedMonthlyPlanRouteWithChildren
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
@@ -2490,9 +2356,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedContentRoute: AuthenticatedContentRoute,
   AuthenticatedCustomersRoute: AuthenticatedCustomersRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedInboxRoute: AuthenticatedInboxRoute,
   AuthenticatedMediaPlansRoute: AuthenticatedMediaPlansRoute,
-  AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
   AuthenticatedMonthlyPlanRoute: AuthenticatedMonthlyPlanRouteWithChildren,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
@@ -2512,7 +2376,6 @@ interface PortalAreaRouteChildren {
   PortalAreaCalendarioRoute: typeof PortalAreaCalendarioRoute
   PortalAreaContaRoute: typeof PortalAreaContaRoute
   PortalAreaInicioRoute: typeof PortalAreaInicioRoute
-  PortalAreaMensagensRoute: typeof PortalAreaMensagensRoute
   PortalAreaMinhaMarcaRoute: typeof PortalAreaMinhaMarcaRoute
   PortalAreaPautaRoute: typeof PortalAreaPautaRoute
   PortalAreaPedidosRoute: typeof PortalAreaPedidosRoute
@@ -2526,7 +2389,6 @@ const PortalAreaRouteChildren: PortalAreaRouteChildren = {
   PortalAreaCalendarioRoute: PortalAreaCalendarioRoute,
   PortalAreaContaRoute: PortalAreaContaRoute,
   PortalAreaInicioRoute: PortalAreaInicioRoute,
-  PortalAreaMensagensRoute: PortalAreaMensagensRoute,
   PortalAreaMinhaMarcaRoute: PortalAreaMinhaMarcaRoute,
   PortalAreaPautaRoute: PortalAreaPautaRoute,
   PortalAreaPedidosRoute: PortalAreaPedidosRoute,

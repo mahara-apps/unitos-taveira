@@ -14,8 +14,7 @@ export type PortalModuleId =
   | "briefing"
   | "files"
   | "brand"
-  | "requests"
-  | "messages";
+  | "requests";
 
 /** Nenhum = nem aparece. Ver = acompanha. Interagir = decide/responde. */
 export type PortalPermissionLevel = "none" | "view" | "interact";
@@ -80,12 +79,6 @@ export const PORTAL_MODULES: Array<{
     viewOnly: true,
   },
   {
-    id: "messages",
-    label: "Mensagens",
-    description: "Conversas compartilhadas com a equipe.",
-    interact: "Enviar mensagens e links na conversa",
-  },
-  {
     id: "requests",
     label: "Pedidos",
     description: "Solicitações que o cliente envia para a equipe.",
@@ -104,7 +97,6 @@ export const DEFAULT_PORTAL_PERMISSIONS: PortalPermissions = {
   files: "view",
   brand: "view",
   requests: "interact",
-  messages: "interact",
 };
 
 const isLevel = (v: unknown): v is PortalPermissionLevel =>

@@ -9,8 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "master:check": "python3 supabase/baseline-snapshot/tools/build_delta.py && vitest run tests/installation-master-sync.unit.test.ts tests/installation-baseline-completeness.unit.test.ts"
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

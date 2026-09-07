@@ -33,9 +33,9 @@ WITH checks AS (
 
   -- --------------------------------------------------------------- contagens base
   UNION ALL
-  SELECT 10, 'baseline: tabelas em public (esperado >= 98)',
+  SELECT 10, 'baseline: tabelas em public (esperado 95)',
          (SELECT count(*)::text FROM pg_tables WHERE schemaname = 'public'),
-         CASE WHEN (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') >= 98 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') >= 95 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 11, 'baseline: enums em public (esperado 10)',
          (SELECT count(*)::text FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
@@ -49,42 +49,9 @@ WITH checks AS (
          CASE WHEN (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                     WHERE n.nspname = 'public') >= 250 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
-  SELECT 13, 'baseline: policies em public (esperado >= 225)',
+  SELECT 13, 'baseline: policies em public (esperado >= 215)',
          (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public'),
-         CASE WHEN (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') >= 225 THEN 'PASS' ELSE 'FAIL' END
-  UNION ALL
-  SELECT 131, 'módulo Mensagens: tabelas + função de acesso',
-         (SELECT count(*)::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-          WHERE n.nspname = 'public'
-            AND c.relname IN ('message_threads','message_thread_participants','messages'))
-         || ' tabelas / '
-         || (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-             WHERE n.nspname = 'public' AND p.proname = 'can_access_message_thread'),
-         CASE WHEN (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = 'public'
-                      AND c.relname IN ('message_threads','message_thread_participants','messages')) = 3
-                   AND EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-                               WHERE n.nspname = 'public' AND p.proname = 'can_access_message_thread')
-              THEN 'PASS' ELSE 'FAIL' END
-  UNION ALL
-  SELECT 132, 'módulo Mensagens: tempo real (publicação supabase_realtime)',
-         coalesce((SELECT string_agg(tablename, ', ' ORDER BY tablename) FROM pg_publication_tables
-                   WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
-                     AND tablename IN ('messages','message_threads')), '(nenhuma)'),
-         CASE WHEN (SELECT count(*) FROM pg_publication_tables
-                    WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
-                      AND tablename IN ('messages','message_threads')) = 2
-              THEN 'PASS' ELSE 'FAIL' END
-  UNION ALL
-  SELECT 133, 'módulo Mensagens: aviso de mensagem no notification_kind',
-         CASE WHEN EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
-                           JOIN pg_namespace n ON n.oid = t.typnamespace
-                           WHERE n.nspname = 'public' AND t.typname = 'notification_kind'
-                             AND e.enumlabel = 'message') THEN 'presente' ELSE 'ausente' END,
-         CASE WHEN EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
-                           JOIN pg_namespace n ON n.oid = t.typnamespace
-                           WHERE n.nspname = 'public' AND t.typname = 'notification_kind'
-                             AND e.enumlabel = 'message') THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') >= 215 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 14, 'baseline: triggers próprios em public (esperado >= 100)',
          (SELECT count(*)::text FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
@@ -146,28 +113,6 @@ WITH checks AS (
   SELECT 43, 'seeds: singleton installation presente',
          (SELECT count(*)::text FROM public.installation),
          CASE WHEN (SELECT count(*) FROM public.installation) = 1 THEN 'PASS' ELSE 'FAIL' END
-  UNION ALL
-  SELECT 44, 'seeds: agente media_planner_paid (plano de mídia com entrevista)',
-         (SELECT count(*)::text FROM public.agent_prompts WHERE agent_id = 'media_planner_paid'),
-         CASE WHEN EXISTS (SELECT 1 FROM public.agent_prompts WHERE agent_id = 'media_planner_paid')
-              THEN 'PASS' ELSE 'FAIL' END
-  UNION ALL
-  SELECT 45, 'schema: colunas de estratégia do plano de mídia',
-         (SELECT count(*)::text FROM information_schema.columns
-           WHERE table_schema = 'public'
-             AND ((table_name = 'media_plans' AND column_name IN ('interview','strategy','plan_version'))
-               OR (table_name = 'media_plan_items'
-                   AND column_name IN ('platform','campaign_subtype','optimization_goal',
-                                       'conversion_event','daily_budget','targeting','placements',
-                                       'creative_brief','estimates','prerequisites','rationale')))),
-         CASE WHEN (SELECT count(*) FROM information_schema.columns
-           WHERE table_schema = 'public'
-             AND ((table_name = 'media_plans' AND column_name IN ('interview','strategy','plan_version'))
-               OR (table_name = 'media_plan_items'
-                   AND column_name IN ('platform','campaign_subtype','optimization_goal',
-                                       'conversion_event','daily_budget','targeting','placements',
-                                       'creative_brief','estimates','prerequisites','rationale')))) = 14
-              THEN 'PASS' ELSE 'FAIL' END
 
   -- --------------------------------------------------- nenhum dado de negócio copiado
   UNION ALL
@@ -221,40 +166,7 @@ WITH checks AS (
          coalesce((SELECT relispopulated::text FROM pg_class WHERE relname = 'brain_stats_mv' AND relkind = 'm'), 'ausente'),
          CASE WHEN (SELECT relispopulated FROM pg_class WHERE relname = 'brain_stats_mv' AND relkind = 'm')
               THEN 'PASS' ELSE 'FAIL' END
-
-  -- ------------------------------------------- cobertura do delta (MASTER-first)
-  -- Toda tabela criada por 007_delta_migrations.sql precisa existir na
-  -- instalação. Mantido em sincronia por tests/installation-master-sync.unit.test.ts.
-  UNION ALL
-  SELECT 80, 'delta: todas as tabelas do pacote MASTER existem',
-         coalesce((
-           SELECT string_agg(t, ',' ORDER BY t) FROM (
-             SELECT t FROM unnest(ARRAY[
-               'access_profiles','brain_events_new','briefing_import_changes',
-               'briefing_import_runs','briefing_import_steps','client_portal_access',
-               'client_request_events','client_requests','installation',
-               'installation_meta_app','message_thread_participants','message_threads',
-               'messages','portal_notification_prefs','post_client_comments',
-               'project_participants','user_login_events','work_comments',
-               'work_links','work_statuses'
-             ]) AS t
-             WHERE to_regclass('public.' || t) IS NULL
-           ) faltando
-         ), 'todas presentes'),
-         CASE WHEN NOT EXISTS (
-           SELECT 1 FROM unnest(ARRAY[
-             'access_profiles','brain_events_new','briefing_import_changes',
-             'briefing_import_runs','briefing_import_steps','client_portal_access',
-             'client_request_events','client_requests','installation',
-             'installation_meta_app','message_thread_participants','message_threads',
-             'messages','portal_notification_prefs','post_client_comments',
-             'project_participants','user_login_events','work_comments',
-             'work_links','work_statuses'
-           ]) AS t
-           WHERE to_regclass('public.' || t) IS NULL
-         ) THEN 'PASS' ELSE 'FAIL' END
 )
-
 SELECT status, check_name, observed
 FROM checks
 ORDER BY ord;

@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -133,8 +132,9 @@ export function MandatoryPasswordReset() {
             <Label className="text-xs" htmlFor="new-pw">
               Nova senha
             </Label>
-            <PasswordInput
+            <Input
               id="new-pw"
+              type="password"
               autoFocus={!needsName}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
@@ -146,8 +146,9 @@ export function MandatoryPasswordReset() {
             <Label className="text-xs" htmlFor="confirm-pw">
               Confirmar senha
             </Label>
-            <PasswordInput
+            <Input
               id="confirm-pw"
+              type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               minLength={8}

@@ -72,7 +72,7 @@ export type PlanAgentAttemptInfo = {
 const MAX_ATTEMPTS = 3;
 
 export async function runPlanAgent<T extends z.ZodTypeAny>(opts: {
-  agent: "pauta.suggest" | "content.generate" | "media.plan";
+  agent: "pauta.suggest" | "content.generate";
   supabase: SupabaseClient;
   brandId: string;
   clientId: string;

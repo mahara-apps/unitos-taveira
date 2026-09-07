@@ -70,8 +70,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { KpiCard as CanonicalKpiCard, type KpiTone } from "@/components/ui/kpi-card";
 import { DashboardPageShell } from "@/components/ui/dashboard-primitives";
 import { FunnelStages } from "@/components/ui/funnel-stages";
-import { TimesheetPanel } from "@/components/analytics/timesheet/timesheet-panel";
-
 import { usePageHeader } from "@/hooks/use-page-header";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { getAnalytics, type AnalyticsResult } from "@/lib/analytics.functions";
@@ -242,7 +240,6 @@ function AnalyticsPage() {
           <TabsTrigger value="social">Social</TabsTrigger>
           <TabsTrigger value="production">Produção</TabsTrigger>
           <TabsTrigger value="team">Equipe</TabsTrigger>
-          <TabsTrigger value="timesheet">Timesheet</TabsTrigger>
           {!clientId && <TabsTrigger value="clients">Clientes</TabsTrigger>}
         </TabsList>
 
@@ -262,17 +259,6 @@ function AnalyticsPage() {
           <TeamTab loading={analyticsQuery.isLoading} data={data?.team} />
           <SlaPanel data={slaQuery.data} />
         </TabsContent>
-        <TabsContent value="timesheet" className="space-y-6">
-          <TimesheetPanel
-            brandId={brandId}
-            start={start}
-            end={end}
-            clientIds={clientId ? [clientId] : filters.client_ids}
-            projectIds={filters.project_ids}
-            userIds={filters.assignee_ids}
-          />
-        </TabsContent>
-
         {!clientId && (
           <TabsContent value="clients" className="space-y-6">
             <ClientsTab loading={analyticsQuery.isLoading} data={data?.clients} />
