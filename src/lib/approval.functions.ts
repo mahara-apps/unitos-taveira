@@ -45,10 +45,21 @@ export const createApprovalTokenFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<ApprovalToken> => {
     const { data: post, error: pe } = await context.supabase
       .from("posts")
-      .select("id, brand_id")
+      .select("id, brand_id, client_id")
       .eq("id", data.postId)
       .single();
     if (pe || !post) throw pe ?? new Error("post_not_found");
+
+    // Regra do cliente: sem aprovação de conteúdo, não existe link de aprovação.
+    const { requiresClientApproval } = await import("@/lib/client-policy.server");
+    const needsClient = await requiresClientApproval(
+      context.supabase,
+      { brandId: post.brand_id, clientId: post.client_id },
+      "content",
+    );
+    if (!needsClient) throw new Error("client_approval_waived");
+
+
 
     const expiresAt = new Date(Date.now() + data.expiresInDays * 86_400_000).toISOString();
     const { data: row, error } = await context.supabase

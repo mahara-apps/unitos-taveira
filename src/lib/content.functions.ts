@@ -955,7 +955,21 @@ export const createPostFn = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }): Promise<BoardPost> => {
+    // Limite de produção na criação manual (quando a regra do cliente pede).
+    const { checkManualScope } = await import("@/lib/scope-manual.server");
+    const scope = await checkManualScope(context.supabase, {
+      brandId: data.brandId,
+      clientId: data.clientId,
+      userId: context.userId,
+    });
+    if (scope.blocked) {
+      throw new Error(
+        `scope_limit_reached: limite de produção do mês atingido (${scope.used}/${scope.quota}). Solicite liberação em Produção.`,
+      );
+    }
+
     const { data: maxRow } = await context.supabase
+
       .from("posts")
       .select("position")
       .eq("stage_id", data.stageId)

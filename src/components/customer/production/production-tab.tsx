@@ -8,6 +8,7 @@ import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import { getPlanVolumetryFn } from "@/lib/monthly-plans.functions";
 import { ProductionReport } from "./production-report";
 import { ProductionOverages } from "./production-overages";
+import { ClientRules } from "./client-rules";
 
 export function ProductionTab({ brandId, clientId }: { brandId: string; clientId: string }) {
   const loadVolumetry = useServerFn(getPlanVolumetryFn);
@@ -56,6 +57,7 @@ export function ProductionTab({ brandId, clientId }: { brandId: string; clientId
       </PageKpiGrid>
 
       <ProductionReport brandId={brandId} clientId={clientId} quotaByChannel={quotaByChannel} />
+      <ClientRules brandId={brandId} clientId={clientId} />
       <ProductionOverages brandId={brandId} clientId={clientId} />
     </div>
   );

@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Loader2, ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Form,
   FormControl,
@@ -59,7 +59,6 @@ type Values = z.infer<typeof schema>;
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState<"checking" | "ok" | "invalid">("checking");
-  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<Values>({
@@ -165,27 +164,12 @@ function ResetPasswordPage() {
                     <FormItem>
                       <FormLabel>Nova senha</FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? "text" : "password"}
-                            placeholder="••••••••"
-                            autoComplete="new-password"
-                            className="h-11 pr-10"
-                            {...field}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword((v) => !v)}
-                            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                        <PasswordInput
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                          className="h-11"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -199,8 +183,7 @@ function ResetPasswordPage() {
                     <FormItem>
                       <FormLabel>Confirmar senha</FormLabel>
                       <FormControl>
-                        <Input
-                          type={showPassword ? "text" : "password"}
+                        <PasswordInput
                           placeholder="••••••••"
                           autoComplete="new-password"
                           className="h-11"

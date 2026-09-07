@@ -79,7 +79,7 @@ export async function notifyPlanClientDecision(
       kind: "approval_decision",
       title: TITLE[input.status],
       body,
-      href: `/customers/${input.clientId}/pauta`,
+      href: `/customers/${input.clientId}?tab=pauta`,
       dedupe_key: dedupeKey,
       payload: {
         monthly_plan_id: input.planId,

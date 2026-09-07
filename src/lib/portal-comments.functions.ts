@@ -191,5 +191,19 @@ export const addPortalPostCommentFn = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error((error as { message: string }).message);
+
+    // Aviso interno: comentário do cliente precisa chegar na equipe.
+    const { notifyInternalTeam } = await import("@/lib/client-comms.server");
+    await notifyInternalTeam({
+      brandId: scope.brandId,
+      clientId: scope.clientId,
+      kind: "mention",
+      title: "Comentário do cliente em um conteúdo",
+      body: data.body?.trim() || "Novo anexo no comentário",
+      href: `/inbox?cliente=${scope.clientId}&tipo=comment`,
+      dedupeParts: ["post_comment", data.postId, (inserted as { id: string }).id],
+      payload: { post_id: data.postId, inbox_type: "comment" },
+    });
+
     return { id: (inserted as { id: string }).id };
   });

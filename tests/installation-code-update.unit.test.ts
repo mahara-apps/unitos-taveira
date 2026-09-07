@@ -27,7 +27,7 @@ function fakeFetch(routes: Array<{ match: RegExp; status?: number; body: unknown
 describe("atualização de código da instalação", () => {
   it("a operação update tem etapas próprias", () => {
     expect(stepsFor("update")).toBe(UPDATE_STEPS);
-    expect(UPDATE_STEPS.map((s) => s.id)).toEqual(["code", "build", "version"]);
+    expect(UPDATE_STEPS.map((s) => s.id)).toEqual(["database", "code", "build", "version"]);
   });
 
   it("update bem-sucedido com a versão do MASTER deixa a instalação atualizada", () => {

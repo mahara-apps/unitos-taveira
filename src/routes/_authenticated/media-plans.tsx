@@ -191,8 +191,10 @@ function MediaPlansIndex() {
           open={dialog.open}
           mode={dialog.mode}
           brandId={brandId}
+          defaultClientId={clientId ?? undefined}
           onOpenChange={(o) => setDialog((d) => ({ ...d, open: o }))}
         />
+
       )}
     </DashboardPageShell>
   );

@@ -101,7 +101,7 @@ export async function notifyOverageRequested(
       kind: "approval_requested",
       title: "Liberação de volumetria solicitada",
       body,
-      href: `/customers/${input.clientId}?tab=producao`,
+      href: `/customers/${input.clientId}?tab=trabalho`,
       dedupe_key: dedupeKey,
       payload: {
         client_id: input.clientId,
@@ -135,7 +135,7 @@ export async function notifyOverageDecided(
       kind: "approval_decision",
       title: approved ? "Excedente autorizado" : "Excedente recusado",
       body: [`${input.clientName ?? "Cliente"}`, summarize([input.item])].join("\n"),
-      href: `/customers/${input.clientId}?tab=producao`,
+      href: `/customers/${input.clientId}?tab=trabalho`,
       dedupe_key: notificationDedupeKey("approval_decision", "plan_overage", input.requestId),
       payload: {
         client_id: input.clientId,

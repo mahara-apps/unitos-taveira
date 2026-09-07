@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -795,9 +796,8 @@ function ProviderCard({
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={`key-${provider.id}`}>API Key</Label>
-            <Input
+            <PasswordInput
               id={`key-${provider.id}`}
-              type="password"
               autoComplete="off"
               placeholder="sk-..."
               value={apiKey}
