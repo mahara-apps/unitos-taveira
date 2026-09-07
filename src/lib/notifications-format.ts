@@ -3,8 +3,6 @@ import {
   CheckCircle2,
   Clock,
   MessageSquare,
-  MessagesSquare,
-
   Sparkles,
   UserPlus,
   AlarmClock,
@@ -39,8 +37,6 @@ export const KIND_META: Record<
     tone: "emerald",
   },
   deadline: { label: "Prazo", icon: Clock, color: "text-rose-500", tone: "rose" },
-  message: { label: "Mensagem", icon: MessagesSquare, color: "text-sky-500", tone: "sky" },
-
   system: { label: "Sistema", icon: Sparkles, color: "text-indigo-500", tone: "neutral" },
   sla_overdue: { label: "SLA vencido", icon: AlarmClock, color: "text-rose-500", tone: "rose" },
   sla_overdue_manager: {

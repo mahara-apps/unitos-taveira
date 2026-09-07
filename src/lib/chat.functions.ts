@@ -78,16 +78,12 @@ export const createChatConversationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => CreateInput.parse(i))
   .handler(async ({ data, context }): Promise<ChatConversationRow> => {
-    // O workspace é obrigatório para o chat operacional (IA da conta, escopo e
-    // permissões). Quando a tela não informa, resolvemos pelo vínculo do usuário.
-    const { resolveUserBrandId } = await import("./chat/workspace.server");
-    const brandId = data.brandId ?? (await resolveUserBrandId(context.supabase, context.userId));
     const { data: row, error } = await context.supabase
       .from("chat_conversations")
       .insert({
         user_id: context.userId,
         title: data.title?.trim() || "Nova conversa",
-        brand_id: brandId,
+        brand_id: data.brandId ?? null,
         client_id: data.clientId ?? null,
       })
       .select("id, user_id, brand_id, client_id, title, last_message_at, created_at")
@@ -95,7 +91,6 @@ export const createChatConversationFn = createServerFn({ method: "POST" })
     if (error || !row) throw new Error(error?.message ?? "insert failed");
     return row as ChatConversationRow;
   });
-
 
 // ============ rename / delete ============
 export const renameChatConversationFn = createServerFn({ method: "POST" })
@@ -172,12 +167,6 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
         .maybeSingle();
       if (convoErr || !convo) throw new Error("Conversa não encontrada");
 
-      // Workspace obrigatório: resolve/backfilla conversas legadas.
-      const { ensureConversationBrandId } = await import("./chat/workspace.server");
-      const brandId = await ensureConversationBrandId(context.supabase, context.userId, convo);
-
-
-
       // 2) Persist user message immediately
       const { data: userRow, error: userErr } = await context.supabase
         .from("chat_messages")
@@ -207,7 +196,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       const brainCtx: BrainContext = {
         supabase: context.supabase,
         userId: context.userId,
-        brandId,
+        brandId: convo.brand_id,
         clientId: convo.client_id,
         module: "chat",
       };
@@ -268,7 +257,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
           brain: brainKnowledge,
           attachments: data.attachments.map((a) => ({ name: a.name, kind: a.kind, mime: a.mime })),
           supabase: context.supabase,
-          brandId,
+          brandId: convo.brand_id as string,
         });
         answer = llm.text;
         usedLlm = true;
@@ -313,7 +302,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       // 7) Feedback loop → Brain Event Bus (best-effort)
       await Promise.all([
         brain.events.publish(brainCtx, {
-          brand_id: brandId,
+          brand_id: convo.brand_id,
           client_id: convo.client_id,
           source_module: "chat",
           event_type: "chat.turn",

@@ -2,7 +2,6 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import {
   Bell,
   History,
-  KeyRound,
   ListChecks,
   Loader2,
   Lock,
@@ -56,7 +55,6 @@ const GROUPS: TabGroup[] = [
         icon: ListChecks,
         admin: true,
       },
-      { to: "/settings/access-log", label: "Acessos", icon: KeyRound, admin: true },
       { to: "/settings/logs", label: "Auditoria", icon: History, admin: true },
     ],
   },

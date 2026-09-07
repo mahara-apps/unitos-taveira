@@ -47,7 +47,6 @@ import {
   DEFAULT_PORTAL_PERMISSIONS,
   normalizePortalPermissions,
   portalCanInteract,
-  portalCanView,
   PORTAL_MODULES,
   type PortalPermissions,
 } from "@/lib/portal-permissions";
@@ -301,13 +300,6 @@ export function PortalLink({
       {children}
     </Link>
   );
-}
-
-/** O cliente pode ver este módulo? "Início" é sempre visível. */
-export function usePortalCanView(id: PortalTabId): boolean {
-  const { permissions } = usePortalCaps();
-  if (id === "home" || id === "notifications" || id === "account") return true;
-  return portalCanView(permissions, id as never);
 }
 
 /** O cliente pode agir neste módulo? Link sem senha nunca pode. */
