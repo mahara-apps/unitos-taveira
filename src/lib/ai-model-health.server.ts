@@ -287,13 +287,14 @@ export async function runAiModelHealthCheck(): Promise<HealthCheckResult> {
             error: check.message.slice(0, 500),
           };
           entries.push(entry);
-          await supabaseAdmin.from("ai_model_health").insert({
+          const { error: insErr } = await supabaseAdmin.from("ai_model_health").insert({
             provider,
             role,
             model_id: modelId,
             status: "failed",
             error_message: entry.error ?? null,
           } as never);
+          if (insErr) console.error("[ai-model-health] falha ao gravar histórico", insErr);
         }
         continue;
       }
@@ -359,13 +360,14 @@ export async function runAiModelHealthCheck(): Promise<HealthCheckResult> {
 
       entries.push(entry);
 
-      await supabaseAdmin.from("ai_model_health").insert({
+      const { error: histErr } = await supabaseAdmin.from("ai_model_health").insert({
         provider,
         role,
         model_id: entry.replacedWith ?? modelId,
         status: entry.status,
         error_message: entry.error ?? null,
       } as never);
+      if (histErr) console.error("[ai-model-health] falha ao gravar histórico", histErr);
     }
   }
 

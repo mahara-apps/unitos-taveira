@@ -1,8 +1,17 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, Plus, Search, Share2, Sparkles, Target } from "lucide-react";
+import {
+  BarChart3,
+  CheckCircle2,
+  ChevronDown,
+  Plus,
+  Search,
+  Share2,
+  Sparkles,
+  Target,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +32,55 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import { cn } from "@/lib/utils";
 import { listBrandMediaPlans, type BrandMediaPlanRow } from "@/lib/media-plans-index.functions";
 import { CreateMediaPlanDialog } from "@/components/media-plans/create-media-plan-dialog";
+import { AdsReportPanel } from "@/components/media-plans/ads-report-panel";
 import { ensureFeatureEnabled } from "@/lib/feature-flags.gate";
+
+type MediaPlansTab = "planos" | "relatorio";
 
 export const Route = createFileRoute("/_authenticated/media-plans")({
   beforeLoad: () => ensureFeatureEnabled("midia_paga"),
+  validateSearch: (search: Record<string, unknown>): { tab: MediaPlansTab } => ({
+    tab: search.tab === "relatorio" ? "relatorio" : "planos",
+  }),
   component: MediaPlansIndex,
 });
+
+function MediaPlansIndex() {
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
+  return (
+    <DashboardPageShell>
+      <div className="inline-flex items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-1">
+        {(
+          [
+            { key: "planos", label: "Plano de mídia", icon: Target },
+            { key: "relatorio", label: "Relatório de anúncios", icon: BarChart3 },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() =>
+              navigate({ search: { tab: t.key }, replace: true, resetScroll: false })
+            }
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition",
+              tab === t.key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <t.icon className="h-3.5 w-3.5" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "relatorio" ? <AdsReportPanel /> : <PlansPanel />}
+    </DashboardPageShell>
+  );
+}
 
 const currency = (n: number) =>
   new Intl.NumberFormat("pt-BR", {
@@ -43,7 +95,7 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Arquivado",
 };
 
-function MediaPlansIndex() {
+function PlansPanel() {
   const { brandId, clientId } = useActiveContext();
   const listFn = useServerFn(listBrandMediaPlans);
   const q = useQuery({
@@ -125,7 +177,7 @@ function MediaPlansIndex() {
   );
 
   return (
-    <DashboardPageShell>
+    <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard label="Planos" value={String(kpis.total)} icon={<Target className="h-4 w-4" />} />
@@ -194,9 +246,8 @@ function MediaPlansIndex() {
           defaultClientId={clientId ?? undefined}
           onOpenChange={(o) => setDialog((d) => ({ ...d, open: o }))}
         />
-
       )}
-    </DashboardPageShell>
+    </div>
   );
 }
 

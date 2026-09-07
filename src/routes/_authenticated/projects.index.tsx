@@ -77,7 +77,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LayoutGrid, List as ListIcon, Palette, Sparkles } from "lucide-react";
+import {
+  ChevronDown,
+  LayoutGrid,
+  List as ListIcon,
+  Palette,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectCard } from "@/components/projects/project-card";
 
@@ -589,6 +596,10 @@ function ProjectsIndexPage() {
     ownerFilter !== "all" ||
     (!activeClientId && clientFilter !== "all");
 
+  /** Quantos filtros do painel "Filtros" estão aplicados (só os que filtram dados). */
+  const extraFilterCount =
+    (ownerFilter !== "all" ? 1 : 0) + (!activeClientId && clientFilter !== "all" ? 1 : 0);
+
   return (
     <DashboardPageShell>
       {/* KPIs */}
@@ -634,8 +645,9 @@ function ProjectsIndexPage() {
 
       {/* Filtros */}
       <DashboardPanelSurface className="space-y-3 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1">
+        <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          {/* Busca ocupa o espaço livre e nunca empurra os widgets fixos. */}
+          <div className="relative min-w-0">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
@@ -644,100 +656,137 @@ function ProjectsIndexPage() {
               className="h-9 pl-8 text-xs"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-[160px] text-xs">
-              <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Ativos (sem arquivados)</SelectItem>
-              {Object.entries(STATUS_META).map(([k, v]) => (
-                <SelectItem key={k} value={k}>
-                  {v.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="h-9 w-[180px] text-xs">
-              <UserIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue placeholder="Todos..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os responsáveis</SelectItem>
-              {team.map((m) => (
-                <SelectItem key={m.user_id} value={m.user_id}>
-                  {m.full_name ?? "Sem nome"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {activeClientId ? (
-            <span
-              title="Troque o cliente no seletor da barra lateral"
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground"
-            >
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{
-                  background: clients.find((c) => c.id === activeClientId)?.color ?? "#8b5cf6",
-                }}
-              />
-              <span className="truncate font-medium text-foreground">
-                {clientName(activeClientId) || "Cliente ativo"}
-              </span>
-              <span className="hidden text-[10px] uppercase tracking-wide sm:inline">sidebar</span>
-            </span>
-          ) : (
-            <ClientFilterCombobox
-              value={clientFilter}
-              onChange={setClientFilter}
-              clients={clients}
-              sidebarClientId={null}
-            />
-          )}
 
-          <div className="ml-auto flex items-center gap-2">
-            {view === "cards" ? (
-              <>
-                <Select
-                  value={colorBy}
-                  onValueChange={(v) => setColorBy(v as ColorBy)}
-                >
-                  <SelectTrigger className="h-9 w-[168px] text-xs">
-                    <Palette className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COLOR_BYS.map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {COLOR_BY_LABELS[k]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={`${sortKey}:${sortDir}`}
-                  onValueChange={(v) => {
-                    const [k, d] = v.split(":") as [SortKey, SortDir];
-                    setSortKey(k);
-                    setSortDir(d);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-[190px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                      <SelectItem key={k} value={`${k}:${k === "progress" ? "desc" : "asc"}`}>
-                        {SORT_LABELS[k]}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="due:desc">Entrega mais distante</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            ) : null}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-[150px] shrink-0 text-xs">
+                <Filter className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Ativos (sem arquivados)</SelectItem>
+                {Object.entries(STATUS_META).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>
+                    {v.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filtros secundários agrupados: mantém a faixa em uma linha estável. */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 shrink-0 gap-2 px-3 text-xs">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                  Filtros
+                  {extraFilterCount > 0 ? (
+                    <Badge
+                      variant="secondary"
+                      className="h-4 min-w-4 justify-center px-1 text-[10px]"
+                    >
+                      {extraFilterCount}
+                    </Badge>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[260px] space-y-3 p-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground">Responsável</Label>
+                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <UserIcon className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Todos..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os responsáveis</SelectItem>
+                      {team.map((m) => (
+                        <SelectItem key={m.user_id} value={m.user_id}>
+                          {m.full_name ?? "Sem nome"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground">Cliente</Label>
+                  {activeClientId ? (
+                    <div
+                      title="Troque o cliente no seletor da barra lateral"
+                      className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground"
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{
+                          background:
+                            clients.find((c) => c.id === activeClientId)?.color ?? "#8b5cf6",
+                        }}
+                      />
+                      <span className="truncate font-medium text-foreground">
+                        {clientName(activeClientId) || "Cliente ativo"}
+                      </span>
+                      <span className="shrink-0 text-[10px] uppercase tracking-wide">sidebar</span>
+                    </div>
+                  ) : (
+                    <ClientFilterCombobox
+                      value={clientFilter}
+                      onChange={setClientFilter}
+                      clients={clients}
+                      sidebarClientId={null}
+                    />
+                  )}
+                </div>
+
+                {view === "cards" ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px] text-muted-foreground">Cor do projeto</Label>
+                      <Select value={colorBy} onValueChange={(v) => setColorBy(v as ColorBy)}>
+                        <SelectTrigger className="h-9 w-full text-xs">
+                          <Palette className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COLOR_BYS.map((k) => (
+                            <SelectItem key={k} value={k}>
+                              {COLOR_BY_LABELS[k]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px] text-muted-foreground">Ordenar por</Label>
+                      <Select
+                        value={`${sortKey}:${sortDir}`}
+                        onValueChange={(v) => {
+                          const [k, d] = v.split(":") as [SortKey, SortDir];
+                          setSortKey(k);
+                          setSortDir(d);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 w-full text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                            <SelectItem
+                              key={k}
+                              value={`${k}:${k === "progress" ? "desc" : "asc"}`}
+                            >
+                              {SORT_LABELS[k]}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="due:desc">Entrega mais distante</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+
             <div className="inline-flex h-9 shrink-0 items-center rounded-md border border-border/60 bg-muted/40 p-0.5">
               <Button
                 type="button"

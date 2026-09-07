@@ -156,7 +156,7 @@ export function PautaOrganizationField({
       </div>
 
       {value.mode === "existing" && (
-        <div className="rounded-lg border border-border/60">
+        <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border/60">
           <div className="flex items-center gap-2 border-b border-border/50 px-2.5 py-1.5">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -191,8 +191,9 @@ export function PautaOrganizationField({
                       <button
                         type="button"
                         onClick={() => onChange({ mode: "existing", projectId: p.id })}
+                        title={p.name}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
+                          "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
                           selected ? "bg-primary/10 text-foreground" : "hover:bg-muted/60",
                         )}
                       >

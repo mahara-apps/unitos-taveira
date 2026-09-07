@@ -532,24 +532,36 @@ function HealthPanel({
     staleTime: 5 * 60 * 1000,
   });
 
+  const [lastRun, setLastRun] = useState<string | null>(null);
+
   const runMut = useMutation({
     mutationFn: () => runFn(),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ai-model-status", brandId] });
-      toast.success(
-        res.replacements > 0
-          ? `${res.replacements} modelo(s) atualizado(s) automaticamente`
-          : res.problems > 0
-            ? `${res.problems} verificação(ões) com problema — veja as notificações`
-            : "Todos os modelos estão ativos",
-      );
+      setLastRun(res.checkedAt);
+      const noKeys =
+        res.skipped > 0
+          ? ` · ${res.skippedProviders.length} fornecedor(es) sem chave configurada`
+          : "";
+      if (res.replacements > 0) {
+        toast.success(`${res.replacements} modelo(s) atualizado(s) automaticamente${noKeys}`);
+      } else if (res.problems > 0) {
+        toast.error(`${res.problems} modelo(s) com falha — veja as notificações${noKeys}`);
+      } else {
+        toast.success(`Todos os modelos ativos${noKeys}`);
+      }
     },
     onError: (e: unknown) =>
       toast.error(aiErrorMessage(e, "Falha ao verificar modelos")),
   });
 
   const connectedProviders = AI_PROVIDERS.filter((p) => providers?.[p.id]?.connected);
-  const replaced = (data?.models ?? []).filter((m) => m.replacedModelId);
+  const missingKeyProviders = AI_PROVIDERS.filter((p) => !providers?.[p.id]?.connected);
+  const connectedIds = new Set(connectedProviders.map((p) => p.id));
+  const replaced = (data?.models ?? []).filter(
+    (m) => m.replacedModelId && connectedIds.has(m.provider),
+  );
+  const lastCheckedAt = lastRun ?? data?.lastCheckedAt ?? null;
 
   return (
     <DashboardPanelSurface className="p-4">
@@ -557,8 +569,8 @@ function HealthPanel({
         <div>
           <div className="text-sm font-semibold">Saúde da IA</div>
           <p className="text-xs text-muted-foreground">
-            {data?.lastCheckedAt
-              ? `Última verificação: ${new Date(data.lastCheckedAt).toLocaleString("pt-BR")}`
+            {lastCheckedAt
+              ? `Última verificação: ${new Date(lastCheckedAt).toLocaleString("pt-BR")}`
               : "Nunca verificado"}
           </p>
         </div>
@@ -608,6 +620,23 @@ function HealthPanel({
               </div>
             );
           })}
+
+          {missingKeyProviders.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                  {p.name}
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  Sem chave configurada · não é verificado
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -616,17 +645,17 @@ function HealthPanel({
           {replaced.map((m) => (
             <div
               key={`${m.provider}-${m.role}`}
-              className="flex items-start gap-1.5 text-[11px] text-severity-warning"
+              className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
             >
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
               <span>
                 {providerLabel(m.provider)}: o modelo{" "}
                 {modelLabel(m.provider, m.replacedModelId!)} saiu do ar e foi substituído
-                automaticamente por {modelLabel(m.provider, m.modelId)}.
+                automaticamente por {modelLabel(m.provider, m.modelId)}
+                {m.updatedAt ? ` em ${new Date(m.updatedAt).toLocaleString("pt-BR")}` : ""}.
               </span>
             </div>
           ))}
-
         </div>
       )}
     </DashboardPanelSurface>

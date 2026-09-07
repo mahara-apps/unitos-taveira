@@ -54,6 +54,9 @@ export function getMetaScopesForChannel(channel?: MetaChannel | null): string[] 
       "instagram_basic",
       "instagram_manage_insights",
       "instagram_content_publish",
+      // Leitura de anúncios: sem isto o Relatório de Anúncios fica vazio para
+      // quem autorizou pelo canal Instagram/Facebook.
+      "ads_read",
       META_BUSINESS_PORTFOLIO_SCOPE,
     ];
   }
@@ -62,6 +65,7 @@ export function getMetaScopesForChannel(channel?: MetaChannel | null): string[] 
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_posts",
+      "ads_read",
       META_BUSINESS_PORTFOLIO_SCOPE,
     ];
   }
@@ -70,6 +74,7 @@ export function getMetaScopesForChannel(channel?: MetaChannel | null): string[] 
   }
   return META_DEFAULT_SCOPES;
 }
+
 
 export type MetaPageAsset = {
   pageId: string;

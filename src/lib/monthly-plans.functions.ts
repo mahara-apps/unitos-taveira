@@ -748,13 +748,6 @@ export const discardMonthlyPlanFn = createServerFn({ method: "POST" })
 
 /* ---------- Envio ao cliente ---------- */
 
-function randomToken(len = 40): string {
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, len);
-}
 
 export type PlanClientLink = {
   /** Nulo quando o cliente não aprova pauta (etapa dispensada na regra do cliente). */
@@ -779,125 +772,16 @@ export const submitPlanToClientFn = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }): Promise<PlanClientLink> => {
-    const { data: planRow } = await context.supabase
-      .from("monthly_plans" as never)
-      .select("id, brand_id, client_id, status, title, project_id")
-      .eq("id", data.planId)
-      .maybeSingle();
-    if (!planRow) throw new Error("plan_not_found");
-    const plan = planRow as unknown as {
-      id: string;
-      brand_id: string;
-      client_id: string;
-      status: MonthlyPlanStatus;
-      title: string | null;
-      project_id: string | null;
-    };
-
-    // Projeto é obrigatório e explícito: nada é gravado antes dessa checagem.
-    if (!plan.project_id) throw new Error("project_required");
-
-    const { data: topics } = await context.supabase
-      .from("monthly_plan_topics" as never)
-      .select("id, status, channel, content_format")
-      .eq("monthly_plan_id", plan.id);
-    const list = (topics ?? []) as unknown as MonthlyPlanTopic[];
-    if (list.length === 0) throw new Error("plan_has_no_topics");
-    if (list.some((t) => t.status === "pending")) throw new Error("topics_pending_decision");
-    const approved = list.filter((t) => t.status === "approved");
-    if (approved.length === 0) throw new Error("no_approved_topics");
-    if (approved.some((t) => !isTopicComplete(t))) throw new Error("topics_incomplete");
-
-    // Regra do cliente: se a pauta não exige aprovação do cliente, o time
-    // avança direto — sem link, sem pendência no portal, sem espera.
-    const { requiresClientApproval } = await import("@/lib/client-policy.server");
-    const needsClient = await requiresClientApproval(
-      context.supabase,
-      { brandId: plan.brand_id, clientId: plan.client_id },
-      "plan",
-    );
-    if (!needsClient) {
-      const now = new Date().toISOString();
-      await context.supabase
-        .from("monthly_plans" as never)
-        .update({
-          internal_approved_at: now,
-          client_decision_at: now,
-          client_decision_mode: "internal_waived",
-        } as never)
-        .eq("id", plan.id);
-      const { materializePlanToKanban } = await import("@/lib/monthly-plan-kanban.server");
-      const res = await materializePlanToKanban(context.supabase, {
-        planId: plan.id,
-        brandId: plan.brand_id,
-        clientId: plan.client_id,
-        userId: context.userId,
-      });
-      return {
-        token: null,
-        url: null,
-        expires_at: null,
-        waived: true,
-        cardsCreated: res.created,
-      };
-    }
-
-    // Reaproveita um link válido, se existir.
-
-    const { data: existing } = await context.supabase
-      .from("monthly_plan_tokens" as never)
-      .select("token, expires_at, revoked_at")
-      .eq("monthly_plan_id", plan.id)
-      .is("revoked_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const found = (existing ?? [])[0] as { token: string; expires_at: string | null } | undefined;
-
-    let token = found?.token ?? null;
-    let expiresAt = found?.expires_at ?? null;
-    if (!token || (expiresAt && new Date(expiresAt).getTime() < Date.now())) {
-      token = randomToken(40);
-      expiresAt = new Date(Date.now() + data.expiresInDays * 86_400_000).toISOString();
-      const { error: insErr } = await context.supabase.from("monthly_plan_tokens" as never).insert({
-        monthly_plan_id: plan.id,
-        brand_id: plan.brand_id,
-        client_id: plan.client_id,
-        token,
-        expires_at: expiresAt,
-        created_by: context.userId,
-      } as never);
-      if (insErr) throw insErr;
-    }
-
-    const { error: upErr } = await context.supabase
-      .from("monthly_plans" as never)
-      .update({
-        status: "pending_client",
-        internal_approved_at: new Date().toISOString(),
-        internal_approved_by: context.userId,
-        client_decision_at: null,
-        client_feedback: null,
-        client_decision_mode: null,
-      } as never)
-      .eq("id", plan.id);
-    if (upErr) throw upErr;
-
-    // Reenvio: limpa decisões anteriores dos itens que ainda não viraram card.
-    await context.supabase
-      .from("monthly_plan_topics" as never)
-      .update({ client_status: "pending", client_comment: null, client_decision_at: null } as never)
-      .eq("monthly_plan_id", plan.id)
-      .neq("client_status", "approved");
-
-    // Reconcilia o vínculo do projeto já escolhido (nunca cria projeto sozinho).
-    const { reconcilePlanProjectLink } = await import("@/lib/monthly-plan-project.server");
-    await reconcilePlanProjectLink(context.supabase as never, {
-      planId: plan.id,
-      projectId: plan.project_id,
+    // Regra única (política do cliente, link do portal, materialização):
+    // @/lib/monthly-plan-submit.server.
+    const { submitPlanForApproval } = await import("@/lib/monthly-plan-submit.server");
+    return submitPlanForApproval(context.supabase as unknown as SupabaseClient, {
+      planId: data.planId,
+      userId: context.userId,
+      expiresInDays: data.expiresInDays,
     });
-
-    return { token, url: `/pauta/${plan.id}?token=${token}`, expires_at: expiresAt };
   });
+
 
 /** Reconcilia o vínculo pauta ↔ projeto já escolhido. Não cria projeto. */
 export const ensurePlanProjectFn = createServerFn({ method: "POST" })
@@ -1545,4 +1429,151 @@ export const listPlanBoardFn = createServerFn({ method: "POST" })
     });
 
     return { items, summary, projects, canDelete };
+  });
+
+/* ================================================================
+ * ROTA RÁPIDA — mini-pauta expressa
+ * ----------------------------------------------------------------
+ * Encurta o caminho (uma tela em vez de assistente + aprovação item a item),
+ * sem criar fluxo paralelo: usa a MESMA geração (`runPlanGeneration`, que já
+ * aplica o limite de produção contratado), o MESMO vínculo de projeto e a
+ * MESMA regra de aprovação do cliente (`submitPlanForApproval`). Quando o
+ * cliente aprova pauta, nada entra em produção: fica aguardando o portal.
+ * ============================================================== */
+
+const QuickPlanInput = z.object({
+  brandId: z.string().uuid(),
+  clientId: z.string().uuid(),
+  channel: z.enum(PLAN_CHANNELS),
+  quantity: z.number().int().min(1).max(30),
+  /** Cota por formato canônico; vazio = distribuição padrão do canal. */
+  formatQuotas: z.record(z.string(), z.number().int().min(0).max(30)).optional(),
+  theme: z.string().trim().max(500).optional().default(""),
+  briefingId: z.string().uuid().nullable().optional(),
+  organization: z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("existing"), projectId: z.string().uuid() }),
+    z.object({
+      mode: z.literal("new"),
+      name: z.string().trim().min(1).max(120),
+      description: z.string().max(2000).nullable().optional(),
+      due_at: z.string().min(4).nullable().optional(),
+    }),
+  ]),
+});
+
+export type QuickPlanResult =
+  | {
+      ok: true;
+      planId: string;
+      topics: number;
+      /** true = seguiu direto para produção (cliente não aprova pauta). */
+      inProduction: boolean;
+      /** Peças criadas no Kanban (já com a legenda escrita pelos agentes). */
+      cardsCreated: number;
+      /** Link do portal quando o cliente precisa aprovar. */
+      clientUrl: string | null;
+    }
+  | { ok: false; code: GenerateFailureCode; retryable?: boolean }
+  | {
+      ok: false;
+      code: "overage_not_authorized";
+      overage: Array<{ channel: PlanChannel; quota: number; requested: number; overage: number }>;
+    };
+
+export const quickPlanFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => QuickPlanInput.parse(i))
+  .handler(async ({ data, context }): Promise<QuickPlanResult> => {
+    const period = currentPeriodMonth();
+    const lock = await acquirePlanGenerationLock(context.supabase, {
+      brandId: data.brandId,
+      clientId: data.clientId,
+      userId: context.userId,
+      period,
+    });
+    if ("conflict" in lock) return { ok: false, code: "generation_in_progress" };
+    const stopHeartbeat = startPlanLockHeartbeat(context.supabase, lock);
+
+    try {
+      const result = await runPlanGeneration({
+        supabase: context.supabase,
+        userId: context.userId,
+        input: {
+          brandId: data.brandId,
+          clientId: data.clientId,
+          theme: data.theme ?? "",
+          briefingId: data.briefingId ?? null,
+          selection: [
+            {
+              channel: data.channel,
+              quantity: data.quantity,
+              formats: [],
+              ...(data.formatQuotas ? { formatQuotas: data.formatQuotas } : {}),
+            },
+          ],
+        },
+        period,
+        jobId: lock.jobId,
+      });
+      await releasePlanGenerationLock(context.supabase, lock.jobId, {
+        ok: result.ok,
+        ...(result.ok ? { planId: result.data.plan.id } : { error: result.code }),
+      });
+      if (!result.ok) return result;
+
+      const planId = result.data.plan.id;
+      await linkPlanToProject(context.supabase as PlanSupabaseClient, {
+        planId,
+        brandId: data.brandId,
+        clientId: data.clientId,
+        userId: context.userId,
+        organization: data.organization,
+      });
+
+      // Aprovação interna em lote — só itens completos (plataforma + formato).
+      const complete = result.data.topics.filter((t) => isTopicComplete(t));
+      if (complete.length === 0) return { ok: false, code: "incomplete_generation" };
+      const { error: apprErr } = await context.supabase
+        .from("monthly_plan_topics" as never)
+        .update({ status: "approved" } as never)
+        .in(
+          "id",
+          complete.map((t) => t.id),
+        );
+      if (apprErr) throw apprErr;
+      // Itens incompletos não bloqueiam o envio: ficam recusados e revisáveis.
+      const incomplete = result.data.topics.filter((t) => !isTopicComplete(t));
+      if (incomplete.length > 0) {
+        await context.supabase
+          .from("monthly_plan_topics" as never)
+          .update({ status: "rejected" } as never)
+          .in(
+            "id",
+            incomplete.map((t) => t.id),
+          );
+      }
+
+      const { submitPlanForApproval } = await import("@/lib/monthly-plan-submit.server");
+      const submitted = await submitPlanForApproval(
+        context.supabase as unknown as SupabaseClient,
+        { planId, userId: context.userId },
+      );
+
+      return {
+        ok: true,
+        planId,
+        topics: complete.length,
+        inProduction: submitted.waived === true,
+        cardsCreated: submitted.cardsCreated ?? 0,
+        clientUrl: submitted.url,
+      };
+    } catch (err) {
+      await releasePlanGenerationLock(context.supabase, lock.jobId, {
+        ok: false,
+        error: errorToMessage(err) || "unknown_error",
+      });
+      throw err;
+    } finally {
+      stopHeartbeat();
+    }
   });

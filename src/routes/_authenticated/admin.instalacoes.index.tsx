@@ -8,9 +8,11 @@ import { AlertTriangle, Loader2, Plus, RefreshCw, Search, Server } from "lucide-
 import {
   createInstallationFn,
   getInstallationManagerAccessFn,
+  getMasterVersionFn,
   listInstallationsFn,
   type InstallationRecord,
 } from "@/lib/installation/manager.functions";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,6 +78,7 @@ function AdminInstallationsPage() {
   const accessFn = useServerFn(getInstallationManagerAccessFn);
   const listFn = useServerFn(listInstallationsFn);
   const createFn = useServerFn(createInstallationFn);
+  const masterVersionFn = useServerFn(getMasterVersionFn);
 
   const access = useQuery({
     queryKey: ["installation-manager-access"],
@@ -87,6 +90,15 @@ function AdminInstallationsPage() {
   const list = useQuery({
     queryKey: ["installations"],
     queryFn: () => listFn(undefined),
+    enabled: available,
+    retry: false,
+  });
+
+  // Versão que existe no pacote publicado do MASTER: quando fica atrás do
+  // sistema, autorizar atualização não envia código novo.
+  const masterVersion = useQuery({
+    queryKey: ["installations-master-version"],
+    queryFn: () => masterVersionFn({ data: undefined }),
     enabled: available,
     retry: false,
   });
@@ -178,14 +190,23 @@ function AdminInstallationsPage() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Cada instalação é uma aplicação independente — só metadados ficam aqui, nunca credenciais
-            do destino.
+            Cada instalação é uma aplicação independente — só metadados ficam aqui, nunca
+            credenciais do destino.
           </p>
         </div>
         <Button size="sm" className="shrink-0" onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 h-4 w-4" /> Nova instalação
         </Button>
       </header>
+
+      {masterVersion.data?.masterPublished === false && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <strong>MASTER não publicado.</strong> O pacote de código disponível para as instalações
+          está na versão {masterVersion.data.repoRelease ?? "—"} e o sistema já está em{" "}
+          {masterVersion.data.release}. Publique o MASTER antes de autorizar atualizações — sem isso
+          as instalações recebem o mesmo código de novo.
+        </div>
+      )}
 
       <PageKpiGrid>
         <PageKpi icon={<Server />} label="Total" value={kpis.total} />
@@ -263,9 +284,7 @@ function AdminInstallationsPage() {
             <InstallationCard
               key={i.id}
               installation={i}
-              onOpen={() =>
-                void navigate({ to: "/admin/instalacoes/$id", params: { id: i.id } })
-              }
+              onOpen={() => void navigate({ to: "/admin/instalacoes/$id", params: { id: i.id } })}
             />
           ))}
         </div>

@@ -21,7 +21,7 @@ import { MASTER_FORBIDDEN_TOKENS } from "./bootstrap-contract";
  * Subir a cada correção de banco/código propagável: é o que habilita o botão
  * "Atualizar" (que agora também aplica o delta de banco na instalação).
  */
-export const MASTER_RELEASE_VERSION = "1.2.9";
+export const MASTER_RELEASE_VERSION = "1.3.4";
 
 /* ------------------------------------------------------------------ MASTER */
 
@@ -84,9 +84,7 @@ export const INSTALLATION_HEALTH_LABEL: Record<InstallationHealth, string> = {
 };
 
 export function isInstallationStatus(value: unknown): value is InstallationStatus {
-  return (
-    typeof value === "string" && (INSTALLATION_STATUSES as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && (INSTALLATION_STATUSES as readonly string[]).includes(value);
 }
 
 export type InstallationOperationKind = "register" | "provision" | "validate" | "update";
@@ -163,6 +161,43 @@ export function isUpdateAvailable(
   const current = (currentVersion ?? "").trim();
   if (!current) return false;
   return current !== availableVersion.trim();
+}
+
+/**
+ * Compara versões de release (`1.3.10` > `1.3.9`). Devolve -1, 0 ou 1.
+ * Versões não numéricas caem para comparação textual, sem lançar.
+ */
+export function compareReleaseVersions(a: string, b: string): number {
+  const parse = (v: string) =>
+    (v ?? "")
+      .trim()
+      .split(".")
+      .map((part) => Number.parseInt(part, 10));
+  const left = parse(a);
+  const right = parse(b);
+  if (left.some(Number.isNaN) || right.some(Number.isNaN)) {
+    return a.trim() === b.trim() ? 0 : a.trim() < b.trim() ? -1 : 1;
+  }
+  const size = Math.max(left.length, right.length);
+  for (let i = 0; i < size; i += 1) {
+    const l = left[i] ?? 0;
+    const r = right[i] ?? 0;
+    if (l !== r) return l < r ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Mensagem única do caso "MASTER não publicado": o repositório de código do
+ * MASTER só avança quando o MASTER é publicado, então a atualização não tem
+ * código novo para enviar mesmo que o número da versão já tenha subido aqui.
+ */
+export function masterNotPublishedMessage(repoVersion: string, currentVersion: string): string {
+  return (
+    `O MASTER ainda não foi publicado: o pacote de código está na versão ${repoVersion} e ` +
+    `o sistema já está em ${currentVersion}. Publique o MASTER e repita a atualização — ` +
+    `enviar agora repetiria o mesmo código.`
+  );
 }
 
 /* -------------------------------------------------------------- validação */
@@ -272,7 +307,6 @@ export function validateInstallationInput(input: InstallationInput): ValidationR
     return { ok: false, error: "Informe a URL do repositório Git da instalação." };
   }
 
-
   const blob = [
     input.domain,
     input.supabaseUrl,
@@ -305,22 +339,49 @@ export const PROVISION_STEPS = [
   { id: "supabase", label: "Supabase", script: "supabase/install/bootstrap.sh" },
   { id: "code", label: "Código no GitHub", script: "github: POST /repos/{template}/generate" },
   { id: "deploy_link", label: "Deploy conectado", script: "vercel: POST /v10/projects/{id}/link" },
-  { id: "database", label: "Banco + RLS + funções", script: "supabase/baseline-snapshot/001_initial_schema.sql" },
+  {
+    id: "database",
+    label: "Banco + RLS + funções",
+    script: "supabase/baseline-snapshot/001_initial_schema.sql",
+  },
   { id: "storage", label: "Storage", script: "supabase/baseline-snapshot/003_storage_buckets.sql" },
   { id: "seeds", label: "Seeds de catálogo", script: "supabase/baseline-snapshot/004_seeds.sql" },
   { id: "secrets", label: "Secrets próprios", script: "supabase/install/bootstrap.sh" },
-  { id: "deploy", label: "Variáveis + publicação", script: "supabase/install/010_installation_identity.sql" },
+  {
+    id: "deploy",
+    label: "Variáveis + publicação",
+    script: "supabase/install/010_installation_identity.sql",
+  },
   { id: "brain", label: "Brain stats", script: "supabase/install/011_brain_stats_init.sql" },
   { id: "cron", label: "Cron na própria origem", script: "supabase/install/020_cron.sql" },
-  { id: "validation", label: "Validação final", script: "supabase/install/verify-installation.sql" },
+  {
+    id: "validation",
+    label: "Validação final",
+    script: "supabase/install/verify-installation.sql",
+  },
 ] as const;
 
-
 export const VALIDATE_STEPS = [
-  { id: "isolation", label: "Isolamento do Supabase", script: "supabase/install/verify-installation.sql" },
-  { id: "database", label: "Contagens do baseline", script: "supabase/install/verify-installation.sql" },
-  { id: "rls", label: "RLS, funções e triggers", script: "supabase/install/verify-installation.sql" },
-  { id: "storage", label: "Buckets e policies", script: "supabase/install/verify-installation.sql" },
+  {
+    id: "isolation",
+    label: "Isolamento do Supabase",
+    script: "supabase/install/verify-installation.sql",
+  },
+  {
+    id: "database",
+    label: "Contagens do baseline",
+    script: "supabase/install/verify-installation.sql",
+  },
+  {
+    id: "rls",
+    label: "RLS, funções e triggers",
+    script: "supabase/install/verify-installation.sql",
+  },
+  {
+    id: "storage",
+    label: "Buckets e policies",
+    script: "supabase/install/verify-installation.sql",
+  },
   { id: "cron", label: "Cron e URL própria", script: "supabase/install/verify-installation.sql" },
 ] as const;
 
@@ -329,8 +390,16 @@ export const VALIDATE_STEPS = [
  * instalação (novo build a partir do repositório) e registra a versão.
  */
 export const UPDATE_STEPS = [
-  { id: "database", label: "Atualização do banco", script: "supabase/baseline-snapshot/007_delta_migrations.sql" },
-  { id: "code", label: "Novo deployment do código do MASTER", script: "vercel: POST /v13/deployments" },
+  {
+    id: "database",
+    label: "Atualização do banco",
+    script: "supabase/baseline-snapshot/007_delta_migrations.sql",
+  },
+  {
+    id: "code",
+    label: "Novo deployment do código do MASTER",
+    script: "vercel: POST /v13/deployments",
+  },
   { id: "build", label: "Build e publicação", script: "vercel: GET /v13/deployments/{id}" },
   { id: "version", label: "Versão registrada", script: "installations.current_version" },
 ] as const;
@@ -411,7 +480,6 @@ export function applyStepReport(
   });
 }
 
-
 export type StepProgress = {
   total: number;
   done: number;
@@ -449,7 +517,6 @@ export function stepsProgress(steps: OperationStep[]): StepProgress {
                 100,
             ),
           ),
-
   };
 }
 
@@ -489,7 +556,6 @@ export const HEALTH_CHECKS = [
   { id: "super_admin", label: "Super Admin" },
   { id: "workspace", label: "Workspace único" },
 ] as const;
-
 
 export type HealthCheckId = (typeof HEALTH_CHECKS)[number]["id"];
 
@@ -540,7 +606,6 @@ export function healthFromChecks(raw: unknown): InstallationHealth {
   return "unknown";
 }
 
-
 /* ------------------------------------------------- alvo da operação */
 
 export type TargetCheck = { ok: true } | { ok: false; error: string };
@@ -566,7 +631,8 @@ export function assertOperationTarget(input: {
   if (MASTER_FORBIDDEN_TOKENS.some((t) => blob.includes(t.toLowerCase()))) {
     return {
       ok: false,
-      error: "A operação aponta para o MASTER — bloqueada. Use o Supabase e o domínio da instalação.",
+      error:
+        "A operação aponta para o MASTER — bloqueada. Use o Supabase e o domínio da instalação.",
     };
   }
   return { ok: true };
@@ -611,7 +677,6 @@ export function updateSummary(
   const current = (currentVersion ?? "").trim() || "desconhecida";
   return `Atualização disponível: ${current} → ${availableVersion}`;
 }
-
 
 /* -------------------------------------------------- operação travada (stale) */
 

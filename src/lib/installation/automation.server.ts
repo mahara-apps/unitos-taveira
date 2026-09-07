@@ -50,11 +50,15 @@ import {
   resolveAutomationTarget,
   resolveInstallationRepo,
   resolveOperationalUrl,
-
   type AutomationOutcome,
   type GeneratedSecretVar,
 } from "./automation-contract";
-import { applyProgressReport, finalizeOperation, sanitize, type OperationRow } from "./runner.server";
+import {
+  applyProgressReport,
+  finalizeOperation,
+  sanitize,
+  type OperationRow,
+} from "./runner.server";
 import {
   MASTER_RELEASE_VERSION,
   VALIDATE_STEPS,
@@ -139,8 +143,6 @@ select public.set_cron_secret(${sqlLiteral(secret)}::text);
 `;
 }
 
-
-
 /** Substitui as variáveis psql (`:'app_url'`) usadas pelos scripts. */
 function bindAppUrl(sql: string, appUrl: string): string {
   const pure = stripPsqlMetaCommands(sql).sql;
@@ -216,7 +218,6 @@ export async function hardenHelperTables(management: {
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
-
 /**
  * Reaplica um arquivo do baseline statement por statement, ignorando SOMENTE
  * erros de "objeto já existe". Qualquer outro erro aborta e é reportado.
@@ -268,7 +269,9 @@ export async function applyStatementByStatement(
 
   if (!prep.ok) return { ok: false, error: prep.error, processed };
 
-  const prepRow = prep.rows.find((row): row is Record<string, unknown> => !!row && typeof row === "object");
+  const prepRow = prep.rows.find(
+    (row): row is Record<string, unknown> => !!row && typeof row === "object",
+  );
   const initialized = prepRow?.["initialized"] === true || prepRow?.["initialized"] === "true";
   if (from === 0 || !initialized) {
     const reset = await management.query(
@@ -297,7 +300,7 @@ export async function applyStatementByStatement(
     for (const statement of batch) {
       const isEnumAdd = /^\s*alter\s+type\b[\s\S]*\badd\s+value\b/i.test(statement);
       const last = segments[segments.length - 1];
-      if (last && ((last.kind === "enum") === isEnumAdd)) last.statements.push(statement);
+      if (last && (last.kind === "enum") === isEnumAdd) last.statements.push(statement);
       else segments.push({ kind: isEnumAdd ? "enum" : "guarded", statements: [statement] });
     }
 
@@ -399,12 +402,14 @@ export async function applyStatementByStatement(
   };
 }
 
-
-
-
 export type ManagementClient = {
   query: (sql: string) => Promise<{ ok: boolean; rows: unknown[]; error?: string }>;
-  keys: () => Promise<{ ok: boolean; publishableKey?: string; serviceRoleKey?: string; error?: string }>;
+  keys: () => Promise<{
+    ok: boolean;
+    publishableKey?: string;
+    serviceRoleKey?: string;
+    error?: string;
+  }>;
 };
 
 export function createManagementClient(input: {
@@ -440,7 +445,11 @@ export function createManagementClient(input: {
         return { ok: true, rows: Array.isArray(body) ? body : [] };
       } catch (e) {
         const aborted = e instanceof Error && e.name === "AbortError";
-        return { ok: false, rows: [], error: aborted ? "timeout de 15s na Management API" : (e as Error).message };
+        return {
+          ok: false,
+          rows: [],
+          error: aborted ? "timeout de 15s na Management API" : (e as Error).message,
+        };
       } finally {
         clearTimeout(timer);
       }
@@ -533,7 +542,6 @@ export type DeployClient = {
     plain?: Record<string, string>;
     error?: string;
   }>;
-
 };
 
 /**
@@ -572,7 +580,6 @@ export type PublishSnapshotOptions = {
   onCheckpoint?: (blobMap: Record<string, string>) => void | Promise<void>;
   /** Só compara: não cria blob, árvore nem commit. Usado na adoção manual. */
   dryRun?: boolean;
-
 };
 
 export type PublishSnapshotResult = {
@@ -596,13 +603,20 @@ export type CodeClient = {
   /** Commit atual da branch de produção do MASTER — versão a publicar. */
   masterHeadSha: () => Promise<{ ok: boolean; sha?: string; error?: string }>;
   /**
+   * Versão do pacote MASTER *dentro* de um commit do repositório — lida de
+   * `supabase/baseline-snapshot/tools/delta_version.txt`. É a única forma de
+   * saber se o repositório já recebeu a publicação da versão atual do código:
+   * `MASTER_RELEASE_VERSION` vive no processo, o repositório só avança quando o
+   * MASTER é publicado.
+   */
+  releaseAtCommit: (sha: string) => Promise<{ ok: boolean; version?: string; error?: string }>;
+
+  /**
    * Commit vazio na branch de produção do repositório DA INSTALAÇÃO para que a
    * integração Git da Vercel publique — usado quando a cota de deployments por
    * API do plano gratuito está esgotada.
    */
-  nudgeDeploy: (
-    message?: string,
-  ) => Promise<{ ok: boolean; commitSha?: string; error?: string }>;
+  nudgeDeploy: (message?: string) => Promise<{ ok: boolean; commitSha?: string; error?: string }>;
   /** Diagnóstico do token: alcance da organização, criação e template. */
   diagnose: () => Promise<{
     ok: boolean;
@@ -623,7 +637,6 @@ export type CodeClient = {
       | ((progress: { percent: number; detail: string }) => void | Promise<void>),
   ) => Promise<PublishSnapshotResult>;
 };
-
 
 type TreeEntry = { path?: string; mode?: string; type?: string; sha?: string };
 
@@ -739,10 +752,7 @@ export function createCodeClient(input: {
           }),
         });
         if (created.ok) return { ok: true, created: true, via: "template" };
-        const templateError = await fail(
-          created,
-          `criar ${target} a partir do template ${master}`,
-        );
+        const templateError = await fail(created, `criar ${target} a partir do template ${master}`);
 
         // 2ª tentativa: fork do MASTER. Também compartilha objetos, então a
         // publicação continua sendo rápida mesmo sem template.
@@ -806,6 +816,31 @@ export function createCodeClient(input: {
       }
     },
 
+    async releaseAtCommit(sha) {
+      try {
+        const path = "supabase/baseline-snapshot/tools/delta_version.txt";
+        const res = await api(`/repos/${master}/contents/${path}?ref=${encodeURIComponent(sha)}`);
+        if (!res.ok) {
+          return { ok: false, error: await fail(res, "ler a versão do pacote no MASTER") };
+        }
+        const body = (await res.json().catch(() => ({}))) as {
+          content?: string;
+          encoding?: string;
+        };
+        const raw =
+          body.encoding === "base64" && body.content
+            ? new TextDecoder().decode(
+                Uint8Array.from(atob(body.content.replace(/\s+/g, "")), (c) => c.charCodeAt(0)),
+              )
+            : (body.content ?? "");
+        const match = /^\s*version\s*=\s*(\S+)\s*$/m.exec(raw);
+        if (!match?.[1]) return { ok: false, error: "versão do pacote não encontrada no commit" };
+        return { ok: true, version: match[1] };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
+    },
+
     async nudgeDeploy(message) {
       // Commit vazio na branch de produção do repositório DA INSTALAÇÃO: a
       // integração Git da Vercel publica sem consumir a cota de deployments
@@ -821,19 +856,23 @@ export function createCodeClient(input: {
         if (!commitRes.ok) {
           return { ok: false, error: await fail(commitRes, "ler o commit do destino") };
         }
-        const commitBody = (await commitRes.json().catch(() => ({}))) as { tree?: { sha?: string } };
+        const commitBody = (await commitRes.json().catch(() => ({}))) as {
+          tree?: { sha?: string };
+        };
         const treeSha = commitBody.tree?.sha;
         if (!treeSha) return { ok: false, error: "árvore do commit do destino não retornada" };
 
         const created = await api(`/repos/${target}/git/commits`, {
           method: "POST",
           body: JSON.stringify({
-            message: (message ?? "").trim() || "chore(unitos): republicar com variáveis atualizadas",
+            message:
+              (message ?? "").trim() || "chore(unitos): republicar com variáveis atualizadas",
             tree: treeSha,
             parents: [headSha],
           }),
         });
-        if (!created.ok) return { ok: false, error: await fail(created, "criar o commit de publicação") };
+        if (!created.ok)
+          return { ok: false, error: await fail(created, "criar o commit de publicação") };
         const newSha = ((await created.json().catch(() => ({}))) as { sha?: string }).sha;
         if (!newSha) return { ok: false, error: "commit de publicação não retornado" };
 
@@ -841,7 +880,8 @@ export function createCodeClient(input: {
           method: "PATCH",
           body: JSON.stringify({ sha: newSha, force: false }),
         });
-        if (!updated.ok) return { ok: false, error: await fail(updated, "atualizar a branch do destino") };
+        if (!updated.ok)
+          return { ok: false, error: await fail(updated, "atualizar a branch do destino") };
         return { ok: true, commitSha: newSha };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
@@ -880,7 +920,8 @@ export function createCodeClient(input: {
         await notify(2, "lendo a árvore do MASTER");
         const tree = async (repo: string, ref: string) => {
           const res = await api(`/repos/${repo}/git/trees/${ref}?recursive=1`);
-          if (!res.ok) return { ok: false as const, error: await fail(res, `ler a árvore de ${repo}`) };
+          if (!res.ok)
+            return { ok: false as const, error: await fail(res, `ler a árvore de ${repo}`) };
           const body = (await res.json().catch(() => ({}))) as { tree?: TreeEntry[] };
           return { ok: true as const, entries: (body.tree ?? []).filter((e) => e.type === "blob") };
         };
@@ -895,7 +936,10 @@ export function createCodeClient(input: {
             return { ok: true as const, sha: body.object?.sha ?? null };
           }
           if (res.status === 404 || res.status === 409) return { ok: true as const, sha: null };
-          return { ok: false as const, error: await fail(res, `ler a branch ${branch} de ${target}`) };
+          return {
+            ok: false as const,
+            error: await fail(res, `ler a branch ${branch} de ${target}`),
+          };
         };
 
         const first = await readHead();
@@ -925,7 +969,9 @@ export function createCodeClient(input: {
           parent = again.sha;
         }
 
-        const destination = parent ? await tree(target, parent) : { ok: true as const, entries: [] };
+        const destination = parent
+          ? await tree(target, parent)
+          : { ok: true as const, entries: [] };
         if (!destination.ok) return { ok: false, error: destination.error };
 
         const current = new Map(destination.entries.map((e) => [e.path ?? "", e.sha ?? ""]));
@@ -938,7 +984,11 @@ export function createCodeClient(input: {
           return { ok: true, commitSha: parent, changed: 0 };
         }
         if (opts.dryRun) {
-          return { ok: true, commitSha: parent ?? undefined, changed: changed.length + removed.length };
+          return {
+            ok: true,
+            commitSha: parent ?? undefined,
+            changed: changed.length + removed.length,
+          };
         }
 
         const removalEntries = removed.map((path) => ({
@@ -1072,7 +1122,9 @@ export function createCodeClient(input: {
           api(`/repos/${target}/git/trees`, {
             method: "POST",
             body: JSON.stringify(
-              parent ? { base_tree: parent, tree: [...list, ...removalEntries] } : { tree: [...list, ...removalEntries] },
+              parent
+                ? { base_tree: parent, tree: [...list, ...removalEntries] }
+                : { tree: [...list, ...removalEntries] },
             ),
           });
 
@@ -1087,7 +1139,8 @@ export function createCodeClient(input: {
           entries = copied.entries;
           newTree = await buildTree(entries);
         }
-        if (!newTree.ok) return { ok: false, error: await fail(newTree, `montar a árvore de ${target}`) };
+        if (!newTree.ok)
+          return { ok: false, error: await fail(newTree, `montar a árvore de ${target}`) };
 
         const treeJson = (await newTree.json().catch(() => ({}))) as { sha?: string };
 
@@ -1100,7 +1153,8 @@ export function createCodeClient(input: {
             parents: parent ? [parent] : [],
           }),
         });
-        if (!commit.ok) return { ok: false, error: await fail(commit, `criar o commit em ${target}`) };
+        if (!commit.ok)
+          return { ok: false, error: await fail(commit, `criar o commit em ${target}`) };
         const commitJson = (await commit.json().catch(() => ({}))) as { sha?: string };
 
         const refPath = `/repos/${target}/git/refs`;
@@ -1114,7 +1168,10 @@ export function createCodeClient(input: {
               body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: commitJson.sha }),
             });
         if (!update.ok) {
-          return { ok: false, error: await fail(update, `atualizar a branch ${branch} de ${target}`) };
+          return {
+            ok: false,
+            error: await fail(update, `atualizar a branch ${branch} de ${target}`),
+          };
         }
         return { ok: true, commitSha: commitJson.sha, changed: changed.length + removed.length };
       } catch (e) {
@@ -1123,8 +1180,6 @@ export function createCodeClient(input: {
     },
   };
 }
-
-
 
 export function createDeployClient(input: {
   token: string;
@@ -1148,8 +1203,6 @@ export function createDeployClient(input: {
   const project = encodeURIComponent(input.project);
   const masterRepo = (input.masterRepo ?? "").trim() || DEFAULT_MASTER_REPO;
   const targetRepo = (input.repo ?? "").trim() || masterRepo;
-
-
 
   const client: DeployClient = {
     async deploymentUrl() {
@@ -1183,9 +1236,7 @@ export function createDeployClient(input: {
     async redeploy() {
       try {
         const list = await doFetch(
-          `https://api.vercel.com/v6/deployments?${qs(
-            `app=${project}&target=production&limit=1`,
-          )}`,
+          `https://api.vercel.com/v6/deployments?${qs(`app=${project}&target=production&limit=1`)}`,
           { headers },
         );
         if (!list.ok) {
@@ -1209,7 +1260,10 @@ export function createDeployClient(input: {
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
-          return { ok: false, error: `HTTP ${res.status} ao disparar redeploy (${text.slice(0, 200)})` };
+          return {
+            ok: false,
+            error: `HTTP ${res.status} ao disparar redeploy (${text.slice(0, 200)})`,
+          };
         }
         const created = (await res.json().catch(() => ({}))) as { id?: string; uid?: string };
         return { ok: true, deploymentId: created.id ?? created.uid };
@@ -1278,10 +1332,13 @@ export function createDeployClient(input: {
         const current = `${body.link?.org ?? ""}/${body.link?.repo ?? ""}`.toLowerCase();
         if (current === slug.toLowerCase()) return { ok: true };
         if (body.link?.repo) {
-          await doFetch(`https://api.vercel.com/v9/projects/${id}/link?${qs()}`.replace(/\?$/, ""), {
-            method: "DELETE",
-            headers,
-          });
+          await doFetch(
+            `https://api.vercel.com/v9/projects/${id}/link?${qs()}`.replace(/\?$/, ""),
+            {
+              method: "DELETE",
+              headers,
+            },
+          );
         }
         const linked = await doFetch(
           `https://api.vercel.com/v10/projects/${id}/link?${qs()}`.replace(/\?$/, ""),
@@ -1341,7 +1398,6 @@ export function createDeployClient(input: {
     },
 
     async deployLatestCode(options) {
-
       try {
         const readProject = async () => {
           const res = await doFetch(
@@ -1379,7 +1435,6 @@ export function createDeployClient(input: {
           body = (await readProject()) ?? body;
         }
 
-
         // Instalação externa NUNCA publica sozinha a cada commit no MASTER:
         // o build automático da branch fica desligado e o deploy só acontece
         // aqui, quando o Super Admin autoriza a atualização.
@@ -1394,16 +1449,18 @@ export function createDeployClient(input: {
         const branch = (link.productionBranch ?? "main").trim() || "main";
         const ref = (options?.sha ?? "").trim() || branch;
 
-
-        const created = await doFetch(`https://api.vercel.com/v13/deployments?${qs("forceNew=1")}`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            name: body.name ?? input.project,
-            target: "production",
-            gitSource: { type: link.type, repoId: String(repoId), ref },
-          }),
-        });
+        const created = await doFetch(
+          `https://api.vercel.com/v13/deployments?${qs("forceNew=1")}`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              name: body.name ?? input.project,
+              target: "production",
+              gitSource: { type: link.type, repoId: String(repoId), ref },
+            }),
+          },
+        );
         if (!created.ok) {
           const text = await created.text().catch(() => "");
           const quota = parseDeployQuotaError(created.status, text);
@@ -1424,7 +1481,10 @@ export function createDeployClient(input: {
     },
 
     async ensureDomain(domain) {
-      const host = (domain ?? "").trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+      const host = (domain ?? "")
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/.*$/, "");
       if (!host) return { ok: false, error: "domínio vazio" };
       try {
         const read = await doFetch(
@@ -1540,7 +1600,6 @@ export function createDeployClient(input: {
     },
   };
 
-
   return client;
 }
 
@@ -1555,7 +1614,6 @@ export type AutomationInstallation = {
   /** Repositório Git DA INSTALAÇÃO (`https://github.com/owner/repo`). */
   gitRepoUrl?: string | null;
 };
-
 
 type Client = { from: (table: string) => unknown };
 
@@ -1638,13 +1696,18 @@ export async function saveBaselineProgress(
         };
       };
     };
-    const { data: fresh } = await (client as never as {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+    const { data: fresh } = await (
+      client as never as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (
+              c: string,
+              v: string,
+            ) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+          };
         };
-      };
-    })
+      }
+    )
       .from("installation_operations")
       .select("detail")
       .eq("id", operation.id)
@@ -1685,19 +1748,23 @@ export type StageProgress = {
   updateDeploymentRef?: string;
 };
 
-
 export async function readStageProgress(
   client: Client,
   operation: OperationRow,
 ): Promise<StageProgress> {
   try {
-    const { data } = await (client as never as {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+    const { data } = await (
+      client as never as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (
+              c: string,
+              v: string,
+            ) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+          };
         };
-      };
-    })
+      }
+    )
       .from("installation_operations")
       .select("detail")
       .eq("id", operation.id)
@@ -1716,23 +1783,32 @@ export async function saveStageProgress(
   patch: StageProgress,
 ): Promise<void> {
   try {
-    const { data: fresh } = await (client as never as {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+    const { data: fresh } = await (
+      client as never as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (
+              c: string,
+              v: string,
+            ) => { maybeSingle: () => Promise<{ data?: { detail?: unknown } | null }> };
+          };
         };
-      };
-    })
+      }
+    )
       .from("installation_operations")
       .select("detail")
       .eq("id", operation.id)
       .maybeSingle();
     const detail = (fresh?.detail ?? operation.detail ?? {}) as Record<string, unknown>;
-    await (client as never as {
-      from: (t: string) => {
-        update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
-      };
-    })
+    await (
+      client as never as {
+        from: (t: string) => {
+          update: (v: Record<string, unknown>) => {
+            eq: (c: string, v: string) => Promise<unknown>;
+          };
+        };
+      }
+    )
       .from("installation_operations")
       .update({
         detail: {
@@ -1748,8 +1824,6 @@ export async function saveStageProgress(
 }
 
 async function report(
-
-
   client: Client,
   op: OperationRow,
   step: string,
@@ -1817,7 +1891,10 @@ export async function runAutomatedProvision(input: {
     const db = client as never as {
       from: (table: string) => {
         select: (columns: string) => {
-          eq: (column: string, value: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
             maybeSingle: () => Promise<{ data?: { status?: string } | null }>;
           };
         };
@@ -1864,7 +1941,6 @@ export async function runAutomatedProvision(input: {
   const githubToken = (env["UNITOS_GITHUB_TOKEN"] ?? "").trim();
   const teamId = (env["UNITOS_VERCEL_TEAM_ID"] ?? "").trim() || null;
 
-
   const management = createManagementClient({
     token: managementToken,
     projectRef: target.projectRef,
@@ -1887,14 +1963,15 @@ export async function runAutomatedProvision(input: {
     fetchImpl: input.fetchImpl,
   });
 
-
   /* 2. Supabase destino: conectividade, plataforma e chaves */
   await mark("supabase", "running");
   const ping = await management.query(
     "select count(*)::int as schemas from information_schema.schemata where schema_name in ('auth','storage','vault')",
   );
   if (!ping.ok) {
-    blocked.push(`Supabase destino inacessível com a credencial de gestão: ${ping.error ?? ""}`.trim());
+    blocked.push(
+      `Supabase destino inacessível com a credencial de gestão: ${ping.error ?? ""}`.trim(),
+    );
     await mark("supabase", "error", ping.error);
     checks.supabase = "error";
     return finish(null, null);
@@ -1997,14 +2074,11 @@ export async function runAutomatedProvision(input: {
       "code",
       "done",
       `${
-        ensured.created
-          ? `repositório criado (${ensured.via ?? "novo"}) e `
-          : ""
+        ensured.created ? `repositório criado (${ensured.via ?? "novo"}) e ` : ""
       }código do MASTER publicado em ${repo.slug} (${masterHead.sha.slice(0, 7)}${
         published.changed !== undefined ? `, ${published.changed} arquivos` : ""
       })`,
     );
-
   }
   checks.code = checks.code ?? "ok";
 
@@ -2039,129 +2113,126 @@ export async function runAutomatedProvision(input: {
       : `projeto ligado a ${repo.slug} · auto-deploy por Git desligado`,
   );
 
-
   /* 5. baseline do banco — roda DEPOIS de código, deploy conectado e variáveis:
    * sem código publicado e sem URL própria não faz sentido preparar o banco. */
   const runBaselinePhase = async (
     appUrl: string | null,
     urlSource: "custom_domain" | "deploy" | null,
   ): Promise<AutomationRunResult | null> => {
-  const baseline: { id: string; label: string; sql: string }[] = [
+    const baseline: { id: string; label: string; sql: string }[] = [
+      { id: "database", label: "000_extensions", sql: baseline000 },
+      { id: "database", label: "001_initial_schema", sql: baseline001 },
+      { id: "database", label: "005_auth_trigger", sql: baseline005 },
+      { id: "database", label: "007_delta_migrations", sql: baseline007 },
+      { id: "storage", label: "003_storage_buckets", sql: baseline003 },
+      { id: "storage", label: "006_storage_policies", sql: baseline006 },
+      { id: "seeds", label: "004_seeds", sql: baseline004 },
+    ];
 
-    { id: "database", label: "000_extensions", sql: baseline000 },
-    { id: "database", label: "001_initial_schema", sql: baseline001 },
-    { id: "database", label: "005_auth_trigger", sql: baseline005 },
-    { id: "database", label: "007_delta_migrations", sql: baseline007 },
-    { id: "storage", label: "003_storage_buckets", sql: baseline003 },
-    { id: "storage", label: "006_storage_policies", sql: baseline006 },
-    { id: "seeds", label: "004_seeds", sql: baseline004 },
-  ];
+    // Checkpoint: o Worker tem vida limitada. Cada arquivo (e cada lote dentro
+    // do arquivo) é registrado, então uma retomada continua de onde parou em vez
+    // de reaplicar o baseline inteiro — a causa do travamento em 99%.
+    const progress = await readBaselineProgress(client, installation.id, operation);
 
-  // Checkpoint: o Worker tem vida limitada. Cada arquivo (e cada lote dentro
-  // do arquivo) é registrado, então uma retomada continua de onde parou em vez
-  // de reaplicar o baseline inteiro — a causa do travamento em 99%.
-  const progress = await readBaselineProgress(client, installation.id, operation);
-
-  // Percentual da ETAPA considera todos os arquivos do grupo (ex.: "database"
-  // tem 4 arquivos), então a barra da etapa reflete o avanço real.
-  const groupTotals = baseline.reduce<Record<string, number>>((acc, f) => {
-    acc[f.id] = (acc[f.id] ?? 0) + 1;
-    return acc;
-  }, {});
-  const groupDone: Record<string, number> = {};
-  const groupPercent = (id: string, fileFraction: number) =>
-    Math.min(
-      99,
-      Math.round((((groupDone[id] ?? 0) + fileFraction) / Math.max(groupTotals[id] ?? 1, 1)) * 100),
-    );
-
-  let currentGroup = "";
-  for (const file of baseline) {
-    if (file.id !== currentGroup) {
-      currentGroup = file.id;
-      await mark(file.id, "running", null, groupPercent(file.id, 0));
-    }
-    if (progress[file.label] === DONE) {
-      groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
-      await mark(
-        file.id,
-        "running",
-        `${file.label}: já aplicado (checkpoint)`,
-        groupPercent(file.id, 0),
+    // Percentual da ETAPA considera todos os arquivos do grupo (ex.: "database"
+    // tem 4 arquivos), então a barra da etapa reflete o avanço real.
+    const groupTotals = baseline.reduce<Record<string, number>>((acc, f) => {
+      acc[f.id] = (acc[f.id] ?? 0) + 1;
+      return acc;
+    }, {});
+    const groupDone: Record<string, number> = {};
+    const groupPercent = (id: string, fileFraction: number) =>
+      Math.min(
+        99,
+        Math.round(
+          (((groupDone[id] ?? 0) + fileFraction) / Math.max(groupTotals[id] ?? 1, 1)) * 100,
+        ),
       );
-      continue;
-    }
-    await mark(file.id, "running", `${file.label}: aplicando`, groupPercent(file.id, 0));
-    // A Management API executa como `postgres` (não superusuário): comandos
-    // exclusivos de superusuário do dump são removidos antes de enviar.
-    const prepared = sanitizeBaselineSqlForManagementApi(file.sql);
-    const alreadyApplied = progress[file.label] ?? 0;
-    // Nunca envie o arquivo inteiro em uma única chamada. Além de não gerar
-    // heartbeat durante sua execução, 001 (530 KB) e 007 podiam exceder a vida
-    // do runtime. O mesmo caminho curto/idempotente vale para primeira execução
-    // e retomada, portanto todos os arquivos do instalador ficam protegidos.
-    const perStatement = await applyStatementByStatement(management, prepared.sql, {
-      isCancelled,
-      startIndex: alreadyApplied,
-      maxStatements: BASELINE_STATEMENTS_PER_INVOCATION,
-      ...(input.maxStatementsPerInvocation !== undefined
-        ? { maxStatements: input.maxStatementsPerInvocation }
-        : {}),
-      onProgress: async (processed, total) => {
-        progress[file.label] = processed;
-        await saveBaselineProgress(client, operation, progress);
-        const percent = Math.min(99, Math.round((processed / Math.max(total, 1)) * 100));
-        const action = alreadyApplied > 0 ? "retomando aplicação" : "aplicando";
+
+    let currentGroup = "";
+    for (const file of baseline) {
+      if (file.id !== currentGroup) {
+        currentGroup = file.id;
+        await mark(file.id, "running", null, groupPercent(file.id, 0));
+      }
+      if (progress[file.label] === DONE) {
+        groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
         await mark(
           file.id,
           "running",
-          `${file.label}: ${action} (${percent}%)`,
-          groupPercent(file.id, percent / 100),
+          `${file.label}: já aplicado (checkpoint)`,
+          groupPercent(file.id, 0),
         );
-      },
-    });
-    if (!perStatement.ok) {
-      if (typeof perStatement.processed === "number" && perStatement.processed > 0) {
-        progress[file.label] = perStatement.processed;
-        await saveBaselineProgress(client, operation, progress);
+        continue;
       }
-      failures.push(`${file.label}: ${perStatement.error ?? "falha ao aplicar"}`);
-      await mark(file.id, "error", `${file.label} falhou`);
-      checks[file.id === "seeds" ? "database" : (file.id as HealthCheckId)] = "error";
-      return finish(appUrl, urlSource);
-
+      await mark(file.id, "running", `${file.label}: aplicando`, groupPercent(file.id, 0));
+      // A Management API executa como `postgres` (não superusuário): comandos
+      // exclusivos de superusuário do dump são removidos antes de enviar.
+      const prepared = sanitizeBaselineSqlForManagementApi(file.sql);
+      const alreadyApplied = progress[file.label] ?? 0;
+      // Nunca envie o arquivo inteiro em uma única chamada. Além de não gerar
+      // heartbeat durante sua execução, 001 (530 KB) e 007 podiam exceder a vida
+      // do runtime. O mesmo caminho curto/idempotente vale para primeira execução
+      // e retomada, portanto todos os arquivos do instalador ficam protegidos.
+      const perStatement = await applyStatementByStatement(management, prepared.sql, {
+        isCancelled,
+        startIndex: alreadyApplied,
+        maxStatements: BASELINE_STATEMENTS_PER_INVOCATION,
+        ...(input.maxStatementsPerInvocation !== undefined
+          ? { maxStatements: input.maxStatementsPerInvocation }
+          : {}),
+        onProgress: async (processed, total) => {
+          progress[file.label] = processed;
+          await saveBaselineProgress(client, operation, progress);
+          const percent = Math.min(99, Math.round((processed / Math.max(total, 1)) * 100));
+          const action = alreadyApplied > 0 ? "retomando aplicação" : "aplicando";
+          await mark(
+            file.id,
+            "running",
+            `${file.label}: ${action} (${percent}%)`,
+            groupPercent(file.id, percent / 100),
+          );
+        },
+      });
+      if (!perStatement.ok) {
+        if (typeof perStatement.processed === "number" && perStatement.processed > 0) {
+          progress[file.label] = perStatement.processed;
+          await saveBaselineProgress(client, operation, progress);
+        }
+        failures.push(`${file.label}: ${perStatement.error ?? "falha ao aplicar"}`);
+        await mark(file.id, "error", `${file.label} falhou`);
+        checks[file.id === "seeds" ? "database" : (file.id as HealthCheckId)] = "error";
+        return finish(appUrl, urlSource);
+      }
+      if (!perStatement.complete) {
+        // Não mantenha uma única Promise viva por centenas de requests: o
+        // waitUntil do Worker tem uma janela curta e cancela a tarefa. O
+        // checkpoint/heartbeat já foi persistido; o watchdog inicia a próxima
+        // invocação, exatamente no statement seguinte, sem concorrência.
+        return {
+          result: "RUNNING",
+          reasons: [],
+          appUrl,
+          urlSource,
+          steps,
+        };
+      }
+      progress[file.label] = DONE;
+      groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
+      await saveBaselineProgress(client, operation, progress);
     }
-    if (!perStatement.complete) {
-      // Não mantenha uma única Promise viva por centenas de requests: o
-      // waitUntil do Worker tem uma janela curta e cancela a tarefa. O
-      // checkpoint/heartbeat já foi persistido; o watchdog inicia a próxima
-      // invocação, exatamente no statement seguinte, sem concorrência.
-      return {
-        result: "RUNNING",
-        reasons: [],
-        appUrl,
-        urlSource,
-        steps,
-      };
+    // O PostgREST mantém um cache do schema. Sem recarregar, todas as tabelas e
+    // funções recém-criadas respondem PGRST205/PGRST202 ("Could not find the
+    // table ... in the schema cache") e a instalação sobe aparentemente vazia.
+    await management.query("NOTIFY pgrst, 'reload schema';");
 
-    }
-    progress[file.label] = DONE;
-    groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
-    await saveBaselineProgress(client, operation, progress);
+    checks.database = "ok";
 
-  }
-  // O PostgREST mantém um cache do schema. Sem recarregar, todas as tabelas e
-  // funções recém-criadas respondem PGRST205/PGRST202 ("Could not find the
-  // table ... in the schema cache") e a instalação sobe aparentemente vazia.
-  await management.query("NOTIFY pgrst, 'reload schema';");
-
-  checks.database = "ok";
-
-  checks.storage = "ok";
-  await mark("database", "done", "baseline aplicado no destino");
-  await mark("storage", "done", "buckets e policies aplicados");
-  await mark("seeds", "done", "seeds de catálogo aplicados");
-  return null;
+    checks.storage = "ok";
+    await mark("database", "done", "baseline aplicado no destino");
+    await mark("storage", "done", "buckets e policies aplicados");
+    await mark("seeds", "done", "seeds de catálogo aplicados");
+    return null;
   };
 
   /* 4. banco, storage e seeds — ANTES dos secrets: o segredo do cron é gravado
@@ -2279,9 +2350,8 @@ export async function runAutomatedProvision(input: {
       businessConfigId?: string | null;
     } | null = null;
     try {
-      const { resolveMetaAppCredentials, resolveMetaBusinessConfigId } = await import(
-        "@/lib/meta/app-config.server"
-      );
+      const { resolveMetaAppCredentials, resolveMetaBusinessConfigId } =
+        await import("@/lib/meta/app-config.server");
       const creds = await resolveMetaAppCredentials();
       if (creds.appType === "unitos" && creds.appId && creds.appSecret) {
         officialMetaApp = {
@@ -2413,9 +2483,6 @@ export async function runAutomatedProvision(input: {
 
   // banco/storage/seeds já foram aplicados antes dos secrets (fase 4).
 
-
-
-
   /* 6. Brain stats */
   await mark("brain", "running");
   const brain = await management.query(stripPsqlMetaCommands(install011).sql);
@@ -2463,12 +2530,7 @@ export async function runAutomatedProvision(input: {
   const firstAccess = await readFirstAccessState(management);
   checks.super_admin = firstAccess.superAdmin;
   checks.workspace = firstAccess.workspace;
-  await mark(
-    "validation",
-    "done",
-    `${summary.total} verificações PASS · ${firstAccess.detail}`,
-  );
-
+  await mark("validation", "done", `${summary.total} verificações PASS · ${firstAccess.detail}`);
 
   return finish(url.origin, url.source);
 }
@@ -2514,7 +2576,6 @@ async function readFirstAccessState(management: {
 
 /* ------------------------------------------------------- validação automática */
 
-
 /** Distribui cada verificação do verify entre as etapas de validação da UI. */
 export function classifyVerificationCheck(checkName: string): string {
   const name = checkName.toLowerCase();
@@ -2539,7 +2600,9 @@ function normalizeVerificationRows(rows: readonly unknown[]): VerificationRow[] 
   return rows
     .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
     .map((r) => ({
-      status: String(r["status"] ?? "").trim().toUpperCase(),
+      status: String(r["status"] ?? "")
+        .trim()
+        .toUpperCase(),
       check_name: String(r["check_name"] ?? "verificação sem nome"),
       observed: r["observed"] == null ? null : String(r["observed"]),
     }));
@@ -2589,7 +2652,10 @@ export async function runAutomatedValidate(input: {
   const verify = await management.query(prepareVerificationSql(verifySql).sql);
 
   if (!verify.ok) {
-    return fail("BLOCKED", `verify-installation não pôde ser executado: ${verify.error ?? "falha"}`);
+    return fail(
+      "BLOCKED",
+      `verify-installation não pôde ser executado: ${verify.error ?? "falha"}`,
+    );
   }
 
   const rows = normalizeVerificationRows(verify.rows);
@@ -2655,7 +2721,6 @@ export async function runAutomatedValidate(input: {
     checks: checks as never,
   }).catch(() => undefined);
 
-
   return {
     result: summary.ok ? "PASS" : "FAIL",
     reasons: summary.ok ? [] : summary.failedChecks,
@@ -2674,7 +2739,7 @@ function deltaFingerprint(sql: string): string {
   let h2 = 0x1000193;
   for (let i = 0; i < sql.length; i += 1) {
     const c = sql.charCodeAt(i);
-    h1 = (h1 ^ c) * 0x01000193 >>> 0;
+    h1 = ((h1 ^ c) * 0x01000193) >>> 0;
     h2 = (h2 + c * 31) >>> 0;
   }
   return `${sql.length.toString(36)}-${h1.toString(36)}-${h2.toString(36)}`;
@@ -2726,7 +2791,10 @@ export async function applyDatabaseDelta(input: {
     ].join(";\n"),
   );
   if (!ledger.ok) {
-    return { state: "error", detail: `banco da instalação inacessível: ${ledger.error ?? "falha"}` };
+    return {
+      state: "error",
+      detail: `banco da instalação inacessível: ${ledger.error ?? "falha"}`,
+    };
   }
   const ledgerRow = ledger.rows.find(
     (row): row is Record<string, unknown> => !!row && typeof row === "object",
@@ -2754,7 +2822,10 @@ export async function applyDatabaseDelta(input: {
   }
 
   if (!applied.complete) {
-    await saveBaselineProgress(client, operation, { ...progress, [checkpointKey]: applied.processed });
+    await saveBaselineProgress(client, operation, {
+      ...progress,
+      [checkpointKey]: applied.processed,
+    });
     const percent = Math.min(
       99,
       Math.round((applied.processed / Math.max(applied.total, 1)) * 100),
@@ -2769,7 +2840,10 @@ export async function applyDatabaseDelta(input: {
     `insert into public._unitos_applied_deltas (label) values (${sqlLiteral(ledgerLabel)}) on conflict (label) do nothing`,
   );
   if (!mark.ok) {
-    return { state: "error", detail: `registro da versão do banco falhou: ${mark.error ?? "erro"}` };
+    return {
+      state: "error",
+      detail: `registro da versão do banco falhou: ${mark.error ?? "erro"}`,
+    };
   }
   await management.query("NOTIFY pgrst, 'reload schema';").catch(() => undefined);
   await saveBaselineProgress(client, operation, { ...progress, [checkpointKey]: DONE });
@@ -2842,8 +2916,6 @@ export async function runAutomatedUpdate(input: {
   }
   await report(client, operation, "database", "done", delta.detail, 100);
 
-
-
   const masterRepo = (env["UNITOS_MASTER_REPO"] ?? "").trim() || null;
   const repo = resolveInstallationRepo({
     gitRepoUrl: installation.gitRepoUrl ?? null,
@@ -2890,10 +2962,32 @@ export async function runAutomatedUpdate(input: {
     targetSha = head.sha;
   }
 
+  // A versão que existe DENTRO do commit do MASTER. O repositório de código só
+  // avança quando o MASTER é publicado; sem esta checagem a operação enviaria o
+  // mesmo pacote de novo e ainda gravaria o número de versão novo na instalação.
+  const { compareReleaseVersions, masterNotPublishedMessage } = await import("./manager-contract");
+  const repoRelease = await code.releaseAtCommit(targetSha);
+  if (!repoRelease.ok || !repoRelease.version) {
+    return fail(
+      "BLOCKED",
+      repoRelease.error ?? "versão do pacote do MASTER não pôde ser lida no commit autorizado",
+      "code",
+    );
+  }
+  const publishedRelease = repoRelease.version;
+  if (compareReleaseVersions(publishedRelease, MASTER_RELEASE_VERSION) < 0) {
+    return fail(
+      "BLOCKED",
+      masterNotPublishedMessage(publishedRelease, MASTER_RELEASE_VERSION),
+      "code",
+    );
+  }
+
   // A instalação constrói o SEU repositório: a versão autorizada do MASTER é
   // publicada nele antes do build. Sem isso o deployment repetiria o código
   // antigo. Idempotente: repetir não gera commit novo (devolve o commit atual).
   let buildRef: string | null = null;
+  let changedFiles: number | null = null;
   if (!deploymentId) {
     await report(client, operation, "code", "running");
     const ensured = await code.ensureRepo();
@@ -2905,13 +2999,13 @@ export async function runAutomatedUpdate(input: {
       return fail("FAIL", published.error ?? `não foi possível publicar em ${repo.slug}`);
     }
     buildRef = published.commitSha ?? null;
+    changedFiles = typeof published.changed === "number" ? published.changed : null;
     await saveStageProgress(client, operation, {
       codeDone: true,
       codeSha: targetSha,
       codeRepo: repo.slug,
     });
   }
-
 
   if (!deploymentId) {
     await report(client, operation, "code", "running");
@@ -2930,7 +3024,6 @@ export async function runAutomatedUpdate(input: {
       updateDeploymentRef: deploymentRef,
     });
   }
-
 
   if (deploymentSource === "rebuild") {
     await report(
@@ -2993,12 +3086,16 @@ export async function runAutomatedUpdate(input: {
 
   await report(client, operation, "build", "done", url ? `publicado em ${url}` : "publicado");
   const shortSha = targetSha ? targetSha.slice(0, 7) : null;
+  // A versão fixada é a do pacote realmente publicado, nunca o número atual do
+  // MASTER: se o repositório estiver atrás, o painel precisa mostrar a verdade.
+  const appliedRelease = publishedRelease;
+  const nothingNew = changedFiles === 0;
   await report(
     client,
     operation,
     "version",
     "done",
-    shortSha ? `${MASTER_RELEASE_VERSION} (${shortSha})` : MASTER_RELEASE_VERSION,
+    shortSha ? `${appliedRelease} (${shortSha})` : appliedRelease,
   );
 
   // Fixa a versão publicada: a instalação passa a ficar parada neste ponto do
@@ -3011,7 +3108,7 @@ export async function runAutomatedUpdate(input: {
     )
       .update({
         pinned_commit_sha: targetSha,
-        pinned_release: MASTER_RELEASE_VERSION,
+        pinned_release: appliedRelease,
         pinned_at: new Date().toISOString(),
       })
       .eq("id", installation.id)
@@ -3023,12 +3120,14 @@ export async function runAutomatedUpdate(input: {
 
   await finalizeOperation(client as never, operation as never, {
     ok: true,
-    version: MASTER_RELEASE_VERSION,
-    summary: shortSha
-      ? `Atualização aplicada: código do MASTER (${MASTER_RELEASE_VERSION} · ${shortSha}) publicado na instalação.`
-      : `Atualização aplicada: código do MASTER (${MASTER_RELEASE_VERSION}) publicado na instalação.`,
+    ...(nothingNew ? { warnings: true } : {}),
+    version: appliedRelease,
+    summary: nothingNew
+      ? `Nada novo para enviar: a instalação já está no código do MASTER (${appliedRelease}${shortSha ? ` · ${shortSha}` : ""}). O banco foi conferido.`
+      : shortSha
+        ? `Atualização aplicada: código do MASTER (${appliedRelease} · ${shortSha}) publicado na instalação.`
+        : `Atualização aplicada: código do MASTER (${appliedRelease}) publicado na instalação.`,
   }).catch(() => undefined);
-
 
   return { result: "PASS", reasons: [] };
 }

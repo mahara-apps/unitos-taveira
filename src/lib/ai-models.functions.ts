@@ -73,9 +73,17 @@ export const runAiModelHealthNow = createServerFn({ method: "POST" })
 
     const { runAiModelHealthCheck } = await import("@/lib/ai-model-health.server");
     const result = await runAiModelHealthCheck();
+    // "skipped" = fornecedor sem chave cadastrada; nunca conta como problema.
     return {
       checkedAt: result.checkedAt,
       replacements: result.replacements,
-      problems: result.entries.filter((e) => e.status !== "ok").length,
+      problems: result.entries.filter((e) => e.status === "failed" || e.status === "deprecated")
+        .length,
+      skipped: result.entries.filter((e) => e.status === "skipped").length,
+      skippedProviders: [
+        ...new Set(
+          result.entries.filter((e) => e.status === "skipped").map((e) => e.provider as string),
+        ),
+      ],
     };
   });

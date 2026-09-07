@@ -122,7 +122,10 @@ function MediaPlanRouteError({ error, reset }: { error?: Error; reset?: () => vo
           >
             Tentar novamente
           </Button>
-          <Button variant="outline" onClick={() => void router.navigate({ to: "/media-plans" })}>
+          <Button
+            variant="outline"
+            onClick={() => void router.navigate({ to: "/media-plans", search: { tab: "planos" } })}
+          >
             Voltar para Mídia paga
           </Button>
         </div>

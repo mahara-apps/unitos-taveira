@@ -120,6 +120,319 @@ export type Database = {
           },
         ]
       }
+      ad_accounts: {
+        Row: {
+          account_status: number | null
+          brand_id: string
+          business_name: string | null
+          created_at: string
+          currency: string | null
+          external_id: string
+          id: string
+          last_synced_at: string | null
+          meta_session_id: string | null
+          name: string | null
+          provider: string
+          sync_error: string | null
+          sync_status: string
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_status?: number | null
+          brand_id: string
+          business_name?: string | null
+          created_at?: string
+          currency?: string | null
+          external_id: string
+          id?: string
+          last_synced_at?: string | null
+          meta_session_id?: string | null
+          name?: string | null
+          provider?: string
+          sync_error?: string | null
+          sync_status?: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_status?: number | null
+          brand_id?: string
+          business_name?: string | null
+          created_at?: string
+          currency?: string | null
+          external_id?: string
+          id?: string
+          last_synced_at?: string | null
+          meta_session_id?: string | null
+          name?: string | null
+          provider?: string
+          sync_error?: string | null
+          sync_status?: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_accounts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "ad_accounts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_accounts_meta_session_id_fkey"
+            columns: ["meta_session_id"]
+            isOneToOne: false
+            referencedRelation: "meta_oauth_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_creatives: {
+        Row: {
+          ad_account_id: string
+          ad_external_id: string
+          body: string | null
+          brand_id: string
+          call_to_action: string | null
+          created_at: string
+          creative_external_id: string | null
+          id: string
+          image_url: string | null
+          link_url: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          video_id: string | null
+        }
+        Insert: {
+          ad_account_id: string
+          ad_external_id: string
+          body?: string | null
+          brand_id: string
+          call_to_action?: string | null
+          created_at?: string
+          creative_external_id?: string | null
+          id?: string
+          image_url?: string | null
+          link_url?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          video_id?: string | null
+        }
+        Update: {
+          ad_account_id?: string
+          ad_external_id?: string
+          body?: string | null
+          brand_id?: string
+          call_to_action?: string | null
+          created_at?: string
+          creative_external_id?: string | null
+          id?: string
+          image_url?: string | null
+          link_url?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_creatives_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_creatives_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "ad_creatives_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_entities: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          created_at: string
+          daily_budget: number | null
+          effective_status: string | null
+          external_id: string
+          id: string
+          level: string
+          lifetime_budget: number | null
+          name: string | null
+          objective: string | null
+          parent_external_id: string | null
+          start_time: string | null
+          status: string | null
+          stop_time: string | null
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          created_at?: string
+          daily_budget?: number | null
+          effective_status?: string | null
+          external_id: string
+          id?: string
+          level: string
+          lifetime_budget?: number | null
+          name?: string | null
+          objective?: string | null
+          parent_external_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          stop_time?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          created_at?: string
+          daily_budget?: number | null
+          effective_status?: string | null
+          external_id?: string
+          id?: string
+          level?: string
+          lifetime_budget?: number | null
+          name?: string | null
+          objective?: string | null
+          parent_external_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          stop_time?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_entities_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_entities_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "ad_entities_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_insights_daily: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          breakdown_kind: string
+          breakdown_value: string
+          clicks: number
+          created_at: string
+          entity_external_id: string
+          id: string
+          impressions: number
+          level: string
+          link_clicks: number
+          raw: Json
+          reach: number
+          result_kind: string | null
+          results: number
+          spend: number
+          stat_date: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          breakdown_kind?: string
+          breakdown_value?: string
+          clicks?: number
+          created_at?: string
+          entity_external_id: string
+          id?: string
+          impressions?: number
+          level: string
+          link_clicks?: number
+          raw?: Json
+          reach?: number
+          result_kind?: string | null
+          results?: number
+          spend?: number
+          stat_date: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          breakdown_kind?: string
+          breakdown_value?: string
+          clicks?: number
+          created_at?: string
+          entity_external_id?: string
+          id?: string
+          impressions?: number
+          level?: string
+          link_clicks?: number
+          raw?: Json
+          reach?: number
+          result_kind?: string | null
+          results?: number
+          spend?: number
+          stat_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_insights_daily_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_insights_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "ad_insights_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_prompt_overrides: {
         Row: {
           agent_id: string
@@ -3376,6 +3689,65 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_ad_accounts: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_ad_accounts_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_ad_accounts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_ad_accounts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_ad_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -7786,6 +8158,10 @@ export type Database = {
       }
       can_manage_brand_ai_limits: {
         Args: { _brand_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_read_ad_account: {
+        Args: { _ad_account_id: string; _brand_id: string; _user_id: string }
         Returns: boolean
       }
       canonical_content_format: { Args: { _raw: string }; Returns: string }

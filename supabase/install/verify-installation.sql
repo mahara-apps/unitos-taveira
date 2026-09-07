@@ -230,12 +230,13 @@ WITH checks AS (
          coalesce((
            SELECT string_agg(t, ',' ORDER BY t) FROM (
              SELECT t FROM unnest(ARRAY[
-               'access_profiles','brain_events','briefing_import_changes',
+               'access_profiles','ad_accounts','ad_creatives','ad_entities',
+               'ad_insights_daily','brain_events','briefing_import_changes',
                'briefing_import_runs','briefing_import_steps','client_portal_access',
                'client_request_events','client_requests','installation',
                'installation_meta_app','message_thread_participants','message_threads',
                'messages','portal_notification_prefs','post_client_comments',
-               'project_participants','user_login_events','work_comments',
+               'client_ad_accounts','project_participants','user_login_events','work_comments',
                'work_links','work_statuses'
              ]) AS t
              WHERE to_regclass('public.' || t) IS NULL
@@ -243,12 +244,13 @@ WITH checks AS (
          ), 'todas presentes'),
          CASE WHEN NOT EXISTS (
            SELECT 1 FROM unnest(ARRAY[
-             'access_profiles','brain_events','briefing_import_changes',
+             'access_profiles','ad_accounts','ad_creatives','ad_entities',
+             'ad_insights_daily','brain_events','briefing_import_changes',
              'briefing_import_runs','briefing_import_steps','client_portal_access',
              'client_request_events','client_requests','installation',
              'installation_meta_app','message_thread_participants','message_threads',
              'messages','portal_notification_prefs','post_client_comments',
-             'project_participants','user_login_events','work_comments',
+             'client_ad_accounts','project_participants','user_login_events','work_comments',
              'work_links','work_statuses'
            ]) AS t
            WHERE to_regclass('public.' || t) IS NULL

@@ -1,0 +1,2 @@
+ALTER TABLE public.ai_model_health DROP CONSTRAINT IF EXISTS ai_model_health_status_check;
+ALTER TABLE public.ai_model_health ADD CONSTRAINT ai_model_health_status_check CHECK (status = ANY (ARRAY['ok'::text, 'failed'::text, 'deprecated'::text, 'skipped'::text]));

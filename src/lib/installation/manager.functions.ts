@@ -33,7 +33,6 @@ import {
   type StepProgress,
 } from "./manager-contract";
 
-
 /**
  * Installation Manager — server functions do MASTER.
  *
@@ -149,7 +148,8 @@ function readSteps(raw: unknown): OperationStep[] {
       id: String(s.id ?? ""),
       label: String(s.label ?? ""),
       script: String(s.script ?? ""),
-      state: s.state === "running" || s.state === "done" || s.state === "error" ? s.state : "pending",
+      state:
+        s.state === "running" || s.state === "done" || s.state === "error" ? s.state : "pending",
       detail: typeof s.detail === "string" ? s.detail : null,
     }))
     .filter((s) => s.id);
@@ -171,7 +171,6 @@ function mapOperation(row: any): InstallationOperationRecord {
     lastReportAt: row.last_report_at ?? null,
   };
 }
-
 
 async function guard(context: { supabase: unknown; userId: string }) {
   const { assertMasterInstallation } = await import("./manager.server");
@@ -374,9 +373,8 @@ export const startInstallationOperationFn = createServerFn({ method: "POST" })
     // antes da capability carregar criava uma operação "pending" que ninguém
     // executava e travava a instalação em "Validando"/"Provisionando".
     {
-      const { resolveAutomationCapability, resolveAutomationTarget } = await import(
-        "./automation-contract"
-      );
+      const { resolveAutomationCapability, resolveAutomationTarget } =
+        await import("./automation-contract");
       const { resolveInstallationEnv } = await import("./credentials.server");
       const capability = resolveAutomationCapability(
         await resolveInstallationEnv(context.supabase as never, data.id),
@@ -389,12 +387,12 @@ export const startInstallationOperationFn = createServerFn({ method: "POST" })
       }
     }
 
-
     if (kind === "update") {
       if (!isUpdateAvailable(record.currentVersion, record.availableVersion)) {
         throw new Error("A instalação já está na versão do MASTER — nada a atualizar.");
       }
-      if (!data.confirm) throw new Error(updateSummary(record.currentVersion, record.availableVersion));
+      if (!data.confirm)
+        throw new Error(updateSummary(record.currentVersion, record.availableVersion));
     }
 
     if (!canStartOperation(kind, record.status)) {
@@ -454,7 +452,9 @@ export const startInstallationOperationFn = createServerFn({ method: "POST" })
     if (updateError) throw updateError;
 
     const masterUrl =
-      process.env["PUBLIC_APP_URL"] ?? process.env["VITE_PUBLIC_APP_URL"] ?? "https://unitos-master.lovable.app";
+      process.env["PUBLIC_APP_URL"] ??
+      process.env["VITE_PUBLIC_APP_URL"] ??
+      "https://unitos-master.lovable.app";
 
     return {
       installation: mapInstallation(updated),
@@ -583,7 +583,6 @@ export const refreshInstallationHealthFn = createServerFn({ method: "POST" })
     return mapInstallation(updated);
   });
 
-
 /* ------------------------------------------------ provisionamento automático */
 
 /**
@@ -650,9 +649,8 @@ async function openAutomatedProvision(
     from: (table: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 
-  const { resolveAutomationCapability, resolveAutomationTarget } = await import(
-    "./automation-contract"
-  );
+  const { resolveAutomationCapability, resolveAutomationTarget } =
+    await import("./automation-contract");
   const { resolveInstallationEnv } = await import("./credentials.server");
   const env = await resolveInstallationEnv(supabase as never, installationId);
   const capability = resolveAutomationCapability(env);
@@ -749,7 +747,8 @@ async function openAutomatedProvision(
       // Nenhuma exceção de rede/runtime pode deixar uma operação viva para
       // sempre. O erro persistido é sanitizado por finalizeOperation.
       const { finalizeOperation } = await import("./runner.server");
-      const message = error instanceof Error ? error.message : "falha inesperada no provisionamento";
+      const message =
+        error instanceof Error ? error.message : "falha inesperada no provisionamento";
       await finalizeOperation(supabase as never, op as never, {
         ok: false,
         summary: `FAIL: ${message}`,
@@ -793,9 +792,8 @@ export const runAutomatedValidateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await guard(context);
 
-    const { resolveAutomationCapability, resolveAutomationTarget } = await import(
-      "./automation-contract"
-    );
+    const { resolveAutomationCapability, resolveAutomationTarget } =
+      await import("./automation-contract");
     const { resolveInstallationEnv } = await import("./credentials.server");
     const env = await resolveInstallationEnv(context.supabase as never, data.id);
     const capability = resolveAutomationCapability(env);
@@ -854,7 +852,11 @@ export const runAutomatedValidateFn = createServerFn({ method: "POST" })
 
     await context.supabase
       .from("installations")
-      .update({ status: runningStatusFor("validate"), last_error: null, active_operation_id: op.id })
+      .update({
+        status: runningStatusFor("validate"),
+        last_error: null,
+        active_operation_id: op.id,
+      })
       .eq("id", data.id);
 
     const { runAutomatedValidate } = await import("./automation.server");
@@ -885,7 +887,6 @@ export const runAutomatedValidateFn = createServerFn({ method: "POST" })
 
     return { result: "STARTED" as const, operationId: op.id as string, reasons: [] };
   });
-
 
 /**
  * Watchdog do provisionamento automático. O polling da tela chama esta função;
@@ -925,9 +926,8 @@ export const resumeAutomatedProvisionFn = createServerFn({ method: "POST" })
     if (installationError) throw installationError;
     if (!installation) throw new Error("Instalação não encontrada.");
     const record = mapInstallation(installation);
-    const { runAutomatedProvision, runAutomatedUpdate, runAutomatedValidate } = await import(
-      "./automation.server"
-    );
+    const { runAutomatedProvision, runAutomatedUpdate, runAutomatedValidate } =
+      await import("./automation.server");
     const { waitUntil } = await import("@/lib/wait-until.server");
     // A retomada precisa usar o runner do MESMO tipo da operação: retomar um
     // UPDATE como provisionamento reportava etapas inexistentes e travava a barra.
@@ -1044,9 +1044,34 @@ export const getMasterVersionFn = createServerFn({ method: "GET" })
       githubToken: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
     });
     const head = await deploy.latestCommit();
+    // Versão que existe DENTRO do pacote publicado. Quando ela fica atrás de
+    // MASTER_RELEASE_VERSION, o MASTER não foi publicado e "Atualizar" não tem
+    // código novo para enviar — o painel precisa avisar antes da tentativa.
+    let repoRelease: string | null = null;
+    let repoReleaseError: string | null = null;
+    if (head.ok && head.sha) {
+      const { createCodeClient, DEFAULT_MASTER_REPO } = await import("./automation.server");
+      const masterRepo = (env["UNITOS_MASTER_REPO"] ?? "").trim() || DEFAULT_MASTER_REPO;
+      const [owner, repo] = masterRepo.split("/");
+      const code = createCodeClient({
+        token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+        owner: owner ?? "",
+        repo: repo ?? "",
+        masterRepo,
+      });
+      const at = await code.releaseAtCommit(head.sha);
+      repoRelease = at.ok ? (at.version ?? null) : null;
+      repoReleaseError = at.ok ? null : (at.error ?? "versão do pacote indisponível");
+    }
+    const { compareReleaseVersions } = await import("./manager-contract");
     return {
       release: MASTER_RELEASE_VERSION,
       commitSha: head.ok ? (head.sha ?? null) : null,
+      repoRelease,
+      repoReleaseError,
+      masterPublished: repoRelease
+        ? compareReleaseVersions(repoRelease, MASTER_RELEASE_VERSION) >= 0
+        : null,
       error: head.ok ? null : (head.error ?? "commit do MASTER indisponível"),
     };
   });
@@ -1229,9 +1254,8 @@ export const saveInstallationCredentialsFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await guard(context);
-    const { saveInstallationCredentials, getInstallationCredentialsStatus } = await import(
-      "./credentials.server"
-    );
+    const { saveInstallationCredentials, getInstallationCredentialsStatus } =
+      await import("./credentials.server");
     const patch: Record<string, string> = {};
     for (const field of [
       "supabaseManagementToken",
@@ -1281,9 +1305,8 @@ export const rotateInstallationSecretFn = createServerFn({ method: "POST" })
     if (!(GENERATED_SECRET_VARS as readonly string[]).includes(data.name)) {
       throw new Error("Segredo desconhecido.");
     }
-    const { rotateInstallationSecret, getInstallationSecretsStatus } = await import(
-      "./credentials.server"
-    );
+    const { rotateInstallationSecret, getInstallationSecretsStatus } =
+      await import("./credentials.server");
     const { generateInstallationSecret } = await import("./automation.server");
     await rotateInstallationSecret({
       client: context.supabase as never,
@@ -1308,9 +1331,8 @@ export const clearInstallationCredentialsFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     await guard(context);
-    const { clearInstallationCredentials, getInstallationCredentialsStatus } = await import(
-      "./credentials.server"
-    );
+    const { clearInstallationCredentials, getInstallationCredentialsStatus } =
+      await import("./credentials.server");
     await clearInstallationCredentials(context.supabase as never, data.id);
     return getInstallationCredentialsStatus(context.supabase as never, data.id);
   });
@@ -1335,9 +1357,8 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
     if (!current) throw new Error("Instalação não encontrada.");
     const record = mapInstallation(current);
 
-    const { resolveAutomationTarget, resolveAutomationCapability } = await import(
-      "./automation-contract"
-    );
+    const { resolveAutomationTarget, resolveAutomationCapability } =
+      await import("./automation-contract");
     const { resolveInstallationEnv } = await import("./credentials.server");
     const env = await resolveInstallationEnv(context.supabase as never, data.id);
     const capability = resolveAutomationCapability(env);
@@ -1356,7 +1377,6 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
         code: { ok: false, detail: capability.blockedReasons.join(" | ") },
       };
     }
-
 
     const { createManagementClient, createDeployClient } = await import("./automation.server");
     const management = createManagementClient({
@@ -1388,7 +1408,9 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
         const res = await fetch(url, {
           headers: { authorization: `Bearer ${(env["UNITOS_VERCEL_TOKEN"] ?? "").trim()}` },
         });
-        const body = (await res.json().catch(() => ({}))) as { projects?: Array<{ name?: string }> };
+        const body = (await res.json().catch(() => ({}))) as {
+          projects?: Array<{ name?: string }>;
+        };
         visible = (body.projects ?? []).map((p) => p.name ?? "").filter(Boolean);
       } catch {
         visible = [];
@@ -1541,9 +1563,18 @@ async function findRunningProvision(
   const db = client as never as {
     from: (table: string) => {
       select: (columns: string) => {
-        eq: (c: string, v: string) => {
-          eq: (c: string, v: string) => {
-            order: (c: string, o: { ascending: boolean }) => {
+        eq: (
+          c: string,
+          v: string,
+        ) => {
+          eq: (
+            c: string,
+            v: string,
+          ) => {
+            order: (
+              c: string,
+              o: { ascending: boolean },
+            ) => {
               limit: (n: number) => Promise<{ data?: Array<Record<string, unknown>> | null }>;
             };
           };
@@ -1561,7 +1592,6 @@ async function findRunningProvision(
   const row = data?.[0];
   return row ? (row as never) : null;
 }
-
 
 /* ---------------------------------------------- integrações (somente leitura) */
 
@@ -1688,7 +1718,11 @@ export const inspectInstallationIntegrationsFn = createServerFn({ method: "POST"
       { id: "meta", state: meta.state, detail: meta.detail },
       {
         id: "resend",
-        ...envIntegrationState({ envKeys: keys, required: ["RESEND_API_KEY"], label: "E-mail (Resend)" }),
+        ...envIntegrationState({
+          envKeys: keys,
+          required: ["RESEND_API_KEY"],
+          label: "E-mail (Resend)",
+        }),
       },
       {
         id: "evolution",
