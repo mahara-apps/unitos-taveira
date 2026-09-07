@@ -206,6 +206,7 @@ function InstallationDetailPage() {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
 
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [provisionOpen, setProvisionOpen] = useState(false);
   const [opsPageRaw, setOpsPage] = useState(1);
   const [tab, setTab] = useState("visao");
   const resumePendingRef = useRef(false);
@@ -490,8 +491,21 @@ function InstallationDetailPage() {
     setEditOpen(true);
   };
 
-  const provisionAction = () =>
-    automated ? autoProvision.mutate() : start.mutate({ kind: "provision" });
+  const runProvision = () => {
+    setProvisionOpen(false);
+    if (automated) {
+      autoProvision.mutate();
+      return;
+    }
+    start.mutate({ kind: "provision" });
+  };
+  const provisionAction = () => {
+    if (inst.lastProvisionedAt) {
+      setProvisionOpen(true);
+      return;
+    }
+    runProvision();
+  };
   const validateAction = () =>
     automated ? autoValidate.mutate() : start.mutate({ kind: "validate" });
   const updateAction = () => {
@@ -600,7 +614,7 @@ function InstallationDetailPage() {
                   }
                   onClick={provisionAction}
                 >
-                  <Rocket className="mr-2 h-3.5 w-3.5" /> Provisionar
+                  <Rocket className="mr-2 h-3.5 w-3.5" /> Reprovisionar instalação…
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={
@@ -1288,6 +1302,36 @@ function InstallationDetailPage() {
             >
               {start.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar atualização
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* REPROVISIONAMENTO — ação avançada com confirmação explícita */}
+      <Dialog open={provisionOpen} onOpenChange={setProvisionOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Reprovisionar instalação?</DialogTitle>
+            <DialogDescription>
+              Esta ação reinstala e verifica toda a infraestrutura. Ela não é necessária para
+              receber uma nova versão do MASTER. Para atualizar o sistema, use “Autorizar
+              atualização” na aba Versões.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setProvisionOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={start.isPending || autoProvision.isPending}
+              onClick={runProvision}
+            >
+              {(start.isPending || autoProvision.isPending) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Confirmar reprovisionamento
             </Button>
           </DialogFooter>
         </DialogContent>
