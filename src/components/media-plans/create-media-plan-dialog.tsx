@@ -32,6 +32,7 @@ import {
   MediaPlanInterview,
   type InterviewResult,
 } from "@/components/media-plans/media-plan-interview";
+import { PlanGenerationProgress } from "@/components/media-plans/plan-generation-progress";
 
 type Mode = "manual" | "ai";
 
@@ -68,8 +69,11 @@ export function CreateMediaPlanDialog({
   const [monthlyBudget, setMonthlyBudget] = useState<string>("");
   const [periodStart, setPeriodStart] = useState<string>("");
   const [periodEnd, setPeriodEnd] = useState<string>("");
-  /** Modo IA: passo 1 = dados básicos, passo 2 = entrevista guiada. */
-  const [stage, setStage] = useState<"basics" | "interview">("basics");
+  /** Modo IA: básicos → entrevista → geração (com progresso). */
+  const [stage, setStage] = useState<"basics" | "interview" | "generating">("basics");
+  /** Última entrevista enviada: permite tentar de novo sem refazer nada. */
+  const [lastInterview, setLastInterview] = useState<InterviewResult | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +83,8 @@ export function CreateMediaPlanDialog({
     setPeriodStart("");
     setPeriodEnd("");
     setStage("basics");
+    setLastInterview(null);
+    setGenError(null);
   }, [open, mode, defaultClientId]);
 
   const budgetNum = Number(monthlyBudget.replace(/[^\d.,-]/g, "").replace(",", "."));
@@ -134,9 +140,19 @@ export function CreateMediaPlanDialog({
     },
     onSuccess: (plan) => void goToPlan(plan, "Plano de mídia gerado com sucesso"),
     onError: (err) => {
-      toast.error(aiErrorMessage(err, "Não foi possível gerar o plano"));
+      const message = aiErrorMessage(err, "Não foi possível gerar o plano");
+      setGenError(message);
+      toast.error(message);
     },
   });
+
+  /** Envia a entrevista e mostra o painel de progresso. */
+  const startGeneration = (result: InterviewResult) => {
+    setLastInterview(result);
+    setGenError(null);
+    setStage("generating");
+    interviewMutation.mutate(result);
+  };
 
   const clients = useMemo(
     () => (clientsQ.data ?? []).map((c) => ({ id: c.id, name: c.name })),
@@ -149,14 +165,21 @@ export function CreateMediaPlanDialog({
     clients.find((c) => c.id === defaultClientId)?.name ?? "Cliente da operação";
 
   const isAi = mode === "ai";
-  const busy = manualMutation.isPending || interviewMutation.isPending;
+  const generating = interviewMutation.isPending;
+  const busy = manualMutation.isPending || generating;
   const inInterview = isAi && stage === "interview";
-
+  const inGeneration = isAi && stage === "generating";
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!busy ? onOpenChange(o) : null)}>
       <DialogContent
-        className={cn(inInterview ? "sm:max-w-[720px]" : "sm:max-w-[560px]")}
+        className={cn(inInterview || inGeneration ? "sm:max-w-[720px]" : "sm:max-w-[560px]")}
+        {...(busy
+          ? {
+              onEscapeKeyDown: (e: Event) => e.preventDefault(),
+              onInteractOutside: (e: Event) => e.preventDefault(),
+            }
+          : {})}
       >
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -179,14 +202,30 @@ export function CreateMediaPlanDialog({
           </div>
         </DialogHeader>
 
-        {inInterview ? (
-          <div className="max-h-[70vh] min-h-[420px]">
-            <MediaPlanInterview
-              submitting={busy}
-              onCancel={() => setStage("basics")}
-              onSubmit={(result) => interviewMutation.mutate(result)}
-            />
-          </div>
+        {inInterview || inGeneration ? (
+          <>
+            {inGeneration && (
+              <PlanGenerationProgress
+                error={genError}
+                onRetry={() => {
+                  if (lastInterview) startGeneration(lastInterview);
+                }}
+                onBack={() => {
+                  setGenError(null);
+                  setStage("interview");
+                }}
+              />
+            )}
+            {/* A entrevista fica montada durante a geração: "Rever respostas"
+                volta com tudo preenchido, sem refazer nada. */}
+            <div className={cn("max-h-[70vh] min-h-[420px]", inGeneration && "hidden")}>
+              <MediaPlanInterview
+                submitting={busy}
+                onCancel={() => setStage("basics")}
+                onSubmit={startGeneration}
+              />
+            </div>
+          </>
         ) : (
           <>
             <div className="grid gap-4 py-1">

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  AlertTriangle,
   CheckCircle2,
   GripVertical,
   Link2,
@@ -79,17 +80,56 @@ type MediaPlanSearch = {
   stage?: "topo" | "meio" | "fundo";
   channel?: string;
 };
-const searchSchema = z.object({
-  planId: z.string().uuid().optional(),
-  stage: z.enum(["topo", "meio", "fundo"]).optional(),
-  channel: z.string().optional(),
-});
+// Tolerante por campo: link antigo ou parâmetro inesperado nunca derruba a tela.
+const searchSchema = z
+  .object({
+    planId: z.string().uuid().optional().catch(undefined),
+    stage: z.enum(["topo", "meio", "fundo"]).optional().catch(undefined),
+    channel: z.string().optional().catch(undefined),
+  })
+  .catch({});
 
 export const Route = createFileRoute("/_authenticated/customers/$customerId/media-plan")({
   beforeLoad: () => ensureFeatureEnabled("midia_paga"),
   validateSearch: (raw: Record<string, unknown>): MediaPlanSearch => searchSchema.parse(raw),
   component: MediaPlanPage,
+  pendingComponent: () => (
+    <DashboardPageShell>
+      <Skeleton className="h-96 w-full" />
+    </DashboardPageShell>
+  ),
+  errorComponent: MediaPlanRouteError,
+  notFoundComponent: () => <MediaPlanRouteError />,
 });
+
+/** Nunca deixar tela branca: erro com motivo e caminhos de saída. */
+function MediaPlanRouteError({ error, reset }: { error?: Error; reset?: () => void }) {
+  const router = useRouter();
+  return (
+    <DashboardPageShell>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/40 px-6 py-16 text-center">
+        <AlertTriangle className="mb-4 h-10 w-10 text-amber-500" />
+        <div className="mb-1 text-lg font-medium">Não foi possível abrir o plano de mídia</div>
+        <div className="mb-6 max-w-md text-sm text-muted-foreground">
+          {error?.message?.trim() || "Tente novamente em alguns instantes."}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => {
+              void router.invalidate();
+              reset?.();
+            }}
+          >
+            Tentar novamente
+          </Button>
+          <Button variant="outline" onClick={() => void router.navigate({ to: "/media-plans" })}>
+            Voltar para Mídia paga
+          </Button>
+        </div>
+      </div>
+    </DashboardPageShell>
+  );
+}
 
 const STAGE_LABEL: Record<string, string> = { topo: "Topo", meio: "Meio", fundo: "Fundo" };
 const STAGE_TONE: Record<string, string> = {
@@ -302,8 +342,32 @@ function MediaPlanPage() {
     <DashboardPageShell>
       {plansQ.isLoading ? (
         <Skeleton className="h-40 w-full" />
+      ) : plansQ.isError ? (
+        <PlanLoadError
+          message={
+            plansQ.error instanceof Error ? plansQ.error.message : "Falha ao carregar os planos."
+          }
+          onRetry={() => void plansQ.refetch()}
+        />
       ) : plans.length === 0 ? (
         <EmptyState onCreate={() => setCreating(true)} />
+      ) : planQ.isError ? (
+        <PlanLoadError
+          message={
+            planQ.error instanceof Error ? planQ.error.message : "Falha ao carregar este plano."
+          }
+          onRetry={() => void planQ.refetch()}
+        />
+      ) : !!search.planId && !plansQ.isFetching && !plans.some((p) => p.id === search.planId) ? (
+        <PlanMissing
+          onOpenLatest={() =>
+            navigate({
+              to: ".",
+              search: (p: MediaPlanSearch) => ({ ...p, planId: undefined }),
+              replace: true,
+            })
+          }
+        />
       ) : !activePlanId || !planQ.data ? (
         <Skeleton className="h-96 w-full" />
       ) : (
@@ -340,6 +404,30 @@ function MediaPlanPage() {
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} plan={planQ.data?.plan ?? null} />
       )}
     </DashboardPageShell>
+  );
+}
+
+function PlanLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/40 px-6 py-16 text-center">
+      <AlertTriangle className="mb-4 h-10 w-10 text-amber-500" />
+      <div className="mb-1 text-lg font-medium">Não foi possível carregar</div>
+      <div className="mb-6 max-w-md text-sm text-muted-foreground">{message}</div>
+      <Button onClick={onRetry}>Tentar novamente</Button>
+    </div>
+  );
+}
+
+function PlanMissing({ onOpenLatest }: { onOpenLatest: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/40 px-6 py-16 text-center">
+      <AlertTriangle className="mb-4 h-10 w-10 text-amber-500" />
+      <div className="mb-1 text-lg font-medium">Este plano não está mais disponível</div>
+      <div className="mb-6 max-w-md text-sm text-muted-foreground">
+        Ele pode ter sido excluído. Abra o plano mais recente deste cliente.
+      </div>
+      <Button onClick={onOpenLatest}>Abrir plano mais recente</Button>
+    </div>
   );
 }
 

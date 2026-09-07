@@ -88,3 +88,12 @@ export function customerBreadcrumbs(
     { label: customerTabLabel(tab) },
   ];
 }
+
+/**
+ * A aba só é normalizada quando o usuário está no painel do cliente.
+ * Em sub-rotas (ex.: `/customers/<id>/media-plan`) redirecionar descartaria o
+ * endereço da sub-página — e, no plano de mídia, o plano aberto na URL.
+ */
+export function shouldNormalizeCustomerTab(pathname: string, customerId: string): boolean {
+  return pathname.replace(/\/+$/, "") === `/customers/${customerId}`;
+}

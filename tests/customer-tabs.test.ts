@@ -9,6 +9,7 @@ import {
   isCustomerTab,
   isCustomerTabAlias,
   resolveCustomerTab,
+  shouldNormalizeCustomerTab,
 } from "@/lib/customer-tabs";
 
 const CID = "11111111-1111-1111-1111-111111111111";
@@ -21,6 +22,7 @@ describe("customer panel tabs (fonte única)", () => {
       "briefing",
       "pauta",
       "trabalho",
+      "horas",
       "publicacoes",
       "area-cliente",
     ]);
@@ -61,5 +63,18 @@ describe("customer panel tabs (fonte única)", () => {
     expect(customerTabLabel("producao")).toBe("Trabalho");
     const crumbs = customerBreadcrumbs(CID, "Café Aurora", "channels");
     expect(crumbs.map((c) => c.label)).toEqual(["Clientes", "Café Aurora", "Publicações"]);
+  });
+});
+
+describe("guard de aba x sub-rotas", () => {
+  const CID2 = "11111111-2222-3333-4444-555555555555";
+  it("normaliza a aba só no painel do cliente", () => {
+    expect(shouldNormalizeCustomerTab(`/customers/${CID2}`, CID2)).toBe(true);
+    expect(shouldNormalizeCustomerTab(`/customers/${CID2}/`, CID2)).toBe(true);
+  });
+  it("não redireciona sub-rotas (plano de mídia, briefing, pauta)", () => {
+    for (const sub of ["media-plan", "briefing", "pauta", "brain"]) {
+      expect(shouldNormalizeCustomerTab(`/customers/${CID2}/${sub}`, CID2)).toBe(false);
+    }
   });
 });
