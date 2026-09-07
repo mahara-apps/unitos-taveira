@@ -228,9 +228,43 @@ export const testProviderKey = createServerFn({ method: "POST" })
       throw new Error("Nenhuma chave cadastrada para este provedor.");
     }
 
-    const { decryptCredential } = await import("./credentials-crypto.server");
+    const { decryptCredential, isCredentialDecryptError } = await import(
+      "./credentials-crypto.server"
+    );
     const { verifyProviderKey } = await import("./ai-provider-verify.server");
-    const apiKey = await decryptCredential(credRow.ciphertext as string);
+    let apiKey: string;
+    try {
+      apiKey = await decryptCredential(credRow.ciphertext as string);
+    } catch (err) {
+      if (!isCredentialDecryptError(err)) throw err;
+      // Chave ilegível nesta instalação: marca como inválida para a tela avisar
+      // que é preciso salvar a chave novamente, em vez de parecer conectada.
+      const unreadable =
+        "A chave salva não pôde ser lida nesta instalação. Salve a chave do provedor novamente.";
+      const { data: prev } = await context.supabase
+        .from("brand_connections")
+        .select("providers")
+        .eq("brand_id", data.brandId)
+        .maybeSingle();
+      const prevProviders = ((prev?.providers as Record<string, ProviderConfig>) ?? {}) as Record<
+        string,
+        ProviderConfig
+      >;
+      prevProviders[data.provider] = {
+        ...(prevProviders[data.provider] ?? { connected: false }),
+        connected: false,
+        verified: "invalid",
+        verifiedAt: new Date().toISOString(),
+        verifyMessage: unreadable,
+      };
+      await context.supabase
+        .from("brand_connections")
+        .upsert(
+          { brand_id: data.brandId, providers: prevProviders },
+          { onConflict: "brand_id" },
+        );
+      return { status: "invalid" as const, message: unreadable, models: 0 };
+    }
     const check = await verifyProviderKey(data.provider, apiKey);
 
     const { data: existing } = await context.supabase

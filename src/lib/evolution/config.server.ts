@@ -146,8 +146,13 @@ export async function resolveEvolutionConfig(
   let apiKey = "";
   let apiKeySource: "workspace" | "installation" = "installation";
   if (credential?.ciphertext) {
-    apiKey = (await decryptCredential(credential.ciphertext)).trim();
-    apiKeySource = "workspace";
+    try {
+      apiKey = (await decryptCredential(credential.ciphertext)).trim();
+      apiKeySource = "workspace";
+    } catch {
+      // Chave ilegível nesta instalação: cai para a credencial da instalação.
+      apiKey = "";
+    }
   }
   if (!apiKey) {
     apiKey = installationApiKey;

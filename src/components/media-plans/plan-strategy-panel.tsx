@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { aiErrorMessage } from "@/lib/ai-error-display";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ export function PlanStrategyPanel({ plan, items }: { plan: MediaPlan; items: Med
       toast.success("Plano regerado com as novas instruções");
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível regerar o plano"),
+      toast.error(aiErrorMessage(e, "Não foi possível regerar o plano")),
   });
 
 

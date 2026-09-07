@@ -3,5 +3,5 @@
 # subir version (o mesmo valor de MASTER_RELEASE_VERSION em
 # src/lib/installation/manager-contract.ts). O teste
 # tests/installation-master-sync.unit.test.ts reprova se algo ficar fora de sincronia.
-version=1.2.1
+version=1.2.2
 sha256=e2b182607241da8509e65a17a423d75a9489e6aba711946c926db8b5397698c2

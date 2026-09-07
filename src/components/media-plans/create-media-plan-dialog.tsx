@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { listClients } from "@/lib/workspace.functions";
 import { createMediaPlan } from "@/lib/media-plans.functions";
 import { createMediaPlanFromInterview } from "@/lib/media-plan-interview.functions";
+import { aiErrorMessage } from "@/lib/ai-error-display";
 import {
   MediaPlanInterview,
   type InterviewResult,
@@ -111,7 +112,7 @@ export function CreateMediaPlanDialog({
     },
     onSuccess: (plan) => void goToPlan(plan, "Plano criado com sucesso"),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Não foi possível criar o plano");
+      toast.error(aiErrorMessage(err, "Não foi possível criar o plano"));
     },
   });
 
@@ -133,7 +134,7 @@ export function CreateMediaPlanDialog({
     },
     onSuccess: (plan) => void goToPlan(plan, "Plano de mídia gerado com sucesso"),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o plano");
+      toast.error(aiErrorMessage(err, "Não foi possível gerar o plano"));
     },
   });
 
