@@ -18,6 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PanelEmptyState } from "@/components/ui/panel-empty";
 import { ExpandedModal } from "@/components/ui/expanded-modal";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { listTasksFn, updateTaskFn, type TaskRow } from "@/lib/tasks.functions";
 import { getPautaDetailFn, type PautaDetail } from "@/lib/projects.functions";
 import { contentFormatLabel } from "@/lib/content-formats";
@@ -219,6 +226,69 @@ function LongText({ text }: { text: string }) {
   );
 }
 
+/**
+ * Invólucro do detalhe: painel lateral (padrão na área Projetos, para não
+ * empilhar janelas sobre o board) ou o modal amplo legado.
+ */
+function PautaShell({
+  variant,
+  open,
+  onOpenChange,
+  title,
+  description,
+  headerExtra,
+  footer,
+  children,
+}: {
+  variant: "modal" | "drawer";
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  title: string;
+  description?: ReactNode;
+  headerExtra?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  if (variant === "modal") {
+    return (
+      <ExpandedModal
+        open={open}
+        onOpenChange={onOpenChange}
+        size="md"
+        title={title}
+        description={description}
+        headerExtra={headerExtra}
+        footer={footer}
+      >
+        {children}
+      </ExpandedModal>
+    );
+  }
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+      >
+        <SheetHeader className="space-y-1.5 border-b border-border/60 px-5 py-4 pr-12 text-left">
+          <SheetTitle className="text-base leading-snug">{title}</SheetTitle>
+          {description ? (
+            <SheetDescription className="text-xs">{description}</SheetDescription>
+          ) : null}
+          {headerExtra}
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-background/60 px-5 py-3">
+            {footer}
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+
 export function PautaDetailModal({
   open,
   onOpenChange,
@@ -230,6 +300,8 @@ export function PautaDetailModal({
   currentUserId,
   canEdit,
   onOpenTask,
+  variant = "modal",
+
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -242,6 +314,8 @@ export function PautaDetailModal({
   canEdit: boolean;
   /** Abre o drawer de tarefa (mesmo usado na lista de tarefas do job). */
   onOpenTask?: (taskId: string) => void;
+  /** "drawer" = painel lateral (padrão da área Projetos); "modal" = legado. */
+  variant?: "modal" | "drawer";
 }) {
   const qc = useQueryClient();
   const listTasks = useServerFn(listTasksFn);
@@ -310,10 +384,10 @@ export function PautaDetailModal({
   const loading = detailQ.isLoading;
 
   return (
-    <ExpandedModal
+    <PautaShell
+      variant={variant}
       open={open}
       onOpenChange={onOpenChange}
-      size="md"
       title={item.title}
       description={
         [channelText, formatText].filter(Boolean).join(" · ") ||
@@ -636,6 +710,6 @@ export function PautaDetailModal({
           )}
         </Section>
       </div>
-    </ExpandedModal>
+    </PautaShell>
   );
 }

@@ -68,8 +68,36 @@ import { AssigneePicker } from "@/components/projects/assignee-picker";
 import { ProjectHeader } from "@/components/projects/project-header";
 import { setProjectArchivedFn } from "@/lib/projects.functions";
 import { useAccessRole } from "@/hooks/use-access-role";
+import { z } from "zod";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CommentThread } from "@/components/projects/comment-thread";
+import { WorkLinks } from "@/components/ui/work-links";
+import { StageFunnel } from "@/components/projects/stage-funnel";
+import { PautaBoard, type BoardPauta, type BoardView } from "@/components/projects/pauta-board";
+import { UnitNetworkMatrix } from "@/components/projects/unit-network-matrix";
+import { UpcomingDeadlines, type DeadlineEntry } from "@/components/projects/upcoming-deadlines";
+import { CONTENT_STAGES, contentStageOf, type ContentStage } from "@/lib/content-stage-tokens";
+
+const PROJECT_TABS = ["overview", "jobs", "comments", "links"] as const;
+type ProjectTab = (typeof PROJECT_TABS)[number];
+
+const TAB_LABELS: Record<ProjectTab, string> = {
+  overview: "Visão geral",
+  jobs: "Jobs & Pautas",
+  comments: "Comentários",
+  links: "Anexos",
+};
+
+const projectSearchSchema = z.object({
+  tab: z.enum(PROJECT_TABS).optional(),
+  /** Item de pauta aberto no painel lateral. */
+  pauta: z.string().optional(),
+  board: z.enum(["board", "list", "matrix"]).optional(),
+  estagio: z.enum(CONTENT_STAGES).optional(),
+});
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
+  validateSearch: projectSearchSchema,
   component: ProjectDetailPage,
 });
 
@@ -150,7 +178,21 @@ function ProjectDetailPage() {
   const navigate = useNavigate();
   const [openNewTask, setOpenNewTask] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
-  const [openPautaKey, setOpenPautaKey] = useState<string | null>(null);
+  // Navegação in-place (aba, board de pautas e painel do item) fica na URL,
+  // então dá para voltar, recarregar e compartilhar o mesmo ponto da tela.
+  const search = Route.useSearch();
+  const tab: ProjectTab = search.tab ?? "overview";
+  const boardOpen = !!search.board;
+  const boardView: BoardView = search.board ?? "board";
+  const openPautaKey = search.pauta ?? null;
+  const setSearch = (patch: Partial<typeof search>) =>
+    navigate({
+      to: "/projects/$projectId",
+      params: { projectId },
+      search: { ...search, ...patch },
+      replace: true,
+    });
+  const setOpenPautaKey = (key: string | null) => setSearch({ pauta: key ?? undefined });
   const { userId, role } = useAccessRole();
   // `role` já colapsa admin/manager/super_admin no nível legado "admin".
   const canEditProject = role === "admin";
@@ -403,6 +445,57 @@ function ProjectDetailPage() {
     }),
   ];
 
+  // Estágio do ciclo de conteúdo por item — sempre a partir do estado REAL da peça.
+  const stageByKey = new Map<string, ContentStage>([
+    ...items.map((it) => [it.topic_id, contentStageOf(it.post)] as const),
+    ...extraPosts.map(
+      (p) =>
+        [
+          p.id as string,
+          contentStageOf({
+            stage: (p.stage as string | null) ?? null,
+            review_status: (p.review_status as string | null) ?? null,
+            published_at: (p.published_at as string | null) ?? null,
+          }),
+        ] as const,
+    ),
+  ]);
+
+  const funnelCounts = CONTENT_STAGES.reduce(
+    (acc, s) => {
+      acc[s] = 0;
+      return acc;
+    },
+    {} as Record<ContentStage, number>,
+  );
+  for (const stage of stageByKey.values()) funnelCounts[stage] += 1;
+
+  // O modelo atual não separa itens por unidade, então a matriz agrupa em "Geral".
+  const boardItems: BoardPauta[] = pautaDetails.map((d) => ({
+    key: d.key,
+    title: d.title,
+    stage: stageByKey.get(d.key) ?? "briefing",
+    channelLabel: d.channelLabel,
+    formatLabel: d.formatLabel,
+    unitLabel: null,
+    assigneeName: d.assigneeName ?? null,
+    coverUrl: d.coverUrl,
+    dateLabel: d.scheduledAt ? fmtDate(d.scheduledAt) : null,
+    outOfPlan: d.outOfPlan,
+  }));
+
+  const deadlines: DeadlineEntry[] = pautaDetails
+    .filter((d) => !!d.scheduledAt)
+    .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
+    .slice(0, 8)
+    .map((d) => ({
+      key: d.key,
+      title: d.title,
+      kindLabel: d.outOfPlan ? "Peça do projeto" : "Item da pauta",
+      date: d.scheduledAt!,
+      onOpen: () => setOpenPautaKey(d.key),
+    }));
+
   // Conteúdo do job virtual "Pautas" (nível 2 da hierarquia).
   const pautasContent = (
     <DashboardPanelSurface>
@@ -493,14 +586,31 @@ function ProjectDetailPage() {
 
   return (
     <DashboardPageShell>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2 h-9 w-fit"
-        onClick={() => navigate({ to: "/projects" })}
+      {/* Trilha sempre visível — a navegação é in-place, sem modais empilhados. */}
+      <nav
+        aria-label="Trilha de navegação"
+        className="-ml-1 flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-muted-foreground"
       >
-        <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-      </Button>
+        <button
+          type="button"
+          onClick={() => navigate({ to: "/projects" })}
+          className="flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Projetos
+        </button>
+        <span aria-hidden>/</span>
+        <button
+          type="button"
+          onClick={() => setSearch({ tab: undefined, board: undefined, pauta: undefined })}
+          className="max-w-[220px] truncate rounded px-1 py-0.5 hover:text-foreground"
+        >
+          {project.name}
+        </button>
+        <span aria-hidden>/</span>
+        <span className="px-1 py-0.5 font-medium text-foreground">
+          {boardOpen ? "Pauta de conteúdo" : TAB_LABELS[tab]}
+        </span>
+      </nav>
 
       {/* Cabeçalho do projeto — identidade, cliente, responsável, status, ações */}
       <ProjectHeader
@@ -582,32 +692,88 @@ function ProjectDetailPage() {
         }
       />
 
-      {/* Níveis 2 e 3 — JOBS › TAREFAS, com comentários por nível e envolvidos no rodapé */}
-      <JobsPanel
-        brandId={brandId!}
-        projectId={projectId}
-        projectName={project.name}
-        clientName={clientName}
-        team={team}
-        currentUserId={userId}
-        pautasContent={
-          <div className="overflow-hidden rounded-lg border border-border/60">{pautasContent}</div>
+      {/* Funil do ciclo de conteúdo — mesma paleta usada nas pautas e nos cards */}
+      <StageFunnel
+        counts={funnelCounts}
+        onSelect={(stage) =>
+          setSearch({ tab: "jobs", board: "board", pauta: undefined, estagio: stage ?? undefined })
         }
-        pautasCount={items.length + extraPosts.length}
-        footer={
-          <div className="space-y-3">
-            <ProjectHoursCard brandId={brandId!} projectId={projectId} />
-            <InvolvedPeople
-              brandId={brandId!}
-              projectId={projectId}
-              team={team}
-              canEdit={canEditProject}
-              compact
-            />
-          </div>
-        }
-
       />
+
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setSearch({ tab: v as ProjectTab, board: undefined })}
+      >
+        <TabsList>
+          {PROJECT_TABS.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {TAB_LABELS[t]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {tab === "comments" ? (
+        <DashboardPanelSurface className="p-4">
+          <CommentThread
+            brandId={brandId!}
+            level="project"
+            projectId={projectId}
+            currentUserId={userId}
+          />
+        </DashboardPanelSurface>
+      ) : tab === "links" ? (
+        <DashboardPanelSurface className="p-4">
+          <WorkLinks target="project" targetId={projectId} readOnly={!canEditProject} />
+        </DashboardPanelSurface>
+      ) : boardOpen ? (
+        /* Board de pautas — nível "job de conteúdo" aberto in-place */
+        <PautaBoard
+          items={boardItems}
+          view={boardView}
+          onViewChange={(v) => setSearch({ board: v })}
+          onOpenItem={(key) => setOpenPautaKey(key)}
+          stage={search.estagio ?? null}
+          onStageChange={(s) => setSearch({ estagio: s ?? undefined })}
+        />
+      ) : (
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          {/* Níveis 2 e 3 — JOBS › TAREFAS (a pauta é um job de conteúdo na mesma lista) */}
+          <JobsPanel
+            brandId={brandId!}
+            projectId={projectId}
+            projectName={project.name}
+            clientName={clientName}
+            team={team}
+            currentUserId={userId}
+            initialMode={tab === "jobs" ? "jobs" : "overview"}
+            onOpenPautas={() => setSearch({ tab: "jobs", board: "board" })}
+            pautasContent={
+              <div className="overflow-hidden rounded-lg border border-border/60">
+                {pautasContent}
+              </div>
+            }
+            pautasCount={items.length + extraPosts.length}
+            footer={
+              <div className="space-y-3">
+                <ProjectHoursCard brandId={brandId!} projectId={projectId} />
+                <InvolvedPeople
+                  brandId={brandId!}
+                  projectId={projectId}
+                  team={team}
+                  canEdit={canEditProject}
+                  compact
+                />
+              </div>
+            }
+          />
+
+          <aside className="min-w-0 space-y-4">
+            <UnitNetworkMatrix items={boardItems} />
+            <UpcomingDeadlines entries={deadlines} />
+          </aside>
+        </div>
+      )}
 
       {/* Resumo da pauta em modal — evita sair da gestão do projeto */}
       <PautaDetailModal
@@ -620,6 +786,7 @@ function ProjectDetailPage() {
         team={team}
         currentUserId={userId}
         canEdit={canEditProject}
+        variant="drawer"
       />
 
       {/* Configurações do projeto */}

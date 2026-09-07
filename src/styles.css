@@ -73,7 +73,16 @@
   --color-stage-published: var(--stage-published);
   --color-brand-lime: var(--brand-lime);
   --color-brand-lime-foreground: var(--brand-lime-foreground);
+  /* Status de publicação (calendário) — COR = STATUS */
+  --color-pub-draft: var(--pub-draft);
+  --color-pub-reserved: var(--pub-reserved);
+  --color-pub-awaiting: var(--pub-awaiting);
+  --color-pub-scheduled: var(--pub-scheduled);
+  --color-pub-published: var(--pub-published);
+  --color-pub-ai: var(--pub-ai);
+  --color-pub-failed: var(--pub-failed);
 }
+
 
 :root {
   /* Geek Sleek — Light (Stripe/Vercel) */
@@ -124,7 +133,16 @@
   --stage-published: oklch(0.65 0.22 340);
   --brand-lime: oklch(0.92 0.24 125);
   --brand-lime-foreground: oklch(0.35 0.12 130);
+  /* Status de publicação — referência #64748B #E0A011 #EC4899 #0EA5E9 #16A34A #8B5CF6 #DC2626 */
+  --pub-draft: oklch(0.554 0.041 257.417);
+  --pub-reserved: oklch(0.72 0.144 78.5);
+  --pub-awaiting: oklch(0.656 0.221 354.308);
+  --pub-scheduled: oklch(0.64 0.152 237.323);
+  --pub-published: oklch(0.596 0.145 163.225);
+  --pub-ai: oklch(0.606 0.25 292.717);
+  --pub-failed: oklch(0.577 0.245 27.325);
 }
+
 
 .dark {
   /* Geek Sleek — Dark (Vercel) */
@@ -174,7 +192,16 @@
   --stage-published: oklch(0.72 0.22 340);
   --brand-lime: oklch(0.92 0.24 125);
   --brand-lime-foreground: oklch(0.28 0.1 130);
+  /* Status de publicação — mesmas matizes, luminosidade ajustada ao escuro */
+  --pub-draft: oklch(0.72 0.035 257.417);
+  --pub-reserved: oklch(0.82 0.15 82);
+  --pub-awaiting: oklch(0.74 0.19 354.308);
+  --pub-scheduled: oklch(0.76 0.13 231);
+  --pub-published: oklch(0.75 0.16 158);
+  --pub-ai: oklch(0.74 0.19 292.717);
+  --pub-failed: oklch(0.72 0.21 22.216);
 }
+
 
 @layer base {
   * {

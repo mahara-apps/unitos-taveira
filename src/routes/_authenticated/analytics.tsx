@@ -38,6 +38,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SocialAnalyticsDashboard } from "@/components/analytics/social-analytics-dashboard";
+import { useSocialDashboard } from "@/components/analytics/use-social-dashboard";
+import { RefreshCw, GitCompareArrows } from "lucide-react";
 import {
   DateRangePicker,
   daysToDateRange,
@@ -128,6 +130,7 @@ function AnalyticsPage() {
     channels: string[];
     tags: string[];
   }>({ client_ids: [], assignee_ids: [], project_ids: [], channels: [], tags: [] });
+  const [compare, setCompare] = useState(false);
 
   const { start, end, period } = useMemo(() => {
     const to = range?.to ?? new Date();
@@ -202,25 +205,24 @@ function AnalyticsPage() {
       subtitle: clientId
         ? "Visão do cliente ativo — canais e métricas do escopo"
         : "Visão executiva da agência — produção, social, equipe e clientes",
-      actions: (
-        <div className="flex items-center gap-2">
-          <DateRangePicker
-            value={range}
-            onChange={(r: DateRange | undefined) => r && setRange(r)}
-            maxDate={new Date()}
-          />
-          <FiltersSheet
-            filters={filters}
-            setFilters={setFilters}
-            clients={clientId ? [] : (clientsQuery.data ?? [])}
-            team={teamQuery.data?.members ?? []}
-            projects={projectsQuery.data?.projects ?? []}
-          />
-        </div>
-      ),
     },
-    [range, filters, clientId, clientsQuery.data, teamQuery.data, projectsQuery.data],
+    [clientId],
   );
+
+  const social = useSocialDashboard({
+    brandId: brandId ?? null,
+    period,
+    since: start,
+    until: end,
+    clientId,
+    compare,
+  });
+
+  const activeClientName = useMemo(() => {
+    if (!clientId) return null;
+    const found = (clientsQuery.data ?? []).find((c: any) => c.id === clientId);
+    return (found as any)?.name ?? null;
+  }, [clientId, clientsQuery.data]);
 
   if (!brandId) {
     return (
@@ -237,7 +239,27 @@ function AnalyticsPage() {
 
   return (
     <DashboardPageShell>
-      <Tabs defaultValue="social" className="space-y-6">
+      <AnalyticsContextBar
+        clientName={activeClientName}
+        range={range}
+        onRangeChange={(r) => r && setRange(r)}
+        compare={compare}
+        onCompareChange={setCompare}
+        generatedAt={social.generatedAt}
+        refreshing={social.refreshing}
+        cooldownSeconds={social.cooldownSeconds}
+        onRefresh={social.refresh}
+        filters={
+          <FiltersSheet
+            filters={filters}
+            setFilters={setFilters}
+            clients={clientId ? [] : (clientsQuery.data ?? [])}
+            team={teamQuery.data?.members ?? []}
+            projects={projectsQuery.data?.projects ?? []}
+          />
+        }
+      />
+      <Tabs defaultValue="social" className="space-y-4">
         <TabsList>
           <TabsTrigger value="social">Social</TabsTrigger>
           <TabsTrigger value="production">Produção</TabsTrigger>
@@ -246,14 +268,8 @@ function AnalyticsPage() {
           {!clientId && <TabsTrigger value="clients">Clientes</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="social" className="space-y-6">
-          <SocialAnalyticsDashboard
-            brandId={brandId}
-            period={period}
-            since={start}
-            until={end}
-            clientId={clientId}
-          />
+        <TabsContent value="social" className="space-y-4">
+          <SocialAnalyticsDashboard state={social} clientId={clientId} compare={compare} />
         </TabsContent>
         <TabsContent value="production" className="space-y-6">
           <ProductionTab loading={analyticsQuery.isLoading} data={data?.production} />
@@ -280,6 +296,80 @@ function AnalyticsPage() {
         )}
       </Tabs>
     </DashboardPageShell>
+  );
+}
+
+// ---------- Barra de contexto ----------
+
+const CONTEXT_TIME_FMT = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+function AnalyticsContextBar({
+  clientName,
+  range,
+  onRangeChange,
+  compare,
+  onCompareChange,
+  generatedAt,
+  refreshing,
+  cooldownSeconds,
+  onRefresh,
+  filters,
+}: {
+  clientName: string | null;
+  range: DateRange | undefined;
+  onRangeChange: (r: DateRange | undefined) => void;
+  compare: boolean;
+  onCompareChange: (v: boolean) => void;
+  generatedAt: string | null;
+  refreshing: boolean;
+  cooldownSeconds: number;
+  onRefresh: () => void;
+  filters: React.ReactNode;
+}) {
+  const cacheLabel = (() => {
+    if (!generatedAt) return null;
+    const d = new Date(generatedAt);
+    return Number.isNaN(d.getTime()) ? null : CONTEXT_TIME_FMT.format(d);
+  })();
+  const blocked = cooldownSeconds > 0;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
+      <div className="min-w-0 text-sm font-extrabold tracking-tight">
+        Analytics
+        <span className="ml-1 truncate text-xs font-semibold text-muted-foreground">
+          · {clientName ?? "todos os clientes"} · performance
+        </span>
+      </div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" />
+          {cacheLabel ? `Cache · ${cacheLabel}` : "Sem cache"}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 px-2.5 text-xs"
+          onClick={onRefresh}
+          disabled={refreshing || blocked}
+          title={blocked ? `Aguarde ${cooldownSeconds}s` : "Atualizar métricas agora"}
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+          {blocked ? `${cooldownSeconds}s` : "Atualizar"}
+        </Button>
+        <DateRangePicker value={range} onChange={onRangeChange} maxDate={new Date()} />
+        <Button
+          variant={compare ? "default" : "outline"}
+          size="sm"
+          className="h-8 gap-1.5 px-2.5 text-xs"
+          aria-pressed={compare}
+          onClick={() => onCompareChange(!compare)}
+        >
+          <GitCompareArrows className="h-3.5 w-3.5" />
+          vs. período anterior
+        </Button>
+        {filters}
+      </div>
+    </div>
   );
 }
 

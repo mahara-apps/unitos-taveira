@@ -97,7 +97,104 @@ export const PUBLICATION_STATUS: Record<PublicationOverall, StatusToken> = {
   },
 };
 
+/**
+ * Agrupamento de exibição: os estados reais do pipeline são reduzidos aos 7
+ * rótulos de status usados na tela do Calendário (COR = STATUS).
+ * Tokens de cor vêm de `--pub-*` em src/styles.css (claro e escuro).
+ */
+export type PublicationStatusGroup =
+  | "draft"
+  | "reserved"
+  | "awaiting"
+  | "scheduled"
+  | "published"
+  | "ai"
+  | "failed";
+
+export const STATUS_GROUP: Record<PublicationOverall, PublicationStatusGroup> = {
+  draft: "draft",
+  cancelled: "draft",
+  ready: "reserved",
+  reserved: "reserved",
+  awaiting_approval: "awaiting",
+  scheduled: "scheduled",
+  publishing: "scheduled",
+  published: "published",
+  proposed: "ai",
+  partial: "failed",
+  failed: "failed",
+};
+
+export const STATUS_GROUP_TOKEN: Record<PublicationStatusGroup, StatusToken> = {
+  draft: {
+    label: "Rascunho",
+    chip: "border-pub-draft/30 bg-pub-draft/10 text-pub-draft",
+    dot: "bg-pub-draft",
+    text: "text-pub-draft",
+    accent: "border-l-pub-draft",
+  },
+  reserved: {
+    label: "Data reservada",
+    chip: "border-pub-reserved/30 bg-pub-reserved/10 text-pub-reserved",
+    dot: "bg-pub-reserved",
+    text: "text-pub-reserved",
+    accent: "border-l-pub-reserved",
+  },
+  awaiting: {
+    label: "Aguardando aprovação",
+    chip: "border-pub-awaiting/30 bg-pub-awaiting/10 text-pub-awaiting",
+    dot: "bg-pub-awaiting",
+    text: "text-pub-awaiting",
+    accent: "border-l-pub-awaiting",
+  },
+  scheduled: {
+    label: "Agendado",
+    chip: "border-pub-scheduled/30 bg-pub-scheduled/10 text-pub-scheduled",
+    dot: "bg-pub-scheduled",
+    text: "text-pub-scheduled",
+    accent: "border-l-pub-scheduled",
+  },
+  published: {
+    label: "Publicado",
+    chip: "border-pub-published/30 bg-pub-published/10 text-pub-published",
+    dot: "bg-pub-published",
+    text: "text-pub-published",
+    accent: "border-l-pub-published",
+  },
+  ai: {
+    label: "Sugerido pela IA",
+    chip: "border-pub-ai/30 bg-pub-ai/10 text-pub-ai",
+    dot: "bg-pub-ai",
+    text: "text-pub-ai",
+    accent: "border-l-pub-ai",
+  },
+  failed: {
+    label: "Falhou",
+    chip: "border-pub-failed/30 bg-pub-failed/10 text-pub-failed",
+    dot: "bg-pub-failed",
+    text: "text-pub-failed",
+    accent: "border-l-pub-failed",
+  },
+};
+
+/** Ordem canônica da legenda fixa. */
+export const STATUS_GROUP_ORDER: PublicationStatusGroup[] = [
+  "draft",
+  "reserved",
+  "awaiting",
+  "scheduled",
+  "published",
+  "ai",
+  "failed",
+];
+
+/** Token de exibição (7 grupos) para um estado real do pipeline. */
+export function statusDisplay(overall: PublicationOverall): StatusToken {
+  return STATUS_GROUP_TOKEN[STATUS_GROUP[overall] ?? "draft"];
+}
+
 export const DESTINATION_STATUS_LABEL: Record<string, string> = {
+
   draft: "Rascunho",
   scheduled: "Agendado",
   publishing: "Publicando",

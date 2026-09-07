@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DashboardPanelSurface, DashboardIconFrame } from "@/components/ui/dashboard-primitives";
 
 import {
-  PUBLICATION_STATUS,
+  statusDisplay,
   dayLabel,
   formatLabel,
   relativeLabel,
@@ -36,6 +36,7 @@ function Block({
   tone,
   title,
   count,
+  big,
   children,
   action,
 }: {
@@ -43,6 +44,8 @@ function Block({
   tone?: string;
   title: string;
   count?: React.ReactNode;
+  /** Número grande de resumo (visão Painel). */
+  big?: number;
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
@@ -58,12 +61,18 @@ function Block({
             ) : null}
           </div>
         </div>
-        {action}
+        <div className="flex items-center gap-2">
+          {big !== undefined ? (
+            <span className="text-2xl font-semibold leading-none tabular-nums">{big}</span>
+          ) : null}
+          {action}
+        </div>
       </div>
       {children}
     </DashboardPanelSurface>
   );
 }
+
 
 function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
@@ -120,6 +129,8 @@ export function OperationsPanel({
   onOpen,
   onOpenDraft,
   onSeeAllDrafts,
+  layout = "column",
+
 }: {
   upcoming: PublicationItem[];
   attention: PublicationItem[];
@@ -133,22 +144,28 @@ export function OperationsPanel({
   onOpen: (item: PublicationItem) => void;
   onOpenDraft: (draft: PendingSchedulePost, index: number) => void;
   onSeeAllDrafts?: () => void;
+  /** "column" = coluna lateral; "grid" = visão Painel com números grandes. */
+  layout?: "column" | "grid";
 }) {
+  const grid = layout === "grid";
+  const big = (n: number) => (grid ? n : undefined);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn(grid ? "grid gap-3 md:grid-cols-2" : "flex flex-col gap-3")}>
       <Block
-        tone="border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300"
+        tone="border-pub-scheduled/30 bg-pub-scheduled/10 text-pub-scheduled"
         icon={<CalendarClock className="h-4 w-4" />}
         title="Próximas publicações"
+        big={big(upcoming.length)}
         count={`${upcoming.length} na fila`}
+
       >
         {upcoming.length === 0 ? (
           <Empty title="Nada agendado à frente" hint="Agende uma peça aprovada para vê-la aqui." />
         ) : (
           <ul className="divide-y divide-border/60">
             {upcoming.slice(0, 5).map((it) => {
-              const token = PUBLICATION_STATUS[it.overall];
+              const token = statusDisplay(it.overall);
               return (
                 <li key={it.postId}>
                   <button
@@ -189,9 +206,11 @@ export function OperationsPanel({
       </Block>
 
       <Block
-        tone="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+        tone="border-pub-awaiting/30 bg-pub-awaiting/10 text-pub-awaiting"
         icon={<AlertTriangle className="h-4 w-4" />}
         title="Precisam de atenção"
+        big={big(attention.length)}
+
         count={
           attention.length === 0
             ? "Nada pendente"
@@ -224,7 +243,7 @@ export function OperationsPanel({
                     <span
                       className={cn(
                         "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                        PUBLICATION_STATUS[it.overall].dot,
+                        statusDisplay(it.overall).dot,
                       )}
                       aria-hidden
                     />
@@ -252,6 +271,8 @@ export function OperationsPanel({
         tone="border-destructive/30 bg-destructive/10 text-destructive"
         icon={<XCircle className="h-4 w-4" />}
         title="Falhas recentes"
+        big={big(failures.length)}
+
         count={
           failures.length === 0
             ? "Nenhuma falha"
@@ -307,6 +328,8 @@ export function OperationsPanel({
         tone="border-border/60 bg-muted/50 text-muted-foreground"
         icon={<FileText className="h-4 w-4" />}
         title="Rascunhos"
+        big={big(drafts.length)}
+
         count={
           draftsLoading
             ? "Carregando…"

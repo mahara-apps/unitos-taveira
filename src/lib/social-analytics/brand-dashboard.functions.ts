@@ -73,7 +73,18 @@ export type UnifiedTopPost = {
   channelLabel: string;
 };
 
+/** Faixas do dia usadas no mapa de calor de melhor horário. */
+export type DayBucket = "madrugada" | "manha" | "tarde" | "noite";
+
+export type BestSlotCell = {
+  weekday: number; // 0=Dom … 6=Sáb
+  bucket: DayBucket;
+  score: number;
+  posts: number;
+};
+
 export type BestSlot = {
+
   weekday: number; // 0=Sun … 6=Sat
   hour: number; // 0-23
   score: number;
@@ -101,6 +112,8 @@ export type BrandSocialDashboard = {
   topPosts: UnifiedTopPost[];
   bestHours: BestSlot[]; // top 5 hours
   bestDays: BestSlot[]; // 7 weekdays
+  /** Matriz dia x faixa do dia (mapa de calor). */
+  bestSlotsMatrix?: BestSlotCell[];
   insights: BrainSocialInsight[];
   warnings: string[];
 };
@@ -135,6 +148,7 @@ export type BrandSocialTopPayload = {
   topPosts: UnifiedTopPost[];
   bestHours: BestSlot[];
   bestDays: BestSlot[];
+  bestSlotsMatrix?: BestSlotCell[];
   insights: BrainSocialInsight[];
   warnings: string[];
 };
@@ -463,6 +477,7 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
     const topPostsAll: UnifiedTopPost[] = [];
     const slotAgg = new Map<string, BestSlot>();
     const weekdayAgg = new Map<number, BestSlot>();
+    const matrixAgg = new Map<string, BestSlotCell>();
 
     for (const r of results) {
       if (r.status === "rejected") {
@@ -522,6 +537,13 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
           w.score += eng;
           w.posts += 1;
           weekdayAgg.set(weekday, w);
+
+          const bucket = hourBucket(hour);
+          const mKey = `${weekday}-${bucket}`;
+          const cell = matrixAgg.get(mKey) ?? { weekday, bucket, score: 0, posts: 0 };
+          cell.score += eng;
+          cell.posts += 1;
+          matrixAgg.set(mKey, cell);
         }
       }
     }
@@ -535,6 +557,9 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
     const bestDays = Array.from(weekdayAgg.values()).sort((a, b) => b.score - a.score);
+    const bestSlotsMatrix = Array.from(matrixAgg.values()).sort(
+      (a, b) => a.weekday - b.weekday || DAY_BUCKETS.indexOf(a.bucket) - DAY_BUCKETS.indexOf(b.bucket),
+    );
 
     let insights: BrainSocialInsight[] = [];
     try {
@@ -568,6 +593,7 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
       topPosts,
       bestHours,
       bestDays,
+      bestSlotsMatrix,
       insights,
       warnings,
     };
@@ -576,6 +602,15 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+export const DAY_BUCKETS: DayBucket[] = ["madrugada", "manha", "tarde", "noite"];
+
+function hourBucket(hour: number): DayBucket {
+  if (hour < 6) return "madrugada";
+  if (hour < 12) return "manha";
+  if (hour < 18) return "tarde";
+  return "noite";
+}
 
 function parseDays(period: string): number {
   return Math.min(Math.max(Number.parseInt(period, 10) || 30, 1), 365);
