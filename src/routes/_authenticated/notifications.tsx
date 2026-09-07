@@ -23,6 +23,7 @@ import {
   relativeTimePtBr,
   type NotificationBucket,
 } from "@/lib/notifications-format";
+import { NotificationLink } from "@/components/notifications/notification-link";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
   beforeLoad: () => ensureFeatureEnabled("notifications"),
@@ -249,15 +250,9 @@ function NotificationRow({
   );
   return (
     <li className="hover:bg-muted/40">
-      {n.href ? (
-        <Link to={n.href} onClick={handleClick} className="block">
-          {content}
-        </Link>
-      ) : (
-        <button type="button" onClick={handleClick} className="block w-full text-left">
-          {content}
-        </button>
-      )}
+      <NotificationLink notification={n} onNavigate={handleClick} className="block">
+        {content}
+      </NotificationLink>
     </li>
   );
 }

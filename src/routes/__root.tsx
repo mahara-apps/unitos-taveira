@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SessionExpiredNotice } from "@/components/session-expired-notice";
+
 import {
   Outlet,
   Link,
@@ -190,8 +192,10 @@ function RootComponent() {
       <ThemeProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        <SessionExpiredNotice />
         <Toaster />
       </ThemeProvider>
     </QueryClientProvider>
   );
+
 }

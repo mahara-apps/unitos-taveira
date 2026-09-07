@@ -4,7 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import type { LanguageModel } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { decryptCredential } from "./credentials-crypto.server";
+import { decryptCredential, isCredentialDecryptError } from "./credentials-crypto.server";
 import {
   resolveModel,
   nextFallbackModel,
@@ -140,7 +140,17 @@ export async function getBrandProviderKey(
     );
   }
 
-  const apiKey = await decryptCredential(credRow.ciphertext as string);
+  let apiKey: string;
+  try {
+    apiKey = await decryptCredential(credRow.ciphertext as string);
+  } catch (err) {
+    if (isCredentialDecryptError(err)) {
+      throw new Error(
+        `ai_provider_key_unreadable:${provider}: a chave de IA salva não pôde ser lida nesta instalação. Salve a chave do provedor novamente em Configurações > Conexões.`,
+      );
+    }
+    throw err;
+  }
   return { provider, apiKey };
 }
 

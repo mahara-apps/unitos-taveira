@@ -207,11 +207,24 @@ export async function resolveConnection(
   try {
     accessToken = await decryptCredential(row.access_token_ciphertext);
   } catch {
-    throw new SocialServiceError(
-      "token_decrypt_failed",
-      "Falha ao decriptar token da conexão",
-      500,
-    );
+    // O token está gravado, mas não é mais legível: a chave de criptografia da
+    // instalação (`BRAND_CREDENTIALS_SECRET`) não é a mesma que o cifrou. Não é
+    // erro de servidor nem falha transitória — só reconectar resolve. Marcamos a
+    // conexão para que a tela avise antes de o usuário abrir as métricas.
+    const label = row.external_name ?? row.account_username ?? row.external_id;
+    const message = `Conexão "${label}" precisa ser reconectada: o token salvo não pode mais ser lido. Reconecte a conta em Integrações.`;
+    try {
+      await supabase
+        .from("social_connections")
+        .update({ status: "needs_reconnect", last_error: message })
+        .eq("id", row.id);
+    } catch {
+      // Sinalização é best-effort: nunca substitui o erro devolvido ao usuário.
+    }
+    throw new SocialServiceError("token_decrypt_failed", message, 409, {
+      connectionId: row.id,
+      needsReconnect: true,
+    });
   }
 
   const ctx: SocialProviderContext = {

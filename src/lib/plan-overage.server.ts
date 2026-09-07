@@ -47,7 +47,8 @@ export async function loadApprovedOverage(
 /** `block` = excedente exige liberação. `warn` = volumetria livre (só aviso). */
 export type OveragePolicy = "block" | "warn";
 
-const isPolicy = (v: unknown): v is OveragePolicy => v === "block" || v === "warn";
+
+
 
 /**
  * Política efetiva: override do cliente vence; sem override usa o padrão do
@@ -57,25 +58,17 @@ export async function resolveOveragePolicy(
   supabase: SupabaseClient,
   args: { brandId: string; clientId?: string | null },
 ): Promise<OveragePolicy> {
-  const [brandRes, clientRes] = await Promise.all([
-    supabase
-      .from("brands" as never)
-      .select("overage_policy")
-      .eq("id", args.brandId)
-      .maybeSingle(),
-    args.clientId
-      ? supabase
-          .from("clients" as never)
-          .select("overage_policy")
-          .eq("id", args.clientId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-  const clientPolicy = (clientRes.data as { overage_policy?: unknown } | null)?.overage_policy;
-  if (isPolicy(clientPolicy)) return clientPolicy;
-  const brandPolicy = (brandRes.data as { overage_policy?: unknown } | null)?.overage_policy;
-  return isPolicy(brandPolicy) ? brandPolicy : "block";
+  // Fonte única: `scope_policy` do cliente/workspace, com fallback no campo
+  // legado `overage_policy` (mantido para quem já o configurou).
+  const { resolveClientScopePolicy } = await import("@/lib/client-policy.server");
+  const policy = await resolveClientScopePolicy(supabase, {
+    brandId: args.brandId,
+    clientId: args.clientId ?? null,
+  });
+  // Só bloqueia a geração por IA quando essa frente está no escopo do bloqueio.
+  return policy.mode === "block" && policy.applies.includes("ai") ? "block" : "warn";
 }
+
 
 /**
  * Papéis com autoridade para gerar acima da volumetria sem pedir liberação:

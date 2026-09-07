@@ -301,3 +301,24 @@ destino (`public._unitos_applied_deltas`): repetir a atualização com o mesmo
 delta é no-op. Ela roda **antes** do build, para que o código novo nunca fique
 publicado sobre um banco antigo. Se ela falhar, a atualização para com o motivo
 exato — nunca termina "verde" com banco desatualizado.
+
+---
+
+## Regra MASTER-first (vale para QUALQUER alteracao)
+
+Nao existe alteracao "so no MASTER". Toda mudanca de banco, seed ou modulo
+precisa nascer no MASTER e ir para o pacote de propagacao antes de ser
+considerada pronta:
+
+1. Alteracao aplicada no MASTER.
+2. `python3 supabase/baseline-snapshot/tools/build_delta.py` (regenera o pacote
+   e imprime a impressao digital).
+3. `supabase/baseline-snapshot/tools/delta_version.txt`: novo `sha256` e nova
+   `version`; o mesmo valor vai para `MASTER_RELEASE_VERSION`.
+4. `supabase/install/verify-installation.sql`: tabelas novas entram na checagem
+   80 (cobertura do delta), para que uma instalacao incompleta acuse FAIL.
+5. `bun run master:check` verde.
+6. Publicar o MASTER e autorizar "Atualizar" em cada instalacao.
+
+Esquecer qualquer passo reprova a checagem do projeto — nao chega quebrado na
+instalacao do cliente.

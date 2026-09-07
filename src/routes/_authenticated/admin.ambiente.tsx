@@ -9,12 +9,15 @@ import { getEnvironmentInfoFn, listAdminAuditFn } from "@/lib/admin-environment.
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
+import { MASTER_RELEASE_VERSION } from "@/lib/installation/manager-contract";
 
 export const Route = createFileRoute("/_authenticated/admin/ambiente")({
   component: AdminEnvironmentPage,
 });
 
-const APP_VERSION = "1.0";
+// Versão real do código publicado nesta instalação — a MESMA que o painel de
+// Instalações compara. Nunca escrever número à mão aqui.
+const APP_VERSION = MASTER_RELEASE_VERSION;
 
 function fmt(value: string | null | undefined) {
   if (!value) return "—";

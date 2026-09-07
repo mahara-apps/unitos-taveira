@@ -290,38 +290,64 @@ export async function applyStatementByStatement(
       return { ok: false, error: "Operação cancelada pelo Super Admin.", processed };
     }
     const batch = statements.slice(start, Math.min(start + batchSize, stopAt));
-    const guarded = batch
-      .map((statement, index) => {
-        let suffix = index;
-        let tag = `$unitos_stmt_${suffix}$`;
-        while (statement.includes(tag)) {
-          suffix += batch.length;
-          tag = `$unitos_stmt_${suffix}$`;
-        }
-        return [
-          "DO $unitos_guard$",
-          "BEGIN",
-          `  EXECUTE ${tag}${statement}${tag};`,
-          "EXCEPTION",
-          "  WHEN SQLSTATE '42710' OR SQLSTATE '42P07' OR SQLSTATE '42P06'",
-          "    OR SQLSTATE '42701' OR SQLSTATE '42723' OR SQLSTATE '23505' THEN NULL;",
-          "  WHEN SQLSTATE '42883' OR SQLSTATE '42P01' OR SQLSTATE '42704'",
-          "    OR SQLSTATE '42703' OR SQLSTATE '42P17' THEN",
-          `    INSERT INTO public._unitos_deferred_sql (stmt) VALUES (${tag}${statement}${tag});`,
-          "  WHEN SQLSTATE '42P16' THEN",
-          "    IF SQLERRM ILIKE '%multiple primary key%' THEN",
-          "      NULL;",
-          "    ELSE",
-          "      RAISE;",
-          "    END IF;",
-          "END",
-          "$unitos_guard$;",
-        ].join("\n");
-      })
-      .join("\n");
-    const result = await management.query(`SET check_function_bodies = off;\n${guarded}`);
+    // `ALTER TYPE ... ADD VALUE` não pode rodar dentro de bloco/função: o
+    // Postgres recusa com 25001/0A000. Esses statements saem do bloco protegido
+    // e vão isolados, na mesma ordem, tolerando "já existe".
+    const segments: Array<{ kind: "guarded" | "enum"; statements: string[] }> = [];
+    for (const statement of batch) {
+      const isEnumAdd = /^\s*alter\s+type\b[\s\S]*\badd\s+value\b/i.test(statement);
+      const last = segments[segments.length - 1];
+      if (last && ((last.kind === "enum") === isEnumAdd)) last.statements.push(statement);
+      else segments.push({ kind: isEnumAdd ? "enum" : "guarded", statements: [statement] });
+    }
 
-    if (!result.ok) return { ok: false, error: result.error, processed };
+    for (const segment of segments) {
+      if (segment.kind === "enum") {
+        for (const statement of segment.statements) {
+          const enumRes = await management.query(statement);
+          if (
+            !enumRes.ok &&
+            !/already exists|duplicate|does not exist/i.test(enumRes.error ?? "")
+          ) {
+            return { ok: false, error: enumRes.error, processed };
+          }
+        }
+        continue;
+      }
+
+      const guarded = segment.statements
+        .map((statement, index) => {
+          let suffix = index;
+          let tag = `$unitos_stmt_${suffix}$`;
+          while (statement.includes(tag)) {
+            suffix += segment.statements.length;
+            tag = `$unitos_stmt_${suffix}$`;
+          }
+          return [
+            "DO $unitos_guard$",
+            "BEGIN",
+            `  EXECUTE ${tag}${statement}${tag};`,
+            "EXCEPTION",
+            "  WHEN SQLSTATE '42710' OR SQLSTATE '42P07' OR SQLSTATE '42P06'",
+            "    OR SQLSTATE '42701' OR SQLSTATE '42723' OR SQLSTATE '23505' THEN NULL;",
+            "  WHEN SQLSTATE '42883' OR SQLSTATE '42P01' OR SQLSTATE '42704'",
+            "    OR SQLSTATE '42703' OR SQLSTATE '42P17' THEN",
+            `    INSERT INTO public._unitos_deferred_sql (stmt) VALUES (${tag}${statement}${tag});`,
+            "  WHEN SQLSTATE '42P16' THEN",
+            "    IF SQLERRM ILIKE '%multiple primary key%' THEN",
+            "      NULL;",
+            "    ELSE",
+            "      RAISE;",
+            "    END IF;",
+            "END",
+            "$unitos_guard$;",
+          ].join("\n");
+        })
+        .join("\n");
+      const result = await management.query(`SET check_function_bodies = off;\n${guarded}`);
+      if (!result.ok) return { ok: false, error: result.error, processed };
+    }
+
     processed += batch.length;
     await options?.onProgress?.(processed, statements.length);
   }
@@ -1108,6 +1134,8 @@ export function createDeployClient(input: {
   masterRepo?: string | null;
   /** `owner/repo` DA INSTALAÇÃO — repositório que o deploy realmente constrói. */
   repo?: string | null;
+  /** Token do GitHub — necessário para ler o commit do MASTER (repo privado). */
+  githubToken?: string | null;
   fetchImpl?: Fetcher;
 }): DeployClient {
   const doFetch = input.fetchImpl ?? fetch;
@@ -1276,13 +1304,33 @@ export function createDeployClient(input: {
       }
     },
     async latestCommit() {
+      // O repositório do MASTER é privado: sem o token do GitHub a API responde
+      // 403. Melhor dizer o que falta do que devolver um HTTP cru.
+      const gh = (input.githubToken ?? "").trim();
+      if (!gh) {
+        return {
+          ok: false,
+          error:
+            "Token do GitHub não configurado (UNITOS_GITHUB_TOKEN) — não é possível ler o commit do MASTER.",
+        };
+      }
       try {
-        const res = await doFetch(
-          `https://api.github.com/repos/${masterRepo}/commits/main`,
-          { headers: { accept: "application/vnd.github+json" } },
-        );
+        const res = await doFetch(`https://api.github.com/repos/${masterRepo}/commits/main`, {
+          headers: {
+            accept: "application/vnd.github+json",
+            authorization: `Bearer ${gh}`,
+            "x-github-api-version": "2022-11-28",
+          },
+        });
         if (!res.ok) {
-          return { ok: false, error: `HTTP ${res.status} ao consultar o commit do MASTER` };
+          const hint =
+            res.status === 403 || res.status === 404
+              ? " — verifique se o token tem acesso de leitura ao repositório do MASTER"
+              : "";
+          return {
+            ok: false,
+            error: `HTTP ${res.status} ao consultar o commit do MASTER${hint}`,
+          };
         }
         const body = (await res.json().catch(() => ({}))) as { sha?: string };
         if (!body.sha) return { ok: false, error: "commit do MASTER não retornado" };
@@ -1835,6 +1883,7 @@ export async function runAutomatedProvision(input: {
     teamId,
     masterRepo,
     repo: repo.slug,
+    githubToken,
     fetchImpl: input.fetchImpl,
   });
 
@@ -2144,8 +2193,39 @@ export async function runAutomatedProvision(input: {
     );
   } else {
     await mark("secrets", "running");
+    // Secrets são gerados UMA ÚNICA VEZ por instalação e reutilizados depois.
+    // Regerar `BRAND_CREDENTIALS_SECRET` a cada execução tornava ilegíveis os
+    // tokens das contas sociais já cifrados no banco do destino (o erro
+    // "Falha ao decriptar token da conexão"), além de invalidar o segredo do
+    // cron e os segredos do Meta.
+    const { ensureInstallationSecrets } = await import("./credentials.server");
     const secrets = {} as Record<GeneratedSecretVar, string>;
-    for (const name of GENERATED_SECRET_VARS) secrets[name] = generateInstallationSecret();
+    let secretsDetail: string;
+    try {
+      const ensured = await ensureInstallationSecrets({
+        client: client as never,
+        installationId: installation.id,
+        names: GENERATED_SECRET_VARS,
+        generate: () => generateInstallationSecret(),
+      });
+      for (const name of GENERATED_SECRET_VARS) {
+        const value = (ensured.secrets[name] ?? "").trim();
+        if (!value) throw new Error(`Secret ${name} não pôde ser preparado.`);
+        secrets[name] = value;
+      }
+      secretsDetail =
+        ensured.created.length === 0
+          ? "chaves próprias reutilizadas (nenhum acesso salvo é invalidado)"
+          : `chaves próprias: ${ensured.created.length} criada(s), ${ensured.reused.length} reutilizada(s)`;
+    } catch (error) {
+      // Falha fechada de propósito: gerar novas chaves aqui invalidaria em
+      // silêncio os acessos das redes sociais já cifrados no destino.
+      const reason = error instanceof Error ? error.message : "falha ao preparar as chaves";
+      failures.push(reason);
+      await mark("secrets", "error", reason);
+      checks.secrets = "error";
+      return finish(null, null);
+    }
     const isolation = assertSecretsAreExclusive({ generated: secrets, masterEnv: env });
     if (!isolation.ok) {
       failures.push(isolation.reason);
@@ -2164,7 +2244,7 @@ export async function runAutomatedProvision(input: {
       return finish(null, null);
     }
     checks.secrets = "ok";
-    await mark("secrets", "done", "secrets próprios gerados (valores nunca exibidos)");
+    await mark("secrets", "done", secretsDetail);
 
     await mark("deploy", "running");
     const deployment = await deploy.deploymentUrl();
@@ -2782,6 +2862,7 @@ export async function runAutomatedUpdate(input: {
     teamId: (env["UNITOS_VERCEL_TEAM_ID"] ?? "").trim() || null,
     masterRepo,
     repo: repo.slug,
+    githubToken: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
     fetchImpl: input.fetchImpl,
   });
   const code = createCodeClient({

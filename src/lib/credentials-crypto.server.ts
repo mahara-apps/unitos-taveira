@@ -36,13 +36,46 @@ export async function encryptCredential(plaintext: string): Promise<string> {
   return b64encode(out);
 }
 
+/** Código estável para falha de leitura de credencial guardada. */
+export const CREDENTIAL_DECRYPT_CODE = "credential_unreadable";
+
+/**
+ * Erro de domínio para credenciais que não podem ser abertas nesta instalação
+ * (normalmente porque BRAND_CREDENTIALS_SECRET mudou depois de salvar a chave).
+ * Sem isso, o `crypto.subtle.decrypt` vaza o `DOMException: OperationError`
+ * ("The operation failed for an operation-specific reason") direto para a tela.
+ */
+export class CredentialDecryptError extends Error {
+  readonly code = CREDENTIAL_DECRYPT_CODE;
+  constructor(message?: string) {
+    super(
+      message ??
+        "A chave salva não pôde ser lida nesta instalação. Salve a chave novamente em Configurações > Conexões.",
+    );
+    this.name = "CredentialDecryptError";
+  }
+}
+
+export function isCredentialDecryptError(err: unknown): err is CredentialDecryptError {
+  return (
+    err instanceof CredentialDecryptError ||
+    (typeof err === "object" &&
+      err !== null &&
+      (err as { code?: string }).code === CREDENTIAL_DECRYPT_CODE)
+  );
+}
+
 export async function decryptCredential(stored: string): Promise<string> {
   const key = await importKey();
-  const buf = b64decode(stored);
-  const iv = buf.slice(0, 12);
-  const ct = buf.slice(12);
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
-  return new TextDecoder().decode(pt);
+  try {
+    const buf = b64decode(stored);
+    const iv = buf.slice(0, 12);
+    const ct = buf.slice(12);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  } catch {
+    throw new CredentialDecryptError();
+  }
 }
 
 export function maskCredential(value: string): string {

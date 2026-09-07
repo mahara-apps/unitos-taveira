@@ -18,6 +18,7 @@ import {
 
 import { getMyProfile, updateMyProfile, changeMyPassword } from "@/lib/profile.functions";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -433,9 +434,8 @@ function ProfilePage() {
           >
             <SettingsFieldGrid>
               <SettingsField label="Nova senha" htmlFor="pw_new">
-                <Input
+                <PasswordInput
                   id="pw_new"
-                  type="password"
                   value={pw.next}
                   onChange={(e) => setPw({ ...pw, next: e.target.value })}
                   autoComplete="new-password"
@@ -444,9 +444,8 @@ function ProfilePage() {
                 />
               </SettingsField>
               <SettingsField label="Confirmar senha" htmlFor="pw_confirm">
-                <Input
+                <PasswordInput
                   id="pw_confirm"
-                  type="password"
                   value={pw.confirm}
                   onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
                   autoComplete="new-password"

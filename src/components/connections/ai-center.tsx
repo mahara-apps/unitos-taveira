@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -40,6 +41,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardPanelSurface } from "@/components/ui/dashboard-primitives";
 import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import { supportsKind, type ProviderName as AiProviderName } from "@/lib/ai-capabilities";
+import { aiErrorMessage } from "@/lib/ai-error-display";
+
 import { getAiModelStatus, runAiModelHealthNow } from "@/lib/ai-models.functions";
 import { saveProviderKey, testProviderKey, removeProviderKey } from "@/lib/connections.functions";
 import { cn } from "@/lib/utils";
@@ -98,16 +101,17 @@ export const AI_PROVIDERS: ProviderDef[] = [
   {
     id: "groq",
     name: "Groq",
-    hint: "Llama · GPT-OSS",
+    hint: "GPT-OSS · Llama",
     tone: "text-orange-500",
     docs: "console.groq.com",
     icon: Zap,
     models: [
       { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", kind: "text" },
-      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", kind: "text" },
+      { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B", kind: "text" },
       { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant", kind: "text" },
     ],
   },
+
 ];
 
 const PROVIDER_BY_ID = Object.fromEntries(AI_PROVIDERS.map((p) => [p.id, p])) as Record<
@@ -123,6 +127,31 @@ type ProviderConfig = {
   verifiedAt?: string;
   verifyMessage?: string;
 };
+
+/** Chave que existe mas não pode ser aberta nesta instalação. */
+const UNREADABLE_KEY_RE = /não pôde ser lida/i;
+
+function isUnreadableKey(config?: ProviderConfig) {
+  return config?.verified === "invalid" && UNREADABLE_KEY_RE.test(config.verifyMessage ?? "");
+}
+
+function keyStateLabel(config?: ProviderConfig) {
+  if (config?.verified === "valid") return "Chave válida";
+  if (config?.verified === "invalid")
+    return isUnreadableKey(config) ? "Precisa salvar a chave novamente" : "Chave inválida";
+  return "Chave não verificada";
+}
+
+/** Nome amigável de um modelo, quando ele estiver no catálogo da tela. */
+function modelLabel(providerId: string, modelId: string) {
+  const def = PROVIDER_BY_ID[providerId as AiProviderId];
+  return def?.models.find((m) => m.id === modelId)?.label ?? modelId;
+}
+
+function providerLabel(providerId: string) {
+  return PROVIDER_BY_ID[providerId as AiProviderId]?.name ?? providerId;
+}
+
 
 export type AiCenterData = {
   monthlyBudgetUsd?: number;
@@ -516,7 +545,7 @@ function HealthPanel({
       );
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : "Falha ao verificar modelos"),
+      toast.error(aiErrorMessage(e, "Falha ao verificar modelos")),
   });
 
   const connectedProviders = AI_PROVIDERS.filter((p) => providers?.[p.id]?.connected);
@@ -572,7 +601,7 @@ function HealthPanel({
                     {p.name}
                   </div>
                   <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {ok ? "Chave válida" : bad ? "Chave inválida" : "Chave não verificada"}
+                    {keyStateLabel(c)}
                     {c?.verifiedAt ? ` · ${new Date(c.verifiedAt).toLocaleString("pt-BR")}` : ""}
                   </div>
                 </div>
@@ -587,12 +616,17 @@ function HealthPanel({
           {replaced.map((m) => (
             <div
               key={`${m.provider}-${m.role}`}
-              className="flex items-center gap-1.5 text-[11px] text-severity-warning"
+              className="flex items-start gap-1.5 text-[11px] text-severity-warning"
             >
-              <AlertTriangle className="h-3 w-3" />
-              {m.provider}: {m.modelId} substituiu {m.replacedModelId}
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>
+                {providerLabel(m.provider)}: o modelo{" "}
+                {modelLabel(m.provider, m.replacedModelId!)} saiu do ar e foi substituído
+                automaticamente por {modelLabel(m.provider, m.modelId)}.
+              </span>
             </div>
           ))}
+
         </div>
       )}
     </DashboardPanelSurface>
@@ -627,14 +661,14 @@ function ProviderCard({
     mutationFn: () => saveFn({ data: { brandId, provider: provider.id, apiKey: apiKey.trim() } }),
     onSuccess: (res) => {
       if (res.verified === "valid") toast.success(`${provider.name} conectado — chave válida`);
-      else toast.warning(res.message);
+      else toast.warning(aiErrorMessage(res.message, "Chave salva, mas não verificada"));
       setApiKey("");
       setSaveError(null);
       setOpen(false);
       onChanged();
     },
     onError: (e: unknown) => {
-      const msg = e instanceof Error ? e.message : "Falha ao conectar";
+      const msg = aiErrorMessage(e, "Falha ao conectar");
       setSaveError(msg);
       toast.error(msg);
     },
@@ -643,13 +677,13 @@ function ProviderCard({
   const testMut = useMutation({
     mutationFn: () => testFn({ data: { brandId, provider: provider.id } }),
     onSuccess: (res) => {
-      if (res.status === "valid") toast.success(res.message);
-      else if (res.status === "invalid") toast.error(res.message);
-      else toast.warning(res.message);
+      const msg = aiErrorMessage(res.message, "Teste concluído");
+      if (res.status === "valid") toast.success(msg);
+      else if (res.status === "invalid") toast.error(msg);
+      else toast.warning(msg);
       onChanged();
     },
-    onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : "Falha ao testar a chave"),
+    onError: (e: unknown) => toast.error(aiErrorMessage(e, "Falha ao testar a chave")),
   });
 
   const removeMut = useMutation({
@@ -658,7 +692,9 @@ function ProviderCard({
       toast.success(`${provider.name} desconectado`);
       onChanged();
     },
+    onError: (e: unknown) => toast.error(aiErrorMessage(e, "Falha ao desconectar")),
   });
+
 
   const connected = !!config?.connected;
   const Icon = provider.icon;
@@ -721,11 +757,8 @@ function ProviderCard({
                     : "text-severity-warning",
               )}
             >
-              {config?.verified === "valid"
-                ? "Chave válida"
-                : config?.verified === "invalid"
-                  ? "Chave inválida"
-                  : "Chave não verificada"}
+              {keyStateLabel(config)}
+
             </div>
           </>
         ) : (
@@ -795,9 +828,8 @@ function ProviderCard({
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={`key-${provider.id}`}>API Key</Label>
-            <Input
+            <PasswordInput
               id={`key-${provider.id}`}
-              type="password"
               autoComplete="off"
               placeholder="sk-..."
               value={apiKey}

@@ -160,5 +160,25 @@ aplicadas **depois** de `005_auth_trigger.sql`. Sem esse arquivo, uma instalacao
 nova nasce sem briefing import por IA, workspace singleton, `/setup`,
 `installation_meta_app`, leases de `ai_jobs` e autoridade de integracao.
 
-Ao criar novas migrations: rodar `python3 tools/build_delta.py` e conferir os
-limites de contagem em `supabase/install/verify-installation.sql`.
+Ao criar novas migrations, a sequencia obrigatoria e:
+
+1. `python3 supabase/baseline-snapshot/tools/build_delta.py` (regenera o delta e
+   o manifesto);
+2. conferir/ajustar os limites de contagem e as checagens especificas em
+   `supabase/install/verify-installation.sql`;
+3. elevar `MASTER_RELEASE_VERSION` em `src/lib/installation/manager-contract.ts`
+   (as instalacoes so mostram "atualizacao disponivel" quando a versao sobe);
+4. rodar **Atualizar** em cada instalacao (a etapa de banco aplica o delta novo,
+   controlada pelo ledger `public._unitos_applied_deltas`).
+
+Statements `ALTER TYPE ... ADD VALUE` sao executados isolados pela automacao
+(`applyStatementByStatement`), porque o Postgres recusa esse comando dentro de
+bloco `DO`. Mantenha o `IF NOT EXISTS` nesses comandos.
+
+## 1.2.0 — Plano de mídia paga com entrevista guiada
+
+`007_delta_migrations.sql` passou a 53 migrations, incluindo
+`20260906231507` (colunas `interview`/`strategy`/`plan_version` em
+`media_plans`, campos de execução em `media_plan_items` e seed do agente
+`media_planner_paid`). `verify-installation.sql` ganhou as verificações 44 e 45
+para garantir o agente e as 14 colunas novas em instalações derivadas.

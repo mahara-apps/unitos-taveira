@@ -61,6 +61,8 @@ import { PanelEmptyState } from "@/components/ui/panel-empty";
 import { JobsPanel } from "@/components/projects/jobs-panel";
 import { PautaDetailModal, type PautaDetailItem } from "@/components/projects/pauta-detail-modal";
 import { InvolvedPeople } from "@/components/projects/involved-people";
+import { ProjectHoursCard } from "@/components/analytics/timesheet/project-hours-card";
+
 import { StatusPicker } from "@/components/projects/status-picker";
 import { AssigneePicker } from "@/components/projects/assignee-picker";
 import { ProjectHeader } from "@/components/projects/project-header";
@@ -594,6 +596,7 @@ function ProjectDetailPage() {
         pautasCount={items.length + extraPosts.length}
         footer={
           <div className="space-y-3">
+            <ProjectHoursCard brandId={brandId!} projectId={projectId} />
             <InvolvedPeople
               brandId={brandId!}
               projectId={projectId}
@@ -603,6 +606,7 @@ function ProjectDetailPage() {
             />
           </div>
         }
+
       />
 
       {/* Resumo da pauta em modal — evita sair da gestão do projeto */}

@@ -43,10 +43,12 @@ export const MODEL_CATALOG: Record<ProviderName, Record<ProviderRole, string | n
   },
   groq: {
     // Groq expõe a API compatível com OpenAI; ids conforme o catálogo atual.
+    // `llama-3.3-70b-versatile` foi descontinuado e sai do topo da cadeia.
     strategic: "openai/gpt-oss-120b",
-    operational: "llama-3.3-70b-versatile",
+    operational: "openai/gpt-oss-20b",
     image: null, // Groq não gera imagem
   },
+
 };
 
 /**
@@ -79,11 +81,12 @@ export const MODEL_FALLBACKS: Record<ProviderName, Record<ProviderRole, string[]
   groq: {
     strategic: [
       "openai/gpt-oss-120b",
-      "llama-3.3-70b-versatile",
       "moonshotai/kimi-k2-instruct-0905",
+      "openai/gpt-oss-20b",
     ],
-    operational: ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "llama-3.1-8b-instant"],
+    operational: ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.1-8b-instant"],
     image: [],
+
   },
 };
 

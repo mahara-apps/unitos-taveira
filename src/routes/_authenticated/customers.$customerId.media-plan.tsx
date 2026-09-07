@@ -71,6 +71,7 @@ import {
   type MediaPlan,
   type MediaPlanItem,
 } from "@/lib/media-plans.functions";
+import { PlanStrategyPanel } from "@/components/media-plans/plan-strategy-panel";
 import { ensureFeatureEnabled } from "@/lib/feature-flags.gate";
 
 type MediaPlanSearch = {
@@ -306,6 +307,8 @@ function MediaPlanPage() {
       ) : !activePlanId || !planQ.data ? (
         <Skeleton className="h-96 w-full" />
       ) : (
+        <div className="space-y-4">
+        <PlanStrategyPanel plan={planQ.data.plan} items={planQ.data.items} />
         <PlanEditor
           plan={planQ.data.plan}
           items={planQ.data.items}
@@ -323,6 +326,7 @@ function MediaPlanPage() {
             if (confirm("Excluir este plano? Esta ação é irreversível.")) deletePlanMut.mutate();
           }}
         />
+        </div>
       )}
 
       <CreatePlanDialog

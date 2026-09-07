@@ -161,6 +161,25 @@ const EMPTY_FORM: EditForm = {
   notes: "",
 };
 
+/**
+ * Explicação de apoio quando a medição não trouxe detalhe próprio. Evita que o
+ * painel mostre apenas "Atenção" sem dizer o que fazer.
+ */
+function checkHint(id: string, state: string): string | null {
+  if (state === "ok") return null;
+  if (id === "super_admin") {
+    if (state === "attention")
+      return "Primeiro Super Admin ainda não criado — abra /setup na instalação. Não bloqueia a liberação.";
+    if (state === "pending") return "Primeiro acesso ainda não verificado.";
+  }
+  if (id === "workspace" && state === "attention") {
+    return "Workspace ainda não criado na instalação (o modelo é 1 por instalação).";
+  }
+  if (state === "pending") return "Ainda não medido.";
+  return null;
+}
+
+
 function InstallationDetailPage() {
   const { id } = Route.useParams();
   const { novo } = Route.useSearch();
@@ -775,19 +794,19 @@ function InstallationDetailPage() {
               <DataGrid columns={4}>
                 {CORE_REQUIREMENTS.map((req) => {
                   const result = readiness.core[req.id];
+                  const hint = result.detail ?? checkHint(req.id, result.state);
                   return (
                     <DataCell key={req.id} label={req.label}>
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-1 space-y-1" title={hint ?? undefined}>
                         <StateBadge state={result.state} label={CORE_STATE_LABEL[result.state]} />
-                        {result.detail && (
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {result.detail}
-                          </p>
+                        {hint && (
+                          <p className="line-clamp-2 text-[11px] text-muted-foreground">{hint}</p>
                         )}
                       </div>
                     </DataCell>
                   );
                 })}
+
               </DataGrid>
             </CardContent>
           </Card>
@@ -967,14 +986,13 @@ function InstallationDetailPage() {
                   (INFRA_HEALTH_CHECK_IDS as readonly string[]).includes(c.id),
                 ).map((check) => {
                   const result = inst.healthChecks[check.id];
+                  const hint = result.detail ?? checkHint(check.id, result.state);
                   return (
                     <DataCell key={check.id} label={check.label}>
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-1 space-y-1" title={hint ?? undefined}>
                         <StateBadge state={result.state} label={CHECK_STATE_LABEL[result.state]} />
-                        {result.detail && (
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {result.detail}
-                          </p>
+                        {hint && (
+                          <p className="line-clamp-2 text-[11px] text-muted-foreground">{hint}</p>
                         )}
                       </div>
                     </DataCell>

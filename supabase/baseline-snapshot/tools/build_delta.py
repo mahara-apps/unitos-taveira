@@ -80,7 +80,16 @@ def main() -> None:
     with open(MANIFEST, "w", encoding="utf-8") as fh:
         fh.write("\n".join(os.path.basename(p) for p in selected) + "\n")
 
+    import hashlib
+
+    sha = hashlib.sha256(open(OUT, "rb").read()).hexdigest()
     print(f"{len(selected)} migrations -> {OUT}")
+    print(f"sha256={sha}")
+    print(
+        "MASTER-first: atualize supabase/baseline-snapshot/tools/delta_version.txt\n"
+        "  (sha256 acima + nova version) e o MASTER_RELEASE_VERSION em\n"
+        "  src/lib/installation/manager-contract.ts com o MESMO valor."
+    )
 
 
 if __name__ == "__main__":

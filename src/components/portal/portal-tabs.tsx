@@ -25,7 +25,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { PortalLink, usePortalApi, usePortalCanInteract } from "./portal-context";
+import {
+  PortalLink,
+  usePortalApi,
+  usePortalCanInteract,
+  usePortalCanView,
+} from "./portal-context";
 import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import type { PortalTabId } from "./portal-nav";
 import { PautaApprovals } from "./portal-pauta";
@@ -48,6 +53,12 @@ import { EmptyState, ErrorState, GridSkeleton, ListSkeleton, formatDate } from "
 export function HomeTab() {
   const api = usePortalApi();
   const ym = new Date().toISOString().slice(0, 7);
+  // O Início só consulta o que o cliente pode ver: módulo sem permissão não
+  // gera chamada (o servidor recusaria) nem cartão na tela.
+  const canApprovals = usePortalCanView("approvals");
+  const canPauta = usePortalCanView("pauta");
+  const canBriefing = usePortalCanView("briefing");
+  const canCalendar = usePortalCanView("calendar");
 
   const metricsQ = useQuery({
     queryKey: ["portal", "metrics", api.scopeKey],
@@ -55,21 +66,25 @@ export function HomeTab() {
     staleTime: 30_000,
   });
   const pendingQ = useQuery({
+    enabled: canApprovals,
     queryKey: ["portal", "approvals", api.scopeKey, "pending"],
     queryFn: () => api.approvals("pending"),
     staleTime: 30_000,
   });
   const plansQ = useQuery({
+    enabled: canPauta,
     queryKey: ["portal", "plans", api.scopeKey],
     queryFn: () => api.plans(),
     staleTime: 30_000,
   });
   const briefingQ = useQuery({
+    enabled: canBriefing,
     queryKey: ["portal", "briefing-requests", api.scopeKey],
     queryFn: () => api.briefingRequests(),
     staleTime: 30_000,
   });
   const calendarQ = useQuery({
+    enabled: canCalendar,
     queryKey: ["portal", "calendar", api.scopeKey, ym],
     queryFn: () => api.calendar(ym),
     staleTime: 30_000,
@@ -141,14 +156,17 @@ export function HomeTab() {
 
   const failed =
     metricsQ.isError &&
-    pendingQ.isError &&
-    plansQ.isError &&
-    briefingQ.isError &&
-    calendarQ.isError;
-  const loadingKpis = metricsQ.isLoading || plansQ.isLoading || briefingQ.isLoading;
+    (!canApprovals || pendingQ.isError) &&
+    (!canPauta || plansQ.isError) &&
+    (!canBriefing || briefingQ.isError) &&
+    (!canCalendar || calendarQ.isError);
+  const loadingKpis =
+    metricsQ.isLoading ||
+    (canPauta && plansQ.isLoading) ||
+    (canBriefing && briefingQ.isLoading);
   const kpiValue = (v: number) => (loadingKpis ? <Skeleton className="h-6 w-10" /> : v);
 
-  const pendingCount = metricsQ.data?.pending ?? pendingPosts.length;
+  const pendingCount = canApprovals ? (metricsQ.data?.pending ?? pendingPosts.length) : 0;
 
   if (failed)
     return (
@@ -167,6 +185,7 @@ export function HomeTab() {
   return (
     <div className="space-y-6">
       <PageKpiGrid columns={5}>
+        {canApprovals ? (
         <PortalLink tab="approvals" className="block">
           <PageKpi
             label="Aguardando aprovação"
@@ -176,6 +195,8 @@ export function HomeTab() {
             description={pendingCount > 0 ? "Conteúdos esperando você" : "Nada pendente"}
           />
         </PortalLink>
+        ) : null}
+        {canPauta ? (
         <PortalLink tab="pauta" className="block">
           <PageKpi
             label="Pauta pendente"
@@ -187,6 +208,8 @@ export function HomeTab() {
             }
           />
         </PortalLink>
+        ) : null}
+        {canBriefing ? (
         <PortalLink tab="briefing" className="block">
           <PageKpi
             label="Briefing pendente"
@@ -198,6 +221,8 @@ export function HomeTab() {
             }
           />
         </PortalLink>
+        ) : null}
+        {canCalendar ? (
         <PortalLink tab="calendar" className="block">
           <PageKpi
             label="Próximos compromissos"
@@ -207,6 +232,7 @@ export function HomeTab() {
             description="Publicações já com data"
           />
         </PortalLink>
+        ) : null}
         <PageKpi
           label="Prazos de produção"
           value={
@@ -287,6 +313,7 @@ export function HomeTab() {
       </section>
 
       {/* Próximas publicações */}
+      {canCalendar ? (
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold tracking-tight">Próximas publicações</h2>
@@ -332,6 +359,8 @@ export function HomeTab() {
           </div>
         )}
       </section>
+
+      ) : null}
 
       {/* Atividade recente */}
       <section className="space-y-3">
