@@ -168,6 +168,20 @@ WITH checks AS (
                                        'conversion_event','daily_budget','targeting','placements',
                                        'creative_brief','estimates','prerequisites','rationale')))) = 14
               THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 46, 'Conteúdo: Lixeira recuperável por 30 dias',
+         (SELECT count(*)::text FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND ((table_name = 'content_pipelines' AND column_name IN ('deleted_at','deleted_by'))
+              OR (table_name = 'posts' AND column_name IN ('deleted_by','deleted_reason','deleted_pipeline_id'))))
+         || ' colunas / função=' ||
+         CASE WHEN to_regprocedure('public.purge_deleted_content()') IS NULL THEN 'ausente' ELSE 'presente' END,
+         CASE WHEN (SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND ((table_name = 'content_pipelines' AND column_name IN ('deleted_at','deleted_by'))
+                        OR (table_name = 'posts' AND column_name IN ('deleted_by','deleted_reason','deleted_pipeline_id')))) = 5
+                   AND to_regprocedure('public.purge_deleted_content()') IS NOT NULL
+              THEN 'PASS' ELSE 'FAIL' END
 
   -- --------------------------------------------------- nenhum dado de negócio copiado
   UNION ALL
@@ -214,6 +228,14 @@ WITH checks AS (
          CASE WHEN NOT EXISTS (
            SELECT 1 FROM cron.job WHERE command ~ 'https?://' AND command NOT LIKE '%x-cron-secret%'
          ) THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 65, 'cron: limpeza diária da Lixeira de Conteúdo',
+         coalesce((SELECT schedule || ' — ' || command FROM cron.job
+                   WHERE jobname = 'purge-deleted-content-30d' LIMIT 1), 'ausente'),
+         CASE WHEN EXISTS (SELECT 1 FROM cron.job
+                           WHERE jobname = 'purge-deleted-content-30d'
+                             AND command LIKE '%purge_deleted_content%')
+              THEN 'PASS' ELSE 'FAIL' END
 
   -- ---------------------------------------------------------------- brain_stats_mv
   UNION ALL

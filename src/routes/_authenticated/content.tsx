@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import { describeError } from "@/lib/errors";
 import { ensureFeatureEnabled } from "@/lib/feature-flags.gate";
@@ -41,6 +42,7 @@ import {
   listPipelinesFn,
   loadBoardFn,
   renamePipelineFn,
+  deletePipelineFn,
 } from "@/lib/content.functions";
 import { ContentBoard } from "@/components/content/content-board";
 import { ColumnConfigDialog } from "@/components/content/column-config-dialog";
@@ -66,6 +68,7 @@ import {
 } from "@/components/content/content-toolbar";
 import { ContentList } from "@/components/content/content-list";
 import { BulkStageBar } from "@/components/content/bulk-stage-bar";
+import { ContentTrashDialog } from "@/components/content/content-trash-dialog";
 import { listProjectsFn } from "@/lib/tasks.functions";
 import type { StageSort, SortBy } from "@/components/content/content-board";
 
@@ -164,6 +167,12 @@ function ContentReady({
   const ensureDefault = useServerFn(ensureDefaultPipelineFn);
   const createPipeline = useServerFn(createPipelineFn);
   const renamePipeline = useServerFn(renamePipelineFn);
+  const deletePipeline = useServerFn(deletePipelineFn);
+  const access = useAccessRole();
+  const canDelete =
+    access.authorityRole === "super_admin" ||
+    access.brandRole === "owner" ||
+    access.brandRole === "admin";
 
   const pipelinesQuery = useSuspenseQuery({
     queryKey: ["content-pipelines", brandId, clientId],
@@ -184,6 +193,8 @@ function ContentReady({
   const [openColumnConfig, setOpenColumnConfig] = useState(autoOpenColumns);
   const [newTaskStageId, setNewTaskStageId] = useState<string | null>(null);
   const [openNewTask, setOpenNewTask] = useState(false);
+  const [openTrash, setOpenTrash] = useState(false);
+  const [openDeletePipeline, setOpenDeletePipeline] = useState(false);
 
   useEffect(() => {
     if (initialPostId) setOpenPostId(initialPostId);
@@ -249,6 +260,24 @@ function ContentReady({
               <DropdownMenuItem onClick={() => setOpenColumnConfig(true)}>
                 <Settings className="mr-2 h-4 w-4" /> Colunas
               </DropdownMenuItem>
+              {canDelete ? (
+                <>
+                  <DropdownMenuItem onClick={() => setOpenTrash(true)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Lixeira
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setOpenDeletePipeline(true)}
+                    disabled={
+                      !effectivePipelineId ||
+                      pipelines.length <= 1 ||
+                      pipelines.find((pipeline) => pipeline.id === effectivePipelineId)?.is_default
+                    }
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir pipeline
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -318,6 +347,21 @@ function ContentReady({
     onError: (e: Error) => toast.error(describeError(e)),
   });
 
+  const deletePipelineMutation = useMutation({
+    mutationFn: ({ pipelineId, confirmation }: { pipelineId: string; confirmation: string }) =>
+      deletePipeline({ data: { brandId, clientId, pipelineId, confirmation } }),
+    onSuccess: async () => {
+      setOpenDeletePipeline(false);
+      setActivePipelineId(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["content-pipelines", brandId, clientId] }),
+        qc.invalidateQueries({ queryKey: ["content-trash", brandId, clientId] }),
+      ]);
+      toast.success("Pipeline enviado para a Lixeira.");
+    },
+    onError: (error) => toast.error(describeError(error)),
+  });
+
   return (
     <DashboardPageShell className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col space-y-0">
       {effectivePipelineId ? (
@@ -353,6 +397,26 @@ function ContentReady({
         }}
         pending={renameMutation.isPending}
       />
+
+      <DeletePipelineDialog
+        open={openDeletePipeline}
+        onOpenChange={setOpenDeletePipeline}
+        pipelineName={pipelines.find((pipeline) => pipeline.id === effectivePipelineId)?.name ?? ""}
+        pending={deletePipelineMutation.isPending}
+        onSubmit={(confirmation) => {
+          if (!effectivePipelineId) return;
+          deletePipelineMutation.mutate({ pipelineId: effectivePipelineId, confirmation });
+        }}
+      />
+
+      {canDelete ? (
+        <ContentTrashDialog
+          open={openTrash}
+          onOpenChange={setOpenTrash}
+          brandId={brandId}
+          clientId={clientId}
+        />
+      ) : null}
 
       {effectivePipelineId ? (
         <Suspense fallback={null}>
@@ -396,6 +460,11 @@ function BoardView({
     [brandId, clientId, pipelineId],
   );
   const qc = useQueryClient();
+  const access = useAccessRole();
+  const canDelete =
+    access.authorityRole === "super_admin" ||
+    access.brandRole === "owner" ||
+    access.brandRole === "admin";
   const { data } = useSuspenseQuery({
     queryKey,
     queryFn: () => loadBoard({ data: { brandId, clientId, pipelineId } }),
@@ -479,6 +548,7 @@ function BoardView({
           selected={selected}
           onClear={() => setSelected([])}
           invalidateKey={queryKey}
+          canDelete={canDelete}
         />
       ) : null}
       {view === "kanban" ? (
@@ -507,6 +577,63 @@ function BoardView({
         />
       )}
     </div>
+  );
+}
+
+function DeletePipelineDialog({
+  open,
+  onOpenChange,
+  pipelineName,
+  onSubmit,
+  pending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pipelineName: string;
+  onSubmit: (confirmation: string) => void;
+  pending: boolean;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  useEffect(() => {
+    if (!open) setConfirmation("");
+  }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Excluir pipeline inteiro?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          O pipeline e seus conteúdos irão para a Lixeira por 30 dias. Agendamentos pendentes serão
+          cancelados. Digite <strong className="text-foreground">{pipelineName}</strong> para
+          confirmar.
+        </p>
+        <div className="space-y-2">
+          <Label htmlFor="delete-pipeline-confirmation">Nome do pipeline</Label>
+          <Input
+            id="delete-pipeline-confirmation"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => onSubmit(confirmation)}
+            disabled={
+              pending || confirmation.trim().toLowerCase() !== pipelineName.trim().toLowerCase()
+            }
+          >
+            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Excluir pipeline
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

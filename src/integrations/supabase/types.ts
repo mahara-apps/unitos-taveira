@@ -4536,6 +4536,8 @@ export type Database = {
           color: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           description: string | null
           icon: string | null
           id: string
@@ -4551,6 +4553,8 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -4566,6 +4570,8 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -6391,6 +6397,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          deleted_by: string | null
+          deleted_pipeline_id: string | null
+          deleted_reason: string | null
           design_brief: string | null
           format: string | null
           id: string
@@ -6441,6 +6450,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_pipeline_id?: string | null
+          deleted_reason?: string | null
           design_brief?: string | null
           format?: string | null
           id?: string
@@ -6491,6 +6503,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_pipeline_id?: string | null
+          deleted_reason?: string | null
           design_brief?: string | null
           format?: string | null
           id?: string
@@ -8444,6 +8459,7 @@ export type Database = {
         }
         Returns: Json
       }
+      purge_deleted_content: { Args: never; Returns: Json }
       reactivate_portal_token: {
         Args: { _token_id: string }
         Returns: {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, MoveRight, X } from "lucide-react";
+import { Loader2, MoveRight, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,8 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { bulkMoveStageFn, type PipelineStage } from "@/lib/content.functions";
+import { bulkDeletePostsFn, bulkMoveStageFn, type PipelineStage } from "@/lib/content.functions";
 import { describeError } from "@/lib/errors";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const MAX_BULK = 200;
 
@@ -31,6 +42,7 @@ export function BulkStageBar({
   selected,
   onClear,
   invalidateKey,
+  canDelete = false,
 }: {
   brandId: string;
   clientId: string;
@@ -39,10 +51,12 @@ export function BulkStageBar({
   selected: string[];
   onClear: () => void;
   invalidateKey: readonly unknown[];
+  canDelete?: boolean;
 }) {
   const [stageId, setStageId] = useState<string>("");
   const qc = useQueryClient();
   const bulkMove = useServerFn(bulkMoveStageFn);
+  const bulkDelete = useServerFn(bulkDeletePostsFn);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -68,6 +82,21 @@ export function BulkStageBar({
         );
       }
       qc.invalidateQueries({ queryKey: invalidateKey });
+      onClear();
+    },
+    onError: (e) => toast.error(describeError(e)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      bulkDelete({
+        data: { brandId, clientId, pipelineId, postIds: selected.slice(0, MAX_BULK) },
+      }),
+    onSuccess: (res) => {
+      toast.success(`${res.deleted} conteúdo(s) enviado(s) para a Lixeira.`);
+      qc.invalidateQueries({ queryKey: invalidateKey });
+      qc.invalidateQueries({ queryKey: ["content-trash", brandId, clientId] });
+      qc.invalidateQueries({ queryKey: ["content-pipelines", brandId, clientId] });
       onClear();
     },
     onError: (e) => toast.error(describeError(e)),
@@ -112,6 +141,44 @@ export function BulkStageBar({
         )}
         Aplicar
       </Button>
+
+      {canDelete ? (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Excluir selecionados
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Enviar conteúdos para a Lixeira?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {Math.min(selected.length, MAX_BULK)} conteúdo(s) serão removidos do pipeline e
+                poderão ser recuperados por 30 dias. Agendamentos pendentes serão cancelados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deleteMutation.mutate()}
+              >
+                Enviar para a Lixeira
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
 
       <Button
         size="sm"

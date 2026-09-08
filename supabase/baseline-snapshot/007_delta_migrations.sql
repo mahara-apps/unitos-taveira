@@ -3870,3 +3870,161 @@ CREATE TRIGGER ad_creatives_touch BEFORE UPDATE ON public.ad_creatives
   FOR EACH ROW EXECUTE FUNCTION public.ads_touch_updated_at();
 CREATE TRIGGER ad_insights_daily_touch BEFORE UPDATE ON public.ad_insights_daily
   FOR EACH ROW EXECUTE FUNCTION public.ads_touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- 20260908181738_0813cc22-ce8b-4309-adc0-03c6cf5585e9.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.content_pipelines
+  ADD COLUMN IF NOT EXISTS deleted_at timestamptz,
+  ADD COLUMN IF NOT EXISTS deleted_by uuid;
+
+ALTER TABLE public.posts
+  ADD COLUMN IF NOT EXISTS deleted_by uuid,
+  ADD COLUMN IF NOT EXISTS deleted_reason text,
+  ADD COLUMN IF NOT EXISTS deleted_pipeline_id uuid;
+
+CREATE INDEX IF NOT EXISTS idx_posts_deleted_at
+  ON public.posts (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_content_pipelines_deleted_at
+  ON public.content_pipelines (deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.purge_deleted_content()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_cutoff timestamptz := now() - interval '30 days';
+  v_post_ids uuid[];
+  v_pipe_ids uuid[];
+  v_posts int := 0;
+  v_pipes int := 0;
+BEGIN
+  SELECT coalesce(array_agg(id), '{}') INTO v_post_ids
+  FROM public.posts WHERE deleted_at IS NOT NULL AND deleted_at < v_cutoff;
+
+  IF array_length(v_post_ids, 1) > 0 THEN
+    DELETE FROM public.social_posts WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.post_placements WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.post_client_comments WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.post_approvals WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.card_approval_events WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.card_approval_tokens WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.work_comments WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.work_links WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.calendar_events WHERE post_id = ANY(v_post_ids);
+    DELETE FROM public.posts WHERE id = ANY(v_post_ids);
+    v_posts := array_length(v_post_ids, 1);
+  END IF;
+
+  SELECT coalesce(array_agg(id), '{}') INTO v_pipe_ids
+  FROM public.content_pipelines WHERE deleted_at IS NOT NULL AND deleted_at < v_cutoff;
+
+  IF array_length(v_pipe_ids, 1) > 0 THEN
+    -- pipelines só saem de vez quando nenhuma peça (ativa ou na lixeira) depende deles
+    SELECT coalesce(array_agg(p.id), '{}') INTO v_pipe_ids
+    FROM public.content_pipelines p
+    WHERE p.id = ANY(v_pipe_ids)
+      AND NOT EXISTS (SELECT 1 FROM public.posts po WHERE po.pipeline_id = p.id);
+
+    IF array_length(v_pipe_ids, 1) > 0 THEN
+      DELETE FROM public.content_pipeline_stages WHERE pipeline_id = ANY(v_pipe_ids);
+      DELETE FROM public.content_pipelines WHERE id = ANY(v_pipe_ids);
+      v_pipes := array_length(v_pipe_ids, 1);
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('posts_purged', v_posts, 'pipelines_purged', v_pipes, 'cutoff', v_cutoff);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.purge_deleted_content() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.purge_deleted_content() TO service_role;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'purge-deleted-content-30d') THEN
+      PERFORM cron.unschedule('purge-deleted-content-30d');
+    END IF;
+    PERFORM cron.schedule('purge-deleted-content-30d', '40 4 * * *', 'SELECT public.purge_deleted_content();');
+  END IF;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260908183506_bb896577-81d3-4d45-b00b-958db59f4482.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.guard_content_trash_changes()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_brand_id uuid := coalesce(NEW.brand_id, OLD.brand_id);
+  v_role text;
+BEGIN
+  IF OLD.deleted_at IS NOT DISTINCT FROM NEW.deleted_at
+     AND OLD.deleted_by IS NOT DISTINCT FROM NEW.deleted_by THEN
+    RETURN NEW;
+  END IF;
+
+  v_role := public.app_access_role(auth.uid(), v_brand_id);
+  IF v_role NOT IN ('super_admin', 'admin') THEN
+    RAISE EXCEPTION 'content_trash_admin_required';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_posts_trash_changes ON public.posts;
+CREATE TRIGGER guard_posts_trash_changes
+BEFORE UPDATE OF deleted_at, deleted_by ON public.posts
+FOR EACH ROW EXECUTE FUNCTION public.guard_content_trash_changes();
+
+DROP TRIGGER IF EXISTS guard_content_pipelines_trash_changes ON public.content_pipelines;
+CREATE TRIGGER guard_content_pipelines_trash_changes
+BEFORE UPDATE OF deleted_at, deleted_by ON public.content_pipelines
+FOR EACH ROW EXECUTE FUNCTION public.guard_content_trash_changes();
+
+CREATE OR REPLACE FUNCTION public.purge_deleted_content()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_cutoff timestamptz := now() - interval '30 days';
+  v_posts integer := 0;
+  v_pipelines integer := 0;
+BEGIN
+  WITH removed AS (
+    DELETE FROM public.posts
+    WHERE deleted_at IS NOT NULL AND deleted_at < v_cutoff
+    RETURNING id
+  )
+  SELECT count(*)::integer INTO v_posts FROM removed;
+
+  WITH removed AS (
+    DELETE FROM public.content_pipelines p
+    WHERE p.deleted_at IS NOT NULL
+      AND p.deleted_at < v_cutoff
+      AND NOT EXISTS (SELECT 1 FROM public.posts po WHERE po.pipeline_id = p.id)
+    RETURNING id
+  )
+  SELECT count(*)::integer INTO v_pipelines FROM removed;
+
+  RETURN jsonb_build_object(
+    'posts_purged', v_posts,
+    'pipelines_purged', v_pipelines,
+    'cutoff', v_cutoff
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_content_trash_changes() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.guard_content_trash_changes() TO service_role;
+REVOKE ALL ON FUNCTION public.purge_deleted_content() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.purge_deleted_content() TO service_role;

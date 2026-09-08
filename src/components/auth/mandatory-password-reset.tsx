@@ -2,11 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  getMyPasswordFlag,
-  clearMyPasswordFlag,
-  setMyFullName,
-} from "@/lib/password.functions";
+import { getMyPasswordFlag, clearMyPasswordFlag, setMyFullName } from "@/lib/password.functions";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +32,7 @@ export function MandatoryPasswordReset() {
   const [confirm, setConfirm] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const needsPassword = Boolean(data?.requiresChange);
   const needsName = Boolean(data?.requiresName);
   const open = needsPassword || needsName;
@@ -65,17 +62,38 @@ export function MandatoryPasswordReset() {
       return;
     }
     setBusy(true);
+    setSubmitError(null);
     try {
-      if (needsName) await saveName({ data: { fullName: name.trim() } });
+      let savedFullName = data?.fullName ?? null;
+      if (needsName) {
+        const saved = await saveName({ data: { fullName: name.trim() } });
+        savedFullName = saved.fullName;
+        qc.setQueryData(["me", "password-flag"], {
+          ...data,
+          fullName: saved.fullName,
+          requiresName: false,
+        });
+      }
       if (needsPassword) {
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw error;
         await clearFlag();
+        qc.setQueryData(["me", "password-flag"], {
+          ...data,
+          fullName: savedFullName,
+          requiresName: false,
+          requiresChange: false,
+        });
       }
       toast.success(needsPassword ? "Senha atualizada com sucesso" : "Nome salvo");
-      qc.invalidateQueries({ queryKey: ["me", "password-flag"] });
+      await qc.invalidateQueries({ queryKey: ["me", "password-flag"] });
     } catch (e) {
-      toast.error((e as Error).message);
+      const message =
+        (e as Error).message === "Unauthorized"
+          ? "Sua sessão expirou. Entre novamente para continuar."
+          : (e as Error).message || "Não foi possível concluir seu primeiro acesso.";
+      setSubmitError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -128,33 +146,38 @@ export function MandatoryPasswordReset() {
             </div>
           ) : null}
           {needsPassword ? (
-          <>
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="new-pw">
-              Nova senha
-            </Label>
-            <PasswordInput
-              id="new-pw"
-              autoFocus={!needsName}
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              minLength={8}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="confirm-pw">
-              Confirmar senha
-            </Label>
-            <PasswordInput
-              id="confirm-pw"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              minLength={8}
-              required
-            />
-          </div>
-          </>
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs" htmlFor="new-pw">
+                  Nova senha
+                </Label>
+                <PasswordInput
+                  id="new-pw"
+                  autoFocus={!needsName}
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs" htmlFor="confirm-pw">
+                  Confirmar senha
+                </Label>
+                <PasswordInput
+                  id="confirm-pw"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </div>
+            </>
+          ) : null}
+          {submitError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {submitError}
+            </p>
           ) : null}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
