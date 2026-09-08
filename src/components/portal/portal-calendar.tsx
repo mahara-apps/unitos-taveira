@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ImageIcon,
@@ -126,6 +127,85 @@ function normalize(rows: unknown[]): CalItem[] {
   });
 }
 
+/* ---------------------- agrupamento por dia (acordeão) ---------------------- */
+
+type DayGroup = {
+  key: string;
+  label: string;
+  items: CalItem[];
+  kinds: Kind[];
+  /** Precisa de atenção do cliente (compromisso/confirmação). */
+  needsAttention: boolean;
+  isPast: boolean;
+};
+
+export type QuickFilter = "all" | "confirm" | "scheduled";
+
+function parseDayKey(k: string) {
+  const [y, m, d] = k.split("-").map(Number);
+  return new Date(y as number, (m as number) - 1, d as number);
+}
+
+/** Início da semana (segunda-feira) do dia informado. */
+function weekStart(d: Date) {
+  const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  c.setDate(c.getDate() - ((c.getDay() + 6) % 7));
+  return c;
+}
+
+function dayHeading(key: string) {
+  if (key === "sem-data") return "Sem data definida";
+  const d = parseDayKey(key);
+  const today = dayKey(new Date());
+  if (key === today) return "Hoje";
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (key === dayKey(tomorrow)) return "Amanhã";
+  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+}
+
+/** Uma linha por dia; itens sem data vão para o fim. */
+function buildDayGroups(items: CalItem[]): DayGroup[] {
+  const byDay = new Map<string, CalItem[]>();
+  for (const it of items) {
+    const k = it.at ? it.at.slice(0, 10) : "sem-data";
+    byDay.set(k, [...(byDay.get(k) ?? []), it]);
+  }
+  const todayKeyStr = dayKey(new Date());
+  const groups = [...byDay.keys()]
+    .filter((k) => k !== "sem-data")
+    .sort()
+    .map((k) => {
+      const list = byDay.get(k) ?? [];
+      return {
+        key: k,
+        label: dayHeading(k),
+        items: list,
+        kinds: [...new Set(list.map((i) => i.kind))],
+        needsAttention: list.some((i) => i.kind === "appointment"),
+        isPast: k < todayKeyStr,
+      } satisfies DayGroup;
+    });
+  const undated = byDay.get("sem-data");
+  if (undated?.length) {
+    groups.push({
+      key: "sem-data",
+      label: "Sem data definida",
+      items: undated,
+      kinds: [...new Set(undated.map((i) => i.kind))],
+      needsAttention: false,
+      isPast: false,
+    });
+  }
+  return groups;
+}
+
+/** Abre só o próximo dia que precisa de atenção (ou o próximo dia com itens). */
+function defaultOpenDay(groups: DayGroup[]): string | null {
+  const upcoming = groups.filter((g) => !g.isPast && g.key !== "sem-data");
+  return upcoming.find((g) => g.needsAttention)?.key ?? upcoming[0]?.key ?? groups[0]?.key ?? null;
+}
+
 export function PortalCalendar() {
   const api = usePortalApi();
   const [ym, setYm] = useState(() => {
@@ -135,6 +215,8 @@ export function PortalCalendar() {
   const [view, setView] = useState<"month" | "agenda">("month");
   const [openId, setOpenId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [quick, setQuick] = useState<QuickFilter>("all");
+  const [openDays, setOpenDays] = useState<Set<string> | null>(null);
 
   const q = useQuery({
     queryKey: ["portal", "calendar", api.scopeKey, ym],
@@ -165,14 +247,41 @@ export function PortalCalendar() {
   const todayKey = dayKey(new Date());
   const openItem = items.find((i) => i.id === openId) ?? null;
 
-  const agenda = useMemo(() => {
-    const groups = new Map<string, CalItem[]>();
-    for (const it of items) {
-      const k = it.at ? it.at.slice(0, 10) : "sem-data";
-      groups.set(k, [...(groups.get(k) ?? []), it]);
-    }
-    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items]);
+  // Filtros rápidos + acordeão por dia: acaba o rolo infinito de datas.
+  const visibleItems = useMemo(
+    () =>
+      quick === "all"
+        ? items
+        : items.filter((i) =>
+            quick === "confirm" ? i.kind === "appointment" : i.kind === "scheduled",
+          ),
+    [items, quick],
+  );
+  const dayGroups = useMemo(() => buildDayGroups(visibleItems), [visibleItems]);
+  const autoOpen = useMemo(() => defaultOpenDay(dayGroups), [dayGroups]);
+  const isDayOpen = (key: string) => (openDays ? openDays.has(key) : key === autoOpen);
+  const toggleDay = (key: string) => {
+    setOpenDays((prev) => {
+      const base = new Set(prev ?? (autoOpen ? [autoOpen] : []));
+      if (base.has(key)) base.delete(key);
+      else base.add(key);
+      return base;
+    });
+  };
+
+  // Faixa da semana: semana (segunda a domingo) do dia de hoje ou do 1º item.
+  const strip = useMemo(() => {
+    const first = items.find((i) => i.at)?.at?.slice(0, 10);
+    const base =
+      first && !byDay.has(todayKey) ? weekStart(parseDayKey(first)) : weekStart(new Date());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(d.getDate() + i);
+      const key = dayKey(d);
+      const list = byDay.get(key) ?? [];
+      return { key, date: d, kinds: [...new Set(list.map((it) => it.kind))], count: list.length };
+    });
+  }, [items, byDay, todayKey]);
 
   const dayItems = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
 
@@ -225,6 +334,65 @@ export function PortalCalendar() {
             Agenda
           </Button>
         </div>
+      </div>
+
+      {/* FAIXA DA SEMANA — visão rápida dos dias e status */}
+      <div className="grid grid-cols-7 gap-1.5 rounded-2xl border border-border bg-card p-2">
+        {strip.map((d) => {
+          const isToday = d.key === todayKey;
+          return (
+            <button
+              key={d.key}
+              type="button"
+              disabled={d.count === 0}
+              onClick={() => {
+                setOpenDays(new Set([d.key]));
+                if (view === "month") setView("agenda");
+              }}
+              className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition-colors ${
+                isToday ? "bg-primary/10" : d.count > 0 ? "hover:bg-accent/50" : "opacity-50"
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase text-muted-foreground">
+                {d.date.toLocaleDateString("pt-BR", { weekday: "short" }).slice(0, 3)}
+              </span>
+              <span
+                className={`text-[13px] font-extrabold ${isToday ? "text-primary" : "text-foreground"}`}
+              >
+                {d.date.getDate()}
+              </span>
+              <span className="flex h-1.5 items-center gap-0.5">
+                {d.kinds.map((k) => (
+                  <span key={k} className={`h-1.5 w-1.5 rounded-full ${KIND_META[k].dot}`} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* FILTROS RÁPIDOS */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(
+          [
+            { id: "all" as QuickFilter, label: `Tudo (${items.length})` },
+            { id: "confirm" as QuickFilter, label: `Confirmar (${counts.appointment})` },
+            { id: "scheduled" as QuickFilter, label: `Agendados (${counts.scheduled})` },
+          ] satisfies Array<{ id: QuickFilter; label: string }>
+        ).map((f) => (
+          <Button
+            key={f.id}
+            size="sm"
+            variant={quick === f.id ? "default" : "outline"}
+            className="h-8 rounded-full text-xs font-bold"
+            onClick={() => {
+              setQuick(f.id);
+              setOpenDays(null);
+            }}
+          >
+            {f.label}
+          </Button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -322,42 +490,83 @@ export function PortalCalendar() {
             </div>
           )}
 
-          {/* AGENDA — sempre no mobile, opcional no desktop */}
-          <div className={view === "agenda" ? "space-y-4" : "space-y-4 sm:hidden"}>
-            {agenda.map(([key, group]) => (
-              <div key={key} className="space-y-2">
-                <div className="text-xs font-medium capitalize text-muted-foreground">
-                  {key === "sem-data" ? "Sem data definida" : fullDateLabel(group[0].at)}
-                </div>
-                <div className="space-y-2.5">
-                  {group.map((it) => (
-                    <button
-                      key={it.id}
-                      onClick={() => setOpenId(it.id)}
-                      className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/40"
-                    >
-                      <PortalThumb url={it.coverUrl} alt={it.title} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13.5px] font-bold">{it.title}</div>
-                        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] font-semibold text-muted-foreground">
-                          <span>{timeLabel(it.at)}</span>
-                          {it.channels.length > 0 && (
-                            <span className="inline-flex items-center gap-1.5">
-                              <ChannelDot /> {channelLabel(it.channels[0])}
-                            </span>
-                          )}
+          {/* AGENDA POR DIA (acordeão) — sempre no mobile, opcional no desktop */}
+          <div className={view === "agenda" ? "space-y-2.5" : "space-y-2.5 sm:hidden"}>
+            {dayGroups.length === 0 ? (
+              <EmptyState
+                icon={CalendarDays}
+                title="Nada neste filtro"
+                description="Troque o filtro acima para ver as outras publicações do mês."
+              />
+            ) : null}
+            {dayGroups.map((day) => {
+              const open = isDayOpen(day.key);
+              return (
+                <section
+                  key={day.key}
+                  className="overflow-hidden rounded-2xl border border-border bg-card"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleDay(day.key)}
+                    aria-expanded={open}
+                    className="flex min-h-[52px] w-full items-center gap-3 px-3.5 text-left transition-colors hover:bg-accent/30"
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                        open ? "" : "-rotate-90"
+                      }`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-bold capitalize">{day.label}</div>
+                      {day.needsAttention ? (
+                        <div className="text-[11px] font-bold text-portal-waiting">
+                          Precisa da sua confirmação
                         </div>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${KIND_META[it.kind].chip}`}
-                      >
-                        {KIND_META[it.kind].label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+                      ) : null}
+                    </div>
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      {day.kinds.map((k) => (
+                        <span key={k} className={`h-1.5 w-1.5 rounded-full ${KIND_META[k].dot}`} />
+                      ))}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-extrabold text-muted-foreground">
+                      {day.items.length}
+                    </span>
+                  </button>
+
+                  {open ? (
+                    <div className="space-y-2.5 border-t border-border px-3 py-3">
+                      {day.items.map((it) => (
+                        <button
+                          key={it.id}
+                          onClick={() => setOpenId(it.id)}
+                          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-border bg-background p-3 text-left transition-colors hover:bg-accent/40"
+                        >
+                          <PortalThumb url={it.coverUrl} alt={it.title} />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13.5px] font-bold">{it.title}</div>
+                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] font-semibold text-muted-foreground">
+                              <span>{timeLabel(it.at)}</span>
+                              {it.channels.length > 0 && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <ChannelDot /> {channelLabel(it.channels[0])}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${KIND_META[it.kind].chip}`}
+                          >
+                            {KIND_META[it.kind].label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
           </div>
         </>
       )}

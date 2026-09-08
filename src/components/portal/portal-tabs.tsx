@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -500,8 +501,15 @@ const EMPTY_BY_FILTER: Record<ApprovalFilter, { title: string; description: stri
 
 export function ApprovalsTab() {
   const api = usePortalApi();
+  const qc = useQueryClient();
+  const canDecide = usePortalCanInteract("approvals");
   const [filter, setFilter] = useState<ApprovalFilter>("pending");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<null | "approve" | "reject">(null);
+  const [bulkNote, setBulkNote] = useState("");
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const q = useQuery({
     queryKey: ["portal", "approvals", api.scopeKey, filter],
@@ -518,7 +526,68 @@ export function ApprovalsTab() {
   const openIndex = openId ? ids.indexOf(openId) : -1;
   // "X de N": quantos já foram respondidos entre os que chegaram para você.
   const total = filter === "pending" ? pendingCount : list.length;
-  const done = filter === "pending" ? 0 : list.length;
+
+  // Só faz sentido decidir em lote o que ainda está aguardando o cliente.
+  const decidableIds = list
+    .filter((p) => {
+      const st = (p as unknown as { approval?: { status?: string } }).approval?.status ?? "pending";
+      return st === "pending";
+    })
+    .map((p) => p.id);
+  const canBatch = canDecide && decidableIds.length > 1;
+  const selectedIds = decidableIds.filter((id) => selected.has(id));
+  const allSelected = decidableIds.length > 0 && selectedIds.length === decidableIds.length;
+
+  const exitSelection = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(decidableIds));
+
+  /** Envia uma decisão por item, mantendo as mesmas checagens do servidor. */
+  const runBulk = async (decision: "approved" | "rejected", note?: string) => {
+    const targets = [...selectedIds];
+    setProgress({ done: 0, total: targets.length });
+    const failed: string[] = [];
+    let lastError = "";
+    for (const id of targets) {
+      try {
+        await api.decidePost({ postId: id, decision, note });
+      } catch (err) {
+        failed.push(id);
+        lastError = err instanceof Error ? err.message : String(err);
+      }
+      setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+    }
+    setProgress(null);
+    setBulk(null);
+    setBulkNote("");
+    setSelected(new Set(failed));
+    if (failed.length === 0) setSelectMode(false);
+    const ok = targets.length - failed.length;
+    if (ok > 0) {
+      toast.success(
+        decision === "approved"
+          ? `${ok} ${ok === 1 ? "conteúdo aprovado" : "conteúdos aprovados"}`
+          : `${ok} ${ok === 1 ? "conteúdo reprovado" : "conteúdos reprovados"}`,
+      );
+    }
+    if (failed.length > 0) {
+      toast.error(`${failed.length} não puderam ser enviados`, { description: lastError });
+    }
+    void qc.invalidateQueries({ queryKey: ["portal", "approvals", api.scopeKey] });
+    void qc.invalidateQueries({ queryKey: ["portal", "metrics", api.scopeKey] });
+  };
+
+  const busy = progress !== null;
 
   return (
     <div className="space-y-4">
@@ -547,7 +616,10 @@ export function ApprovalsTab() {
             return (
               <button
                 key={f.id}
-                onClick={() => setFilter(f.id)}
+                onClick={() => {
+                  setFilter(f.id);
+                  exitSelection();
+                }}
                 aria-pressed={active}
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-bold transition-colors ${
                   active ? "bg-accent text-primary" : "bg-muted text-muted-foreground"
@@ -566,14 +638,37 @@ export function ApprovalsTab() {
               </button>
             );
           })}
+          {canBatch ? (
+            <button
+              type="button"
+              onClick={() => (selectMode ? exitSelection() : setSelectMode(true))}
+              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-[12.5px] font-bold text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              {selectMode ? "Cancelar seleção" : "Selecionar"}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {filter === "pending" && pendingCount > 0 && (
+      {selectMode ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-[12.5px] font-bold text-primary underline-offset-2 hover:underline"
+          >
+            {allSelected ? "Limpar seleção" : "Selecionar todos"}
+          </button>
+          <span className="text-[12px] font-semibold text-muted-foreground">
+            {selectedIds.length} de {decidableIds.length} selecionados
+          </span>
+        </div>
+      ) : filter === "pending" && pendingCount > 0 ? (
         <p className="text-xs text-muted-foreground">
           Toque num conteúdo para ver a arte e a legenda. Aprove ou peça ajustes.
         </p>
-      )}
+      ) : null}
 
       {q.isLoading ? (
         <ListSkeleton />
@@ -590,16 +685,123 @@ export function ApprovalsTab() {
           description={EMPTY_BY_FILTER[filter].description}
         />
       ) : (
-        <div className="space-y-2.5">
+        <div className={`space-y-2.5 ${selectMode ? "pb-28" : ""}`}>
           {list.map((p) => (
             <ApprovalListItem
               key={p.id}
               post={p as unknown as Record<string, unknown>}
               onOpen={() => setOpenId(p.id)}
+              selectable={selectMode && decidableIds.includes(p.id)}
+              selected={selected.has(p.id)}
+              onToggle={() => toggleOne(p.id)}
             />
           ))}
         </div>
       )}
+
+      {/* Barra de ação em lote — acima da barra inferior no celular */}
+      {selectMode && selectedIds.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-[76px] z-40 px-3 min-[900px]:bottom-4">
+          <div className="mx-auto flex max-w-xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2.5 shadow-lg">
+            <span className="px-1 text-[12.5px] font-extrabold">
+              {selectedIds.length} de {decidableIds.length} selecionados
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={busy}
+                onClick={() => setBulk("reject")}
+              >
+                <X className="h-3.5 w-3.5" /> Reprovar
+              </Button>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5 bg-portal-published text-white hover:bg-portal-published/90"
+                disabled={busy}
+                onClick={() => setBulk("approve")}
+              >
+                {busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
+                {allSelected ? "Aprovar todos" : "Aprovar selecionados"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Confirmação da decisão em lote */}
+      <Dialog
+        open={bulk !== null}
+        onOpenChange={(o) => {
+          if (!o && !busy) {
+            setBulk(null);
+            setBulkNote("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {bulk === "reject"
+                ? `Reprovar ${selectedIds.length} conteúdo${selectedIds.length === 1 ? "" : "s"}?`
+                : `Aprovar ${selectedIds.length} conteúdo${selectedIds.length === 1 ? "" : "s"}?`}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-[13px] text-muted-foreground">
+              {bulk === "reject"
+                ? "Explique o motivo. Ele será registrado em todos os conteúdos escolhidos."
+                : "Sua aprovação será registrada em cada conteúdo selecionado."}
+            </p>
+            {bulk === "reject" ? (
+              <Textarea
+                value={bulkNote}
+                onChange={(e) => setBulkNote(e.target.value)}
+                rows={3}
+                placeholder="O que precisa mudar nesses conteúdos?"
+                className="text-sm"
+              />
+            ) : null}
+            {progress ? (
+              <div className="text-[12.5px] font-bold text-muted-foreground">
+                Enviando {progress.done} de {progress.total}…
+              </div>
+            ) : null}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setBulk(null);
+                setBulkNote("");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button
+              size="sm"
+              variant={bulk === "reject" ? "destructive" : "default"}
+              disabled={busy || (bulk === "reject" && bulkNote.trim().length < 3)}
+              onClick={() =>
+                void runBulk(
+                  bulk === "reject" ? "rejected" : "approved",
+                  bulk === "reject" ? bulkNote.trim() : undefined,
+                )
+              }
+            >
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {bulk === "reject" ? "Reprovar selecionados" : "Aprovar selecionados"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {openId && (
         <ApprovalDialog
@@ -613,13 +815,24 @@ export function ApprovalsTab() {
           onClose={() => setOpenId(null)}
         />
       )}
-      {done > 0 ? null : null}
     </div>
   );
 }
 
 /** Linha compacta de aprovação (nada de card com arte gigante). */
-function ApprovalListItem({ post, onOpen }: { post: Record<string, unknown>; onOpen: () => void }) {
+function ApprovalListItem({
+  post,
+  onOpen,
+  selectable = false,
+  selected = false,
+  onToggle,
+}: {
+  post: Record<string, unknown>;
+  onOpen: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
+}) {
   const status = ((post.approval as { status: string } | undefined)?.status ?? "pending") as string;
   const channels = Array.isArray(post.channels) ? (post.channels as string[]) : [];
   const format = typeof post.format === "string" ? post.format : null;
@@ -633,12 +846,8 @@ function ApprovalListItem({ post, onOpen }: { post: Record<string, unknown>; onO
           ? "adjust"
           : "waiting";
 
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex min-h-[84px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/40"
-    >
+  const body = (
+    <>
       <PortalThumb url={(post.cover_url as string) ?? null} size="md" />
       <div className="min-w-0 flex-1">
         <div className="line-clamp-2 text-sm font-bold leading-snug">
@@ -655,6 +864,48 @@ function ApprovalListItem({ post, onOpen }: { post: Record<string, unknown>; onO
           </PortalStatusPill>
         </div>
       </div>
+    </>
+  );
+
+  if (selectable) {
+    return (
+      <div
+        className={`flex min-h-[84px] w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left transition-colors ${
+          selected ? "border-primary bg-accent/40" : "border-border"
+        }`}
+      >
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggle?.()}
+          aria-label="Selecionar conteúdo"
+          className="h-5 w-5 shrink-0"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          {body}
+        </button>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label="Abrir conteúdo"
+          className="shrink-0 rounded-lg p-1.5 text-muted-foreground/70 hover:bg-muted"
+        >
+          <ChevronRight className="h-4.5 w-4.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-[84px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/40"
+    >
+      {body}
       <ChevronRight className="h-4.5 w-4.5 shrink-0 text-muted-foreground/60" />
     </button>
   );
