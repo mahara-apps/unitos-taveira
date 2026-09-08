@@ -610,6 +610,17 @@ export type CodeClient = {
    * MASTER é publicado.
    */
   releaseAtCommit: (sha: string) => Promise<{ ok: boolean; version?: string; error?: string }>;
+  /**
+   * Versão que está de fato publicada no repositório DA INSTALAÇÃO (branch de
+   * produção). É a verdade sobre o que está no ar: o painel usa isto para
+   * reconciliar o registro quando uma operação terminou sem gravar a versão.
+   */
+  installedRelease: () => Promise<{
+    ok: boolean;
+    version?: string;
+    sha?: string;
+    error?: string;
+  }>;
 
   /**
    * Commit vazio na branch de produção do repositório DA INSTALAÇÃO para que a
@@ -836,6 +847,44 @@ export function createCodeClient(input: {
         const match = /^\s*version\s*=\s*(\S+)\s*$/m.exec(raw);
         if (!match?.[1]) return { ok: false, error: "versão do pacote não encontrada no commit" };
         return { ok: true, version: match[1] };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
+    },
+
+    async installedRelease() {
+      try {
+        const headRes = await api(`/repos/${target}/commits/${branch}`);
+        if (!headRes.ok) {
+          return { ok: false, error: await fail(headRes, "ler o commit da instalação") };
+        }
+        const headBody = (await headRes.json().catch(() => ({}))) as { sha?: string };
+        if (!headBody.sha) return { ok: false, error: "commit da instalação não retornado" };
+        const path = "supabase/baseline-snapshot/tools/delta_version.txt";
+        const res = await api(
+          `/repos/${target}/contents/${path}?ref=${encodeURIComponent(headBody.sha)}`,
+        );
+        if (!res.ok) {
+          return { ok: false, error: await fail(res, "ler a versão publicada na instalação") };
+        }
+        const body = (await res.json().catch(() => ({}))) as {
+          content?: string;
+          encoding?: string;
+        };
+        const raw =
+          body.encoding === "base64" && body.content
+            ? new TextDecoder().decode(
+                Uint8Array.from(atob(body.content.replace(/\s+/g, "")), (c) => c.charCodeAt(0)),
+              )
+            : (body.content ?? "");
+        const match = /^\s*version\s*=\s*(\S+)\s*$/m.exec(raw);
+        if (!match?.[1]) {
+          return {
+            ok: false,
+            error: "versão do pacote não encontrada no repositório da instalação",
+          };
+        }
+        return { ok: true, version: match[1], sha: headBody.sha };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
@@ -1746,6 +1795,8 @@ export type StageProgress = {
   updateDeploymentId?: string;
   updateDeploymentSource?: "git" | "rebuild";
   updateDeploymentRef?: string;
+  /** Versão do pacote do MASTER já publicada nesta operação (registro da versão). */
+  updateRelease?: string;
 };
 
 export async function readStageProgress(
@@ -2950,9 +3001,16 @@ export async function runAutomatedUpdate(input: {
   let deploymentSource = checkpoint.updateDeploymentSource;
   let deploymentRef = checkpoint.updateDeploymentRef;
 
+  // Retomada: se o código desta MESMA operação já foi publicado, o alvo é o
+  // commit do checkpoint. Nunca revalidar "MASTER publicado" aqui — o pacote já
+  // está no repositório da instalação e barrar agora perderia o registro da
+  // versão (foi exatamente o que deixou o painel parado numa versão antiga).
+  const alreadyPublished = checkpoint.codeDone === true && Boolean(checkpoint.codeSha);
   // Commit autorizado pelo Super Admin (gravado na operação). Sem ele, fixa o
   // commit atual da branch do MASTER no momento da autorização.
-  let targetSha = (input.commitSha ?? "").trim() || null;
+  let targetSha = alreadyPublished
+    ? (checkpoint.codeSha ?? null)
+    : (input.commitSha ?? "").trim() || null;
   if (!targetSha) {
     const head = await code.masterHeadSha();
     if (!head.ok || !head.sha) {
@@ -2966,21 +3024,25 @@ export async function runAutomatedUpdate(input: {
   // avança quando o MASTER é publicado; sem esta checagem a operação enviaria o
   // mesmo pacote de novo e ainda gravaria o número de versão novo na instalação.
   const { compareReleaseVersions, masterNotPublishedMessage } = await import("./manager-contract");
-  const repoRelease = await code.releaseAtCommit(targetSha);
-  if (!repoRelease.ok || !repoRelease.version) {
-    return fail(
-      "BLOCKED",
-      repoRelease.error ?? "versão do pacote do MASTER não pôde ser lida no commit autorizado",
-      "code",
-    );
-  }
-  const publishedRelease = repoRelease.version;
-  if (compareReleaseVersions(publishedRelease, MASTER_RELEASE_VERSION) < 0) {
-    return fail(
-      "BLOCKED",
-      masterNotPublishedMessage(publishedRelease, MASTER_RELEASE_VERSION),
-      "code",
-    );
+  let publishedRelease = alreadyPublished ? (checkpoint.updateRelease ?? null) : null;
+  if (!publishedRelease) {
+    const repoRelease = await code.releaseAtCommit(targetSha);
+    if (!repoRelease.ok || !repoRelease.version) {
+      return fail(
+        "BLOCKED",
+        repoRelease.error ?? "versão do pacote do MASTER não pôde ser lida no commit autorizado",
+        "code",
+      );
+    }
+    publishedRelease = repoRelease.version;
+    if (!alreadyPublished && compareReleaseVersions(publishedRelease, MASTER_RELEASE_VERSION) < 0) {
+      return fail(
+        "BLOCKED",
+        masterNotPublishedMessage(publishedRelease, MASTER_RELEASE_VERSION),
+        "code",
+      );
+    }
+    await saveStageProgress(client, operation, { updateRelease: publishedRelease });
   }
 
   // A instalação constrói o SEU repositório: a versão autorizada do MASTER é
@@ -3088,7 +3150,7 @@ export async function runAutomatedUpdate(input: {
   const shortSha = targetSha ? targetSha.slice(0, 7) : null;
   // A versão fixada é a do pacote realmente publicado, nunca o número atual do
   // MASTER: se o repositório estiver atrás, o painel precisa mostrar a verdade.
-  const appliedRelease = publishedRelease;
+  const appliedRelease = publishedRelease ?? MASTER_RELEASE_VERSION;
   const nothingNew = changedFiles === 0;
   await report(
     client,

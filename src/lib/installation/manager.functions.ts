@@ -1148,6 +1148,31 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
       .maybeSingle();
     if (active) throw new Error("Já existe uma operação em andamento nesta instalação.");
 
+    // A autorização precisa apontar para o ponto ATUAL do código do MASTER.
+    // Aceitar um ponto antigo (por exemplo o commit já fixado na instalação)
+    // faz a operação ser barrada como "MASTER não publicado" e nada sobe.
+    const { createCodeClient, DEFAULT_MASTER_REPO } = await import("./automation.server");
+    const masterRepoSlug = (env["UNITOS_MASTER_REPO"] ?? "").trim() || DEFAULT_MASTER_REPO;
+    const [masterOwner, masterName] = masterRepoSlug.split("/");
+    const masterCode = createCodeClient({
+      token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+      owner: masterOwner ?? "",
+      repo: masterName ?? "",
+      masterRepo: masterRepoSlug,
+    });
+    const head = await masterCode.masterHeadSha();
+    if (!head.ok || !head.sha) {
+      return {
+        result: "BLOCKED" as const,
+        operationId: null,
+        reasons: [
+          head.error ??
+            "não foi possível ler o ponto atual do código do MASTER — configure o acesso de leitura ao repositório e publique o MASTER novamente",
+        ],
+      };
+    }
+    const targetSha = head.sha;
+
     const nowIso = new Date().toISOString();
     const { data: op, error: opError } = await supabase
       .from("installation_operations")
@@ -1161,14 +1186,13 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
           releaseVersion: MASTER_RELEASE_VERSION,
           executed: true,
           automated: true,
-          targetCommitSha: data.commitSha ?? undefined,
+          targetCommitSha: targetSha,
           fromVersion: record.pinnedCommitSha
             ? `${record.pinnedRelease ?? record.currentVersion ?? "?"} · ${record.pinnedCommitSha.slice(0, 7)}`
             : (record.currentVersion ?? null),
-          toVersion: data.commitSha
-            ? `${MASTER_RELEASE_VERSION} · ${data.commitSha.slice(0, 7)}`
-            : MASTER_RELEASE_VERSION,
+          toVersion: `${MASTER_RELEASE_VERSION} · ${targetSha.slice(0, 7)}`,
         },
+
         actor_id: context.userId,
         started_at: nowIso,
         last_report_at: nowIso,
@@ -1198,7 +1222,7 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
         client: supabase as never,
         operation: op as never,
         env,
-        commitSha: data.commitSha ?? null,
+        commitSha: targetSha,
         installation: {
           id: record.id,
           domain: record.domain,
@@ -1219,6 +1243,78 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
     );
 
     return { result: "STARTED" as const, operationId: op.id as string, reasons: [] as string[] };
+  });
+
+/**
+ * Reconcilia o registro do painel com a versão que está DE FATO publicada no
+ * repositório da instalação. Necessário quando uma operação terminou sem gravar
+ * a versão (o código subiu, o registro ficou atrás) — sem isso o painel mostra
+ * um número e a instalação mostra outro.
+ */
+export const syncInstallationVersionFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    await guard(context);
+
+    const supabase = context.supabase as never as {
+      from: (table: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    };
+    const { data: current, error: readError } = await supabase
+      .from("installations")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!current) throw new Error("Instalação não encontrada.");
+    const record = mapInstallation(current);
+
+    const { resolveInstallationEnv } = await import("./credentials.server");
+    const env = await resolveInstallationEnv(supabase as never, data.id);
+    const { createCodeClient, DEFAULT_MASTER_REPO } = await import("./automation.server");
+    const { resolveInstallationRepo } = await import("./automation-contract");
+
+    const masterRepo = (env["UNITOS_MASTER_REPO"] ?? "").trim() || DEFAULT_MASTER_REPO;
+    const repo = resolveInstallationRepo({
+      gitRepoUrl: record.gitRepoUrl ?? null,
+      masterRepo,
+    });
+    if (!repo.ok) return { ok: false as const, reason: repo.reason };
+
+    const code = createCodeClient({
+      token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+      owner: repo.owner,
+      repo: repo.repo,
+      masterRepo,
+    });
+    const installed = await code.installedRelease();
+    if (!installed.ok || !installed.version || !installed.sha) {
+      return {
+        ok: false as const,
+        reason:
+          installed.error ?? "não foi possível ler a versão publicada no repositório da instalação",
+      };
+    }
+
+    const { isUpdateAvailable } = await import("./manager-contract");
+    await supabase
+      .from("installations")
+      .update({
+        current_version: installed.version,
+        pinned_release: installed.version,
+        pinned_commit_sha: installed.sha,
+        pinned_at: new Date().toISOString(),
+        status: isUpdateAvailable(installed.version, MASTER_RELEASE_VERSION)
+          ? "update_available"
+          : "up_to_date",
+      })
+      .eq("id", data.id);
+
+    return {
+      ok: true as const,
+      version: installed.version,
+      commitSha: installed.sha,
+    };
   });
 
 /* ------------------------------------------- credenciais próprias por instalação */
