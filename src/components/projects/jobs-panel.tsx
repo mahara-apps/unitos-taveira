@@ -49,6 +49,16 @@ import { JobDetailModal } from "./job-detail-modal";
 import { AssigneeAvatar, AssigneePicker, type TeamOption } from "./assignee-picker";
 import { StatusPicker } from "./status-picker";
 import { WorkItemRow, formatRange, formatShortDate, isOverdue } from "./work-item-row";
+import { DueMenuBlock, VisibilityMenuBlock } from "./work-filter-menu";
+import {
+  isItemDone,
+  matchesDue,
+  matchesVisibility,
+  needsArchived,
+  VISIBILITY_LABELS,
+  type DueFilter,
+  type VisibilityFilter,
+} from "@/lib/work-visibility";
 
 type Props = {
   brandId: string;
@@ -95,8 +105,11 @@ export function JobsPanel({
   const createTask = useServerFn(createJobTaskFn);
   const updateTask = useServerFn(updateJobTaskFn);
 
-  /** Concluídos ficam arquivados; este filtro permite revê-los. */
-  const [showDone, setShowDone] = useState(false);
+  /** Concluídos ficam arquivados; este filtro (menu ⋯) permite revê-los. */
+  const [visibility, setVisibility] = useState<VisibilityFilter>("active");
+  /** Filtros do nível 3 (tarefas do job aberto). */
+  const [taskVisibility, setTaskVisibility] = useState<VisibilityFilter>("active");
+  const [dueFilter, setDueFilter] = useState<DueFilter>("all");
   const [search, setSearch] = useState("");
   /** Nível 1 (visão geral) × nível 2 (lista de jobs). */
   const [mode, setMode] = useState<"overview" | "jobs">(initialMode);
@@ -104,20 +117,30 @@ export function JobsPanel({
   const [openJobId, setOpenJobId] = useState<string | null>(null);
   const [pautasOpen, setPautasOpen] = useState(false);
 
+  const jobsArchive = needsArchived(visibility) ? "all" : "active";
   const jobsQ = useQuery({
-    queryKey: ["project-jobs", brandId, projectId, showDone ? "all" : "active"],
-    queryFn: () => listJobs({ data: { brandId, projectId, archive: showDone ? "all" : "active" } }),
+    queryKey: ["project-jobs", brandId, projectId, jobsArchive],
+    queryFn: () => listJobs({ data: { brandId, projectId, archive: jobsArchive } }),
   });
   const tasksQ = useQuery({
     queryKey: ["job-tasks", brandId, projectId],
     queryFn: () => listTasks({ data: { brandId, projectId, archive: "all" } }),
   });
 
-  const jobs: ProjectJob[] = jobsQ.data ?? [];
+  const allJobs: ProjectJob[] = jobsQ.data ?? [];
+  const jobs: ProjectJob[] = useMemo(
+    () =>
+      allJobs.filter((j) =>
+        matchesVisibility({ done: !!j.done_at, archived_at: j.archived_at }, visibility),
+      ),
+    [allJobs, visibility],
+  );
   const allTasks: JobTask[] = useMemo(() => tasksQ.data ?? [], [tasksQ.data]);
+  /** Lista do nível 2 (contadores por job) segue o filtro dos jobs. */
   const tasks = useMemo(
-    () => (showDone ? allTasks : allTasks.filter((t) => !t.archived_at)),
-    [allTasks, showDone],
+    () =>
+      visibility === "active" ? allTasks.filter((t) => !t.archived_at && !isItemDone(t)) : allTasks,
+    [allTasks, visibility],
   );
 
   const hasPautas = !!pautasContent || !!onOpenPautas;
@@ -216,6 +239,8 @@ export function JobsPanel({
   });
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  /** Prazo é opcional na criação rápida. */
+  const [newTaskDue, setNewTaskDue] = useState("");
   const createTaskMut = useMutation({
     mutationFn: () =>
       createTask({
@@ -224,12 +249,15 @@ export function JobsPanel({
           projectId,
           jobId: effectiveJobId,
           title: newTaskTitle.trim(),
+          ...(newTaskDue ? { due_at: newTaskDue } : {}),
         },
       }),
     onSuccess: () => {
       setNewTaskTitle("");
+      setNewTaskDue("");
       qc.invalidateQueries({ queryKey: ["job-tasks", brandId, projectId] });
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -256,10 +284,13 @@ export function JobsPanel({
   const currentJob = jobs.find((j) => j.id === openJobId) ?? null;
   const currentTitle = currentJob?.name ?? "Tarefas";
 
-  const currentJobTasks = useMemo(
-    () => (openJobId ? (tasksByJob.get(openJobId) ?? []) : []),
-    [tasksByJob, openJobId],
-  );
+  const currentJobTasks = useMemo(() => {
+    const base = openJobId ? allTasks.filter((t) => (t.job_id ?? null) === openJobId) : [];
+    return base.filter(
+      (t) => matchesVisibility(t, taskVisibility) && matchesDue(t.due_at, isItemDone(t), dueFilter),
+    );
+  }, [allTasks, openJobId, taskVisibility, dueFilter]);
+
   const openTasksCount = currentJobTasks.filter((t) => !t.done && t.status !== "done").length;
 
   /** Busca aplica-se à lista de jobs (nível 2). */
@@ -434,15 +465,27 @@ export function JobsPanel({
                 />
               </div>
             ) : null}
-            <Button
-              size="sm"
-              variant={showDone ? "secondary" : "ghost"}
-              className="h-8 gap-1.5 px-2 text-xs"
-              onClick={() => setShowDone((v) => !v)}
-            >
-              <Archive className="h-3 w-3" />
-              {showDone ? "Ocultar concluídos" : "Ver concluídos"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant={visibility === "active" ? "ghost" : "secondary"}
+                  className="h-8 gap-1.5 px-2 text-xs"
+                >
+                  <Archive className="h-3 w-3" />
+                  {visibility === "active" ? "Exibir" : VISIBILITY_LABELS[visibility]}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <VisibilityMenuBlock
+                  value={visibility}
+                  onChange={setVisibility}
+                  label="Exibir jobs"
+                  withSeparator={false}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               size="sm"
               className="h-8 gap-1.5 px-3 text-xs"
@@ -851,6 +894,12 @@ export function JobsPanel({
                 >
                   <Trash2 className="mr-2 h-3.5 w-3.5" /> Excluir job
                 </DropdownMenuItem>
+                <VisibilityMenuBlock
+                  value={taskVisibility}
+                  onChange={setTaskVisibility}
+                  label="Exibir tarefas"
+                />
+                <DueMenuBlock value={dueFilter} onChange={setDueFilter} label="Prazo" />
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null
@@ -888,6 +937,14 @@ export function JobsPanel({
                 }}
                 placeholder="Adicionar uma tarefa…"
                 className="h-9"
+              />
+              <Input
+                type="date"
+                value={newTaskDue}
+                onChange={(e) => setNewTaskDue(e.target.value)}
+                className="h-9 w-[135px] text-xs"
+                aria-label="Prazo da tarefa (opcional)"
+                title="Prazo (opcional)"
               />
               <Button
                 size="sm"

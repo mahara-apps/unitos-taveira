@@ -78,6 +78,7 @@ import { listClients, updateClient, deleteClient } from "@/lib/workspace.functio
 import { listBrandClientChannelsFn } from "@/lib/customers-list.functions";
 import { listBrandTeam } from "@/lib/team.functions";
 import { cn } from "@/lib/utils";
+import { isBriefingConcluded } from "@/lib/briefing-alert";
 
 export const Route = createFileRoute("/_authenticated/customers/")({
   component: CustomersIndexPage,
@@ -99,11 +100,19 @@ type ClientRow = {
   socials?: unknown;
   is_active?: boolean;
   owner_user_id?: string | null;
+  briefing_status?: string | null;
+  has_briefing?: boolean;
+  briefing_completion?: number;
   created_at: string;
   updated_at: string;
 };
 
 const ANY = "__any";
+
+/** Fonte única do estado de briefing (src/lib/briefing-alert.ts). */
+function briefingPending(c: ClientRow) {
+  return !isBriefingConcluded(c.briefing_status, c.briefing_completion ?? 0);
+}
 
 function timeAgo(iso?: string | null) {
   if (!iso) return "—";
@@ -149,6 +158,8 @@ function CustomersIndexPage() {
   const [segmentFilter, setSegmentFilter] = useState<string>(ANY);
   const [ownerFilter, setOwnerFilter] = useState<string>(ANY);
   const [channelFilter, setChannelFilter] = useState<string>(ANY);
+  const [briefingOnly, setBriefingOnly] = useState(false);
+
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState<ClientRow | null>(null);
   const [toDelete, setToDelete] = useState<ClientRow | null>(null);
@@ -224,28 +235,41 @@ function CustomersIndexPage() {
         )
           return false;
       }
+      if (briefingOnly && !briefingPending(c)) return false;
       return true;
     });
-  }, [all, q, statusFilter, segmentFilter, ownerFilter, channelFilter, channelsByClient]);
+  }, [
+    all,
+    q,
+    statusFilter,
+    segmentFilter,
+    ownerFilter,
+    channelFilter,
+    briefingOnly,
+    channelsByClient,
+  ]);
 
   const activeCount = all.filter((c) => c.is_active !== false).length;
   const inactiveCount = all.length - activeCount;
   const operatingCount = all.filter(
     (c) => c.is_active !== false && (channelsByClient[c.id] ?? []).length > 0,
   ).length;
+  const pendingBriefing = useMemo(() => all.filter((c) => briefingPending(c)), [all]);
 
   const filtersOn =
     !!q ||
     statusFilter !== ANY ||
     segmentFilter !== ANY ||
     ownerFilter !== ANY ||
-    channelFilter !== ANY;
+    channelFilter !== ANY ||
+    briefingOnly;
   const clearFilters = () => {
     setQ("");
     setStatusFilter(ANY);
     setSegmentFilter(ANY);
     setOwnerFilter(ANY);
     setChannelFilter(ANY);
+    setBriefingOnly(false);
   };
 
   const updateMut = useMutation({
@@ -328,6 +352,47 @@ function CustomersIndexPage() {
           sub="Ativos com canal vinculado"
         />
       </div>
+
+      {pendingBriefing.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="text-amber-700 dark:text-amber-300">
+            {pendingBriefing.length === 1
+              ? "1 cliente sem briefing preenchido."
+              : `${pendingBriefing.length} clientes sem briefing preenchido.`}
+          </span>
+          {pendingBriefing.length === 1 ? (
+            <Button asChild size="sm" variant="outline" className="h-7 gap-1 text-xs">
+              <Link
+                to="/customers/$customerId"
+                params={{ customerId: pendingBriefing[0]!.id }}
+                search={{ onboarding: "1" } as never}
+              >
+                Preencher agora
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setBriefingOnly(true)}
+            >
+              Ver clientes sem briefing
+            </Button>
+          )}
+          {briefingOnly ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setBriefingOnly(false)}
+            >
+              <X className="h-3.5 w-3.5" /> Mostrar todos
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card p-2.5">
@@ -518,7 +583,22 @@ function CustomersIndexPage() {
                           {setup.done}/{setup.total} preenchido
                         </span>
                       )}
+                      {briefingPending(c) ? (
+                        <Link
+                          to="/customers/$customerId"
+                          params={{ customerId: c.id }}
+                          search={{ onboarding: "1" } as never}
+                          title="Preencher briefing em poucos campos"
+                          className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {(c.briefing_completion ?? 0) > 0
+                            ? `Briefing ${c.briefing_completion}% · preencher`
+                            : "Sem briefing · preencher"}
+                        </Link>
+                      ) : null}
                     </TableCell>
+
                     <TableCell className="text-[11px] text-muted-foreground">
                       {timeAgo(c.updated_at)}
                     </TableCell>

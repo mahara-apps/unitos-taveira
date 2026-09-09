@@ -625,9 +625,8 @@ export function NewCustomerWizard({ brandId, open, onOpenChange }: NewCustomerWi
             <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm">
               <div className="font-medium text-foreground">{created.name}</div>
               <p className="mt-1 text-xs text-muted-foreground">
-                O cadastro básico já aparece no perfil do cliente. As informações estratégicas
-                (briefing, personas, tom de voz) podem ser preenchidas depois no Cérebro da Marca —
-                isso é opcional.
+                O cadastro básico já está salvo. Agora você pode preencher o briefing em poucos
+                campos essenciais — ou fazer isso depois pelo Cérebro da Marca.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -639,12 +638,12 @@ export function NewCustomerWizard({ brandId, open, onOpenChange }: NewCustomerWi
                 onClick={async () => {
                   onOpenChange(false);
                   await navigate({
-                    to: "/customers/$customerId/brain",
+                    to: "/customers/$customerId",
                     params: { customerId: created.id },
                   });
                 }}
               >
-                Configurar Brand Hub
+                Abrir perfil do cliente
               </Button>
               <Button
                 onClick={async () => {
@@ -652,10 +651,11 @@ export function NewCustomerWizard({ brandId, open, onOpenChange }: NewCustomerWi
                   await navigate({
                     to: "/customers/$customerId",
                     params: { customerId: created.id },
+                    search: { onboarding: "1" } as never,
                   });
                 }}
               >
-                Abrir perfil do cliente
+                Preencher briefing agora
               </Button>
             </div>
           </div>

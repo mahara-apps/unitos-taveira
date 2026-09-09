@@ -424,7 +424,10 @@ function ProjectsIndexPage() {
             signal: s,
             data: {
               brandId: brandId!,
-              status: statusFilter === "all" ? null : (statusFilter as never),
+              status:
+                statusFilter === "all" || statusFilter === "all_with_archived"
+                  ? null
+                  : (statusFilter as never),
               ownerId: ownerFilter === "all" ? null : ownerFilter,
               clientId: effectiveClientId,
             },
@@ -470,7 +473,10 @@ function ProjectsIndexPage() {
     const stats = projectsQ.data?.stats ?? {};
     const query = q.trim().toLowerCase();
     // Arquivados só aparecem quando explicitamente pedidos.
-    const scoped = statusFilter === "archived" ? all : all.filter((r) => r.status !== "archived");
+    const scoped =
+      statusFilter === "archived" || statusFilter === "all_with_archived"
+        ? all
+        : all.filter((r) => r.status !== "archived");
     const filtered = !query
       ? scoped
       : scoped.filter(
@@ -657,6 +663,7 @@ function ProjectsIndexPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Ativos (sem arquivados)</SelectItem>
+                <SelectItem value="all_with_archived">Todos (com arquivados)</SelectItem>
                 {Object.entries(STATUS_META).map(([k, v]) => (
                   <SelectItem key={k} value={k}>
                     {v.label}
@@ -815,7 +822,11 @@ function ProjectsIndexPage() {
           {q.trim() ? <FilterChip label={`Busca: ${q.trim()}`} onClear={() => setQ("")} /> : null}
           {statusFilter !== "all" ? (
             <FilterChip
-              label={`Status: ${STATUS_META[statusFilter]?.label ?? statusFilter}`}
+              label={`Status: ${
+                statusFilter === "all_with_archived"
+                  ? "Todos (com arquivados)"
+                  : (STATUS_META[statusFilter]?.label ?? statusFilter)
+              }`}
               onClear={() => setStatusFilter("all")}
             />
           ) : null}
