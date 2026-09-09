@@ -124,8 +124,6 @@ export async function assertIntegrationAuthority(
   }
 }
 
-
-
 /**
  * Exige que o ator possa CONCEDER `role` na marca — fonte canônica única:
  * `public.can_invite_brand_role()` (mesma matriz usada por `brand_invites`).
@@ -223,7 +221,6 @@ export async function assertCanManageBrandMember(
   return authority as AuthorityRole;
 }
 
-
 /**
  * Exige que o usuário PERTENÇA ao workspace (qualquer papel interno) — fonte
  * canônica `app_access_role`. Usar antes de qualquer operação privilegiada
@@ -256,18 +253,30 @@ export async function assertClientInBrand(
   clientId: string,
 ): Promise<void> {
   await assertClientScope(supabase, userId, clientId);
-  const q = (supabase as unknown as {
-    from: (t: string) => {
-      select: (c: string) => {
-        eq: (k: string, v: string) => {
-          eq: (k: string, v: string) => {
-            maybeSingle: () => Promise<{ data: { id: string } | null; error: unknown }>;
+  const q = (
+    supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            k: string,
+            v: string,
+          ) => {
+            eq: (
+              k: string,
+              v: string,
+            ) => {
+              maybeSingle: () => Promise<{ data: { id: string } | null; error: unknown }>;
+            };
           };
         };
       };
-    };
-  }).from("clients");
-  const { data, error } = await q.select("id").eq("id", clientId).eq("brand_id", brandId).maybeSingle();
+    }
+  ).from("clients");
+  const { data, error } = await q
+    .select("id")
+    .eq("id", clientId)
+    .eq("brand_id", brandId)
+    .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Forbidden: cliente não pertence a este workspace");
 }
@@ -322,7 +331,6 @@ export async function assertTaskScope(
   if (error) throw error;
   if (data !== true) throw new Error("Forbidden: tarefa fora do seu escopo");
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Escopo de clientes (contexto canônico)                             */
@@ -393,7 +401,6 @@ export async function resolveScopedClientIds(
   }
   return scope.allowedClientIds;
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Permissões por MÓDULO (RBAC operacional)                           */

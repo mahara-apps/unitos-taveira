@@ -36,9 +36,8 @@ export const getClientPoliciesFn = createServerFn({ method: "POST" })
     z.object({ brandId: z.string().uuid(), clientId: z.string().uuid() }).parse(i),
   )
   .handler(async ({ data, context }): Promise<ClientPolicies> => {
-    const { resolveClientApprovalPolicy, resolveClientScopePolicy } = await import(
-      "@/lib/client-policy.server"
-    );
+    const { resolveClientApprovalPolicy, resolveClientScopePolicy } =
+      await import("@/lib/client-policy.server");
     const [approval, scope, plans, posts, schedule] = await Promise.all([
       resolveClientApprovalPolicy(context.supabase, data),
       resolveClientScopePolicy(context.supabase, data),

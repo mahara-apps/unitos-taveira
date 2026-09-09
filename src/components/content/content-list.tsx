@@ -59,8 +59,7 @@ export function ContentList({
   onSelectMany,
 }: Props) {
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const allVisibleSelected =
-    posts.length > 0 && posts.every((p) => selectedSet.has(p.id));
+  const allVisibleSelected = posts.length > 0 && posts.every((p) => selectedSet.has(p.id));
   const stageById = useMemo(() => {
     const m = new Map<string, PipelineStage>();
     for (const s of board.stages) m.set(s.id, s);
@@ -238,9 +237,7 @@ export function ContentList({
                     <div className="flex flex-col gap-1">
                       <span
                         className="inline-flex items-center gap-1 text-xs tabular-nums text-foreground/80"
-                        title={
-                          schedule.iso ? scheduleFullLabel(schedule.iso) : "Sem data definida"
-                        }
+                        title={schedule.iso ? scheduleFullLabel(schedule.iso) : "Sem data definida"}
                       >
                         <CalendarDays className="h-3 w-3" />
                         {schedule.iso ? schedule.label : "—"}

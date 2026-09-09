@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Loader2, MoveRight, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import {
   Select,
   SelectContent,
@@ -87,12 +88,22 @@ export function BulkStageBar({
     onError: (e) => toast.error(describeError(e)),
   });
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const bulkCount = Math.min(selected.length, MAX_BULK);
+
   const deleteMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (vars: { confirmLabel: string }) =>
       bulkDelete({
-        data: { brandId, clientId, pipelineId, postIds: selected.slice(0, MAX_BULK) },
+        data: {
+          brandId,
+          clientId,
+          pipelineId,
+          postIds: selected.slice(0, MAX_BULK),
+          confirmLabel: vars.confirmLabel,
+        },
       }),
     onSuccess: (res) => {
+      setConfirmOpen(false);
       toast.success(`${res.deleted} conteúdo(s) enviado(s) para a Lixeira.`);
       qc.invalidateQueries({ queryKey: invalidateKey });
       qc.invalidateQueries({ queryKey: ["content-trash", brandId, clientId] });
@@ -143,41 +154,33 @@ export function BulkStageBar({
       </Button>
 
       {canDelete ? (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
-              Excluir selecionados
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Enviar conteúdos para a Lixeira?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {Math.min(selected.length, MAX_BULK)} conteúdo(s) serão removidos do pipeline e
-                poderão ser recuperados por 30 dias. Agendamentos pendentes serão cancelados.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => deleteMutation.mutate()}
-              >
-                Enviar para a Lixeira
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+            disabled={deleteMutation.isPending}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Excluir selecionados
+          </Button>
+          <CriticalConfirmDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="Enviar conteúdos para a Lixeira"
+            actionLabel="Enviar para a Lixeira"
+            pending={deleteMutation.isPending}
+            impact={`${bulkCount} conteúdo(s) serão removidos do pipeline e poderão ser recuperados por 30 dias. Agendamentos pendentes serão cancelados.`}
+            fieldLabel="Para confirmar, digite a quantidade de conteúdos selecionados"
+            confirmText={String(bulkCount)}
+            onConfirm={() => deleteMutation.mutate({ confirmLabel: String(bulkCount) })}
+          />
+        </>
       ) : null}
 
       <Button

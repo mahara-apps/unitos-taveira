@@ -168,7 +168,7 @@ function RootComponent() {
     // apagava workspace/cliente ativos e todo o cache no meio do boot.
     let previousUserId: string | null = null;
     void supabase.auth.getSession().then(({ data }) => {
-      previousUserId = previousUserId ?? (data.session?.user.id ?? null);
+      previousUserId = previousUserId ?? data.session?.user.id ?? null;
     });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
@@ -197,5 +197,4 @@ function RootComponent() {
       </ThemeProvider>
     </QueryClientProvider>
   );
-
 }

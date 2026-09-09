@@ -24,7 +24,6 @@ export type BriefingWriteOrigin =
   | "document"
   | "portal";
 
-
 export type BriefingWriteResult = {
   hub: BrandHubData;
   completion: number;

@@ -1,6 +1,9 @@
 import { CREATIVE_LIMITS, type GeneratedCampaign, type GeneratedPlan } from "./plan-schema";
 
-const clampText = (s: unknown, max: number) => String(s ?? "").trim().slice(0, max);
+const clampText = (s: unknown, max: number) =>
+  String(s ?? "")
+    .trim()
+    .slice(0, max);
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -47,7 +50,9 @@ function normalizeCampaign(c: GeneratedCampaign): GeneratedCampaign {
     rationale: clampText(c.rationale, 900),
     creative: {
       angles: (c.creative?.angles ?? []).slice(0, 6).map((a) => clampText(a, 200)),
-      headlines: (c.creative?.headlines ?? []).slice(0, 15).map((h) => clampText(h, limits.headline)),
+      headlines: (c.creative?.headlines ?? [])
+        .slice(0, 15)
+        .map((h) => clampText(h, limits.headline)),
       descriptions: (c.creative?.descriptions ?? [])
         .slice(0, 6)
         .map((d) => clampText(d, limits.description)),
@@ -69,7 +74,8 @@ export function normalizeGeneratedPlan(plan: GeneratedPlan): GeneratedPlan {
     if (sum <= 0) {
       const even = round1(100 / campaigns.length);
       campaigns.forEach((c, i) => {
-        c.budget_pct = i === campaigns.length - 1 ? round1(100 - even * (campaigns.length - 1)) : even;
+        c.budget_pct =
+          i === campaigns.length - 1 ? round1(100 - even * (campaigns.length - 1)) : even;
       });
     } else if (Math.abs(sum - 100) > 0.1) {
       const k = 100 / sum;

@@ -161,7 +161,6 @@ export async function resolveResendConfig(
   return null;
 }
 
-
 /** Estado consumido pela UI — derivado do MESMO resolvedor do envio. */
 export async function resolveResendStatus(
   supabase: SupabaseLike,
@@ -407,11 +406,7 @@ export async function sendResendEmail(
       route,
       status: outcome.kind === "http" ? outcome.status : null,
       outcome:
-        outcome.kind === "http"
-          ? "http_error"
-          : outcome.kind === "timeout"
-            ? "timeout"
-            : "network",
+        outcome.kind === "http" ? "http_error" : outcome.kind === "timeout" ? "timeout" : "network",
       failureClass,
       durationMs: now() - attemptStart,
       retried: willRetry || willFallback,
@@ -433,7 +428,6 @@ export async function sendResendEmail(
   finish("retry_exhausted", lastError);
   return { sent: false, error: lastError, from: config.from };
 }
-
 
 /**
  * Atalho: resolve + envia. Retorna `resend_nao_configurado` com o mesmo código

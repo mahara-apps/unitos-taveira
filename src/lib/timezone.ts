@@ -48,7 +48,15 @@ export function zonedParts(d: Date = new Date()): ZonedParts {
 /** Offset do fuso de Brasília, em ms, para o instante informado. */
 function zoneOffsetMs(d: Date): number {
   const p = zonedParts(d);
-  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second, d.getMilliseconds());
+  const asUtc = Date.UTC(
+    p.year,
+    p.month - 1,
+    p.day,
+    p.hour,
+    p.minute,
+    p.second,
+    d.getMilliseconds(),
+  );
   return asUtc - d.getTime();
 }
 

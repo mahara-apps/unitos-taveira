@@ -46,8 +46,7 @@ export function nameFromEmail(email?: string | null): string | null {
 
 /** Nome a exibir, na ordem: nome informado → derivado do e-mail → "Sem nome". */
 export function displayName(person?: IdentityLike | null, fallback = "Sem nome"): string {
-  const given =
-    person?.full_name?.trim() || person?.fullName?.trim() || person?.name?.trim() || "";
+  const given = person?.full_name?.trim() || person?.fullName?.trim() || person?.name?.trim() || "";
   if (given) return given;
   return nameFromEmail(person?.email) ?? fallback;
 }

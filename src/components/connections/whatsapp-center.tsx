@@ -30,7 +30,6 @@ export function WhatsappCenter({
   );
 }
 
-
 /** Canal previsto na arquitetura, ainda sem fluxo funcional. */
 export function WhatsappComingSoonCard() {
   return (

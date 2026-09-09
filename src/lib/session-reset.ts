@@ -103,4 +103,3 @@ export function resetScopeCache(
       isWorkspaceScopedQueryKey(q.queryKey) && !queryKeyCarriesScopeId(q.queryKey, scopeIds),
   });
 }
-

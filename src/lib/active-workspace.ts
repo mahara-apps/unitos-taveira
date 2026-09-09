@@ -66,7 +66,6 @@ export function subscribeActiveWorkspace(fn: (s: ActiveWorkspaceState) => void):
   return () => listeners.delete(fn);
 }
 
-
 /**
  * Aguarda a resolução do workspace (evita a race em que o gate roda antes do
  * contexto carregar e conclui "sem workspace"). Nunca prende a navegação: após

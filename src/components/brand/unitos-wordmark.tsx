@@ -1,8 +1,5 @@
 import { cn } from "@/lib/utils";
-import {
-  UNITOS_MARK_DATA_URL,
-  UNITOS_WORDMARK_DATA_URL,
-} from "@/assets/unitos-logo-data";
+import { UNITOS_MARK_DATA_URL, UNITOS_WORDMARK_DATA_URL } from "@/assets/unitos-logo-data";
 
 /**
  * LOGO OFICIAL DO UNITOS (única marca institucional do sistema).
@@ -23,15 +20,7 @@ export const UNITOS_WORDMARK_RATIO = 1909 / 544;
 /** Proporção do ícone/mark (quadrado). */
 export const UNITOS_MARK_RATIO = 1;
 
-function MaskedLogo({
-  url,
-  className,
-  label,
-}: {
-  url: string;
-  className?: string;
-  label: string;
-}) {
+function MaskedLogo({ url, className, label }: { url: string; className?: string; label: string }) {
   return (
     <span
       role="img"

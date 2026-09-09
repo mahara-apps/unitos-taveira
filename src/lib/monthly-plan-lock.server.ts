@@ -96,7 +96,8 @@ export function pickLockHolder(rows: LockRow[], now: number = Date.now()): LockR
     .filter((r) => isLeaseValid(r, now))
     .sort(
       (a, b) =>
-        Date.parse(a.created_at) - Date.parse(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        Date.parse(a.created_at) - Date.parse(b.created_at) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     )[0];
 }
 

@@ -39,8 +39,7 @@ export function createRememberStorage(): StorageLike {
   // Em produção/preview-nao-framed o broker retorna o `localStorage` real.
   // Apenas nesse caso conseguimos trocar para sessionStorage; no broker de
   // preview (postMessage) mantemos o comportamento original.
-  const isBrowserStorage =
-    typeof Storage !== "undefined" && base === globalThis.localStorage;
+  const isBrowserStorage = typeof Storage !== "undefined" && base === globalThis.localStorage;
 
   if (!isBrowserStorage) {
     return base as StorageLike;
@@ -48,9 +47,7 @@ export function createRememberStorage(): StorageLike {
 
   return {
     getItem: (key: string) =>
-      rememberEnabled()
-        ? localStorage.getItem(key)
-        : sessionStorage.getItem(key),
+      rememberEnabled() ? localStorage.getItem(key) : sessionStorage.getItem(key),
     setItem: (key: string, value: string) => {
       if (rememberEnabled()) localStorage.setItem(key, value);
       else sessionStorage.setItem(key, value);

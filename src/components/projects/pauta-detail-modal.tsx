@@ -288,7 +288,6 @@ function PautaShell({
   );
 }
 
-
 export function PautaDetailModal({
   open,
   onOpenChange,
@@ -301,7 +300,6 @@ export function PautaDetailModal({
   canEdit,
   onOpenTask,
   variant = "modal",
-
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;

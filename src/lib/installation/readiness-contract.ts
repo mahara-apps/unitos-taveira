@@ -44,7 +44,6 @@ export type CoreRequirementId = (typeof CORE_REQUIREMENTS)[number]["id"];
  */
 export const FIRST_ACCESS_REQUIREMENTS: readonly CoreRequirementId[] = ["super_admin", "workspace"];
 
-
 /** Estado de um item do núcleo. `pending` = obrigatório ainda não comprovado. */
 export type CoreState = "ok" | "attention" | "pending" | "running" | "error";
 
@@ -222,7 +221,6 @@ export function computeReadiness(input: ReadinessInput): ReadinessReport {
   return { ready, state, core, optional, missingCore, failedCore, pendingOptional };
 }
 
-
 /* ----------------------------------------------------------- URL operacional */
 
 /** Domínios de deploy temporário aceitos como URL operacional inicial. */
@@ -246,7 +244,9 @@ export function isTemporaryDeployUrl(raw: string | null | undefined): boolean {
   const value = (raw ?? "").trim();
   if (!value) return false;
   try {
-    const host = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`).hostname.toLowerCase();
+    const host = new URL(
+      /^https?:\/\//i.test(value) ? value : `https://${value}`,
+    ).hostname.toLowerCase();
     return TEMPORARY_DEPLOY_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
   } catch {
     return false;
@@ -379,7 +379,6 @@ export function envIntegrationState(input: {
   };
 }
 
-
 /* --------------------------------------------------- troca de URL definitiva */
 
 export type UrlSwitchInput = {
@@ -434,5 +433,7 @@ export function validateAppUrlSwitch(input: UrlSwitchInput): UrlSwitchResult {
     errors.push("META_REDIRECT_URI aponta para outra origem");
   }
 
-  return errors.length ? { ok: false, errors: Array.from(new Set(errors)) } : { ok: true, origin, kind: target.kind };
+  return errors.length
+    ? { ok: false, errors: Array.from(new Set(errors)) }
+    : { ok: true, origin, kind: target.kind };
 }

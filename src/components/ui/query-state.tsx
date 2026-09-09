@@ -56,10 +56,6 @@ export function SlowLoadingNotice({
   const slow = useSlowLoading(active, ms);
   if (!slow) return null;
   return (
-    <DataErrorState
-      compact
-      message="Isto está demorando mais do que o normal."
-      onRetry={onRetry}
-    />
+    <DataErrorState compact message="Isto está demorando mais do que o normal." onRetry={onRetry} />
   );
 }

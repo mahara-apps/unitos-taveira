@@ -35,7 +35,13 @@ import {
   type LinkSource,
 } from "@/lib/link-source";
 import { usePortalCanInteract, usePortalMode } from "./portal-context";
-import { EmptyState, ErrorState, ListSkeleton, formatDate, portalErrorMessage } from "./portal-shared";
+import {
+  EmptyState,
+  ErrorState,
+  ListSkeleton,
+  formatDate,
+  portalErrorMessage,
+} from "./portal-shared";
 
 /**
  * Pedidos do cliente — o cliente abre uma solicitação, acompanha a situação e
@@ -53,7 +59,12 @@ const STATUS_TONE: Record<PortalRequestStatus, string> = {
   cancelled: "border-border/60 bg-muted/40 text-muted-foreground",
 };
 
-const OPEN_STATUS: PortalRequestStatus[] = ["submitted", "info_needed", "accepted", "in_production"];
+const OPEN_STATUS: PortalRequestStatus[] = [
+  "submitted",
+  "info_needed",
+  "accepted",
+  "in_production",
+];
 
 function StatusChip({ status }: { status: PortalRequestStatus }) {
   return (
@@ -337,12 +348,7 @@ function NewRequestDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="req-due">Prazo desejado (opcional)</Label>
-            <Input
-              id="req-due"
-              type="date"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-            />
+            <Input id="req-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="req-link">Links de referência (até {MAX_REQUEST_LINKS})</Label>
@@ -549,7 +555,9 @@ function RequestDetailDialog({
                       {e.actorName ?? (e.actorSide === "client" ? "Você" : "Equipe")} ·{" "}
                       {formatDate(e.createdAt)}
                     </div>
-                    {e.note ? <div className="mt-0.5 whitespace-pre-wrap text-sm">{e.note}</div> : null}
+                    {e.note ? (
+                      <div className="mt-0.5 whitespace-pre-wrap text-sm">{e.note}</div>
+                    ) : null}
                   </li>
                 ))}
               </ol>

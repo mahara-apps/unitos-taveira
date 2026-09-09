@@ -182,6 +182,28 @@ WITH checks AS (
                         OR (table_name = 'posts' AND column_name IN ('deleted_by','deleted_reason','deleted_pipeline_id')))) = 5
                    AND to_regprocedure('public.purge_deleted_content()') IS NOT NULL
               THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 47, 'Auditoria: ações críticas (dupla confirmação) registradas',
+         CASE WHEN to_regclass('public.critical_action_events') IS NULL THEN 'tabela ausente'
+              ELSE 'tabela presente / policies=' ||
+                   (SELECT count(*)::text FROM pg_policies
+                     WHERE schemaname = 'public' AND tablename = 'critical_action_events') END,
+         CASE WHEN to_regclass('public.critical_action_events') IS NOT NULL
+                   AND (SELECT count(*) FROM pg_policies
+                         WHERE schemaname = 'public' AND tablename = 'critical_action_events') >= 1
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 48, 'identidade: nenhuma conta sem perfil',
+         (SELECT count(*)::text
+            FROM auth.users u
+            LEFT JOIN public.user_profiles p ON p.id = u.id
+           WHERE p.id IS NULL),
+         CASE WHEN NOT EXISTS (
+           SELECT 1
+             FROM auth.users u
+             LEFT JOIN public.user_profiles p ON p.id = u.id
+            WHERE p.id IS NULL
+         ) THEN 'PASS' ELSE 'FAIL' END
 
   -- --------------------------------------------------- nenhum dado de negócio copiado
   UNION ALL

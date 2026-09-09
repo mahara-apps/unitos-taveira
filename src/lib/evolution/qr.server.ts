@@ -49,8 +49,7 @@ export async function requestEvolutionQr(
   const record = asRecord(data) ?? {};
   const nested = asRecord(record["qrcode"]) ?? asRecord(record["qr"]) ?? {};
 
-  const qrBase64 =
-    normalizeBase64(record["base64"]) ?? normalizeBase64(nested["base64"]) ?? null;
+  const qrBase64 = normalizeBase64(record["base64"]) ?? normalizeBase64(nested["base64"]) ?? null;
   const qrCode =
     (typeof record["code"] === "string" ? (record["code"] as string) : null) ??
     (typeof nested["code"] === "string" ? (nested["code"] as string) : null);

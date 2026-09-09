@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -25,6 +26,8 @@ const SaveInput = z.object({
   /** `undefined` mantém o segredo atual; string vazia apaga. */
   appSecret: z.string().max(500).nullable().optional(),
   businessConfigId: z.string().max(120).nullable().optional(),
+  /** Confirmação por escrito: "App Meta". */
+  confirmLabel: z.string().min(1),
 });
 
 export const saveMetaAppSettingsFn = createServerFn({ method: "POST" })
@@ -32,6 +35,14 @@ export const saveMetaAppSettingsFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SaveInput.parse(input))
   .handler(async ({ data, context }) => {
     await assertSuperAdmin(context.supabase as unknown as RpcClient, context.userId);
+    assertConfirmLabel(data.confirmLabel, "App Meta");
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "meta_app.update",
+      actorId: context.userId,
+      targetLabel: "App Meta",
+      impact: { appType: data.appType },
+    });
     const { saveMetaAppSettings, getMetaAppSettings } = await import("./app-config.server");
 
     if (data.appType === "client") {

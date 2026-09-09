@@ -326,4 +326,3 @@ export const setJobArchivedFn = createServerFn({ method: "POST" })
     if (!rows || rows.length === 0) throw new Error("Forbidden: job fora do seu escopo");
     return { ok: true };
   });
-

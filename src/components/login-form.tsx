@@ -99,14 +99,9 @@ export function LoginForm() {
       params.delete("email");
       params.delete("password");
       const qs = params.toString();
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${qs ? `?${qs}` : ""}`,
-      );
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
     }
   }, [signInForm]);
-
 
   async function onSignIn(values: SignInValues) {
     setSubmitting(true);
@@ -133,8 +128,7 @@ export function LoginForm() {
     // Contato de cliente vai direto para a área dele — sem passar pela UI
     // interna (que redirecionaria de novo, gerando um pisca).
     const access = await getCachedPortalAccess().catch(() => null);
-    const target =
-      access?.isPortalUser ? "/area/inicio" : resolveNext();
+    const target = access?.isPortalUser ? "/area/inicio" : resolveNext();
     await router.invalidate();
     navigate({ to: target, replace: true });
   }
@@ -209,9 +203,7 @@ export function LoginForm() {
                     <Checkbox
                       id="remember-me"
                       checked={field.value}
-                      onCheckedChange={(checked) =>
-                        field.onChange(checked === true)
-                      }
+                      onCheckedChange={(checked) => field.onChange(checked === true)}
                     />
                   </FormControl>
                   <label
@@ -237,7 +229,6 @@ export function LoginForm() {
             ) : (
               "Entrar"
             )}
-
           </Button>
         </form>
       </Form>
@@ -248,4 +239,3 @@ export function LoginForm() {
     </div>
   );
 }
-

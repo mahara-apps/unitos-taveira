@@ -11,9 +11,7 @@ import { isMasterInstallation } from "./manager-contract";
 export class NotMasterInstallationError extends Error {
   code = "installation_manager_indisponivel" as const;
   constructor() {
-    super(
-      "O módulo de Instalações existe apenas na instalação MASTER do Unitos.",
-    );
+    super("O módulo de Instalações existe apenas na instalação MASTER do Unitos.");
     this.name = "NotMasterInstallationError";
   }
 }

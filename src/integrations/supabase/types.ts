@@ -4605,6 +4605,66 @@ export type Database = {
           },
         ]
       }
+      critical_action_events: {
+        Row: {
+          action_key: string
+          actor_email: string | null
+          actor_id: string | null
+          brand_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          impact: Json
+          result: string
+          target_id: string | null
+          target_label: string | null
+          target_type: string
+        }
+        Insert: {
+          action_key: string
+          actor_email?: string | null
+          actor_id?: string | null
+          brand_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          impact?: Json
+          result?: string
+          target_id?: string | null
+          target_label?: string | null
+          target_type: string
+        }
+        Update: {
+          action_key?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          brand_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          impact?: Json
+          result?: string
+          target_id?: string | null
+          target_label?: string | null
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "critical_action_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "critical_action_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evolution_events: {
         Row: {
           brand_id: string

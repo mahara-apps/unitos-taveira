@@ -104,7 +104,6 @@ export function QuickPostDialog({
       return updatePost({
         data: { postId: result.postId, patch: { title: draftTitle.trim(), copy: draftCopy } },
       });
-
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["content-board"] });
@@ -150,7 +149,8 @@ export function QuickPostDialog({
             />
             {organization.mode === "new" && (
               <p className="text-xs text-muted-foreground">
-                A peça expressa exige um projeto que já existe. Crie o projeto na pauta e volte aqui.
+                A peça expressa exige um projeto que já existe. Crie o projeto na pauta e volte
+                aqui.
               </p>
             )}
 

@@ -348,8 +348,7 @@ export const syncAdAccount = createServerFn({ method: "POST" })
 
         return { entities: entities.length, insights: insightCount, days };
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Falha ao sincronizar dados da Meta.";
+        const message = err instanceof Error ? err.message : "Falha ao sincronizar dados da Meta.";
         await markFailure(message);
         throw new Error(message);
       }

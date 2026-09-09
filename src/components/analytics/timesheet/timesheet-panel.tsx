@@ -30,10 +30,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { TimesheetHeatmap } from "@/components/analytics/timesheet/timesheet-heatmap";
-import {
-  getTimesheetReportFn,
-  type TimesheetReport,
-} from "@/lib/timesheet-report.functions";
+import { getTimesheetReportFn, type TimesheetReport } from "@/lib/timesheet-report.functions";
 import {
   aggregateTimesheet,
   downloadCsv,
@@ -84,7 +81,10 @@ function EstimateBar({ group }: { group: TimesheetGroup }) {
       <TooltipTrigger asChild>
         <div className="flex items-center gap-2">
           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-            <div className={cn("h-full", tone)} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+            <div
+              className={cn("h-full", tone)}
+              style={{ width: `${Math.min(100, ratio * 100)}%` }}
+            />
           </div>
           <span className="text-[11px] tabular-nums text-muted-foreground">
             {Math.round(ratio * 100)}%
@@ -222,10 +222,7 @@ function GroupRows({
               isLast ? (
                 <tr className="bg-muted/20">
                   <td colSpan={showCost ? 7 : 6} className="px-3 py-2">
-                    <div
-                      className="space-y-1.5"
-                      style={{ paddingLeft: (depth + 1) * 16 }}
-                    >
+                    <div className="space-y-1.5" style={{ paddingLeft: (depth + 1) * 16 }}>
                       {subset
                         .slice()
                         .sort((a, b) => (a.started_at < b.started_at ? 1 : -1))
@@ -322,7 +319,10 @@ export function TimesheetPanel({
   const entries = query.data?.entries ?? [];
   const showCost = !!query.data?.canViewCost;
   const totals = useMemo(() => timesheetTotals(entries), [entries]);
-  const closing = useMemo(() => (hideClosing ? [] : monthlyClosing(entries)), [entries, hideClosing]);
+  const closing = useMemo(
+    () => (hideClosing ? [] : monthlyClosing(entries)),
+    [entries, hideClosing],
+  );
   const levels = useMemo(() => {
     const rest = GROUP_ORDER.filter((l) => l !== groupBy);
     return [groupBy, ...rest];
@@ -333,7 +333,8 @@ export function TimesheetPanel({
     totals.people > 0 && totals.activeDays > 0
       ? totals.seconds / totals.people / totals.activeDays
       : 0;
-  const reworkPct = totals.seconds > 0 ? Math.round((totals.reworkSeconds / totals.seconds) * 100) : 0;
+  const reworkPct =
+    totals.seconds > 0 ? Math.round((totals.reworkSeconds / totals.seconds) * 100) : 0;
   const estSeconds = totals.estimatedMinutes * 60;
   const estRatio = estSeconds > 0 ? Math.round((totals.seconds / estSeconds) * 100) : null;
   const hoursTrend = pctChange(totals.seconds, query.data?.previous.seconds ?? 0);
@@ -378,7 +379,9 @@ export function TimesheetPanel({
           value={formatHours(totals.seconds)}
           icon={<Clock />}
           status="info"
-          trend={hoursTrend != null ? { value: hoursTrend, label: "vs. período anterior" } : undefined}
+          trend={
+            hoursTrend != null ? { value: hoursTrend, label: "vs. período anterior" } : undefined
+          }
           description={`${totals.entries} apontamento(s)`}
         />
         {showCost ? (
@@ -420,7 +423,15 @@ export function TimesheetPanel({
           label="Realizado vs. previsto"
           value={estRatio != null ? `${estRatio}%` : "—"}
           icon={<AlertTriangle />}
-          status={estRatio == null ? "neutral" : estRatio > 110 ? "danger" : estRatio > 90 ? "warning" : "success"}
+          status={
+            estRatio == null
+              ? "neutral"
+              : estRatio > 110
+                ? "danger"
+                : estRatio > 90
+                  ? "warning"
+                  : "success"
+          }
           description={
             estRatio != null
               ? `previsto ${formatHours(estSeconds)} · ${totals.tasksWithoutEstimate} sem estimativa`

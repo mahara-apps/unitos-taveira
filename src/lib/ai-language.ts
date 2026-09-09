@@ -115,4 +115,3 @@ export function assertPtBrPayload(payload: unknown, label: string): void {
     );
   }
 }
-

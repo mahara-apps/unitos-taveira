@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertSuperAdmin } from "@/lib/super-admin";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import type { RpcClient } from "@/lib/access-guard";
 
 /**
@@ -68,6 +69,7 @@ export const getEnvironmentInfoFn = createServerFn({ method: "GET" })
 const RenameInput = z.object({
   brandId: z.string().uuid(),
   name: z.string().trim().min(2).max(120),
+  confirmLabel: z.string().min(1),
 });
 
 export const updateEnvironmentNameFn = createServerFn({ method: "POST" })
@@ -81,6 +83,18 @@ export const updateEnvironmentNameFn = createServerFn({ method: "POST" })
       .select("name")
       .eq("id", data.brandId)
       .maybeSingle();
+
+    // Ação crítica: exige o nome ATUAL do ambiente digitado por extenso.
+    assertConfirmLabel(data.confirmLabel, prev?.name ?? null);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "environment.rename",
+      actorId: context.userId,
+      targetId: data.brandId,
+      targetLabel: prev?.name ?? null,
+      brandId: data.brandId,
+      impact: { previous: prev?.name ?? null, next: data.name },
+    });
 
     const { error } = await context.supabase
       .from("brands")
@@ -123,9 +137,7 @@ export const listAdminAuditFn = createServerFn({ method: "GET" })
         .from("user_profiles")
         .select("id, full_name")
         .in("id", actorIds);
-      names = new Map(
-        (profiles ?? []).map((p) => [p.id, p.full_name || "Usuário"]),
-      );
+      names = new Map((profiles ?? []).map((p) => [p.id, p.full_name || "Usuário"]));
     }
 
     return (rows ?? []).map((r) => {
@@ -135,7 +147,8 @@ export const listAdminAuditFn = createServerFn({ method: "GET" })
         actorName: r.actor_id ? (names.get(r.actor_id) ?? "Usuário") : "Sistema",
         entityType: r.entity_type,
         verb: r.verb,
-        featureName: (payload["feature_name"] as string) ?? (payload["feature_key"] as string) ?? null,
+        featureName:
+          (payload["feature_name"] as string) ?? (payload["feature_key"] as string) ?? null,
         field: (payload["field"] as string) ?? null,
         previousValue: payload["previous_value"] ?? null,
         newValue: payload["new_value"] ?? null,

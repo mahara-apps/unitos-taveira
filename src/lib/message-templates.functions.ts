@@ -185,7 +185,11 @@ export const sendTestMessage = createServerFn({ method: "POST" })
           recipient: maskDestination(destination),
           eventKey: data.eventKey,
           source: "brand",
-          metadata: { test: true, instance_id: instance.id, provider_message_id: providerMessageId },
+          metadata: {
+            test: true,
+            instance_id: instance.id,
+            provider_message_id: providerMessageId,
+          },
         },
       );
       return { sent: true, previewBody: body };
@@ -195,7 +199,6 @@ export const sendTestMessage = createServerFn({ method: "POST" })
       return { sent: false, error: message, previewBody: body };
     }
   });
-
 
 export function listCatalog() {
   return EVENTS;

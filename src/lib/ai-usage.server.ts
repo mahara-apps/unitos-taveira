@@ -4,7 +4,6 @@
 
 import { redactAiDetail } from "./ai-observability";
 
-
 export type AiUsageContext = {
   /** Rótulo do recurso que originou a chamada (ex.: "chat.brain"). */
   agent?: string;

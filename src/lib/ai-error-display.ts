@@ -9,8 +9,10 @@ export function aiErrorMessage(err: unknown, fallback: string): string {
   const raw =
     err instanceof Error
       ? err.message
-      : typeof err === "object" && err !== null && typeof (err as { message?: unknown }).message === "string"
-        ? ((err as { message: string }).message)
+      : typeof err === "object" &&
+          err !== null &&
+          typeof (err as { message?: unknown }).message === "string"
+        ? (err as { message: string }).message
         : typeof err === "string"
           ? err
           : "";

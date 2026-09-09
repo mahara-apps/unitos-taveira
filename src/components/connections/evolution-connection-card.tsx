@@ -144,7 +144,6 @@ export function EvolutionConnectionCard({
       toast.error(err instanceof Error ? err.message : "Falha ao consultar o estado."),
   });
 
-
   // Solicita o primeiro QR quando o usuário abre o pareamento.
   useEffect(() => {
     if (!showQr || !instance || connected) return;
@@ -320,11 +319,10 @@ export function EvolutionConnectionCard({
           ) : null}
         </div>
       ) : connected ? (
-
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <CheckCircle2 className="h-3.5 w-3.5 text-health-good" />
-          WhatsApp conectado{phone ? ` em ${phone}` : ""} — pronto para automações,
-          notificações e templates.
+          WhatsApp conectado{phone ? ` em ${phone}` : ""} — pronto para automações, notificações e
+          templates.
         </p>
       ) : !showQr ? (
         <div className="space-y-2">
@@ -372,8 +370,8 @@ export function EvolutionConnectionCard({
           ) : null}
 
           <p className="max-w-xs text-[11px] text-muted-foreground">
-            Abra o WhatsApp → Aparelhos conectados → Conectar aparelho e aponte a câmera
-            para o código.
+            Abra o WhatsApp → Aparelhos conectados → Conectar aparelho e aponte a câmera para o
+            código.
           </p>
 
           <div className="flex items-center gap-1.5">

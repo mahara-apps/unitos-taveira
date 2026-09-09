@@ -16,10 +16,7 @@
  */
 
 import { containsMasterReference } from "./bootstrap-contract";
-import {
-  classifyOperationalUrl,
-  type OperationalUrlKind,
-} from "./readiness-contract";
+import { classifyOperationalUrl, type OperationalUrlKind } from "./readiness-contract";
 
 /* ------------------------------------------------------------ credenciais */
 
@@ -34,8 +31,6 @@ export const AUTOMATION_CREDENTIAL_VARS = {
   vercelTeam: ["UNITOS_VERCEL_TEAM_ID"],
   github: ["UNITOS_GITHUB_TOKEN"],
 } as const;
-
-
 
 export type AutomationEnv = Record<string, string | undefined | null>;
 
@@ -85,7 +80,6 @@ export function resolveAutomationCapability(env: AutomationEnv): AutomationCapab
   const management = pick(env, AUTOMATION_CREDENTIAL_VARS.supabaseManagement);
   const vercel = pick(env, AUTOMATION_CREDENTIAL_VARS.vercel);
   const github = pick(env, AUTOMATION_CREDENTIAL_VARS.github);
-
 
   const supabase: CapabilityState = management
     ? {
@@ -268,8 +262,6 @@ export function resolveInstallationRepo(input: {
   return { ok: true, owner, repo, slug };
 }
 
-
-
 /* ---------------------------------------------------------------- secrets */
 
 /** Secrets exclusivos gerados NO provisionamento, nunca herdados do MASTER. */
@@ -353,9 +345,7 @@ export function resolveOperationalUrl(input: {
 
 export type DeployEnvEntry = { key: string; value: string; sensitive: boolean };
 
-export type DeployEnvPlan =
-  | { ok: true; entries: DeployEnvEntry[] }
-  | { ok: false; reason: string };
+export type DeployEnvPlan = { ok: true; entries: DeployEnvEntry[] } | { ok: false; reason: string };
 
 /**
  * Plano de variáveis que o MASTER grava no projeto de deploy da instalação.
@@ -437,8 +427,16 @@ export function buildDeployEnvPlan(input: {
  */
 export const AUTOMATED_PROVISION_PLAN = [
   { id: "supabase", label: "Supabase destino", detail: "Projeto, chaves e extensões" },
-  { id: "code", label: "Código no GitHub", detail: "Repositório da instalação a partir do template" },
-  { id: "deploy_link", label: "Deploy conectado", detail: "Projeto ligado ao repositório da instalação" },
+  {
+    id: "code",
+    label: "Código no GitHub",
+    detail: "Repositório da instalação a partir do template",
+  },
+  {
+    id: "deploy_link",
+    label: "Deploy conectado",
+    detail: "Projeto ligado ao repositório da instalação",
+  },
   { id: "database", label: "Banco + RLS + funções", detail: "Baseline aplicado no destino" },
   { id: "storage", label: "Storage", detail: "Buckets e policies" },
   { id: "seeds", label: "Seeds de catálogo", detail: "Catálogo, sem dado de negócio" },
@@ -449,7 +447,6 @@ export const AUTOMATED_PROVISION_PLAN = [
   { id: "validation", label: "Validação final", detail: "verify-installation.sql" },
 ] as const;
 
-
 export type AutomatedStepId = (typeof AUTOMATED_PROVISION_PLAN)[number]["id"];
 
 export type AutomationOutcome = {
@@ -459,7 +456,10 @@ export type AutomationOutcome = {
 
 /** Recusa explícita: dependência externa indisponível nunca é sucesso. */
 export function blockedOutcome(reasons: string[]): AutomationOutcome {
-  return { result: "BLOCKED", reasons: reasons.length ? reasons : ["Pré-condição não satisfeita."] };
+  return {
+    result: "BLOCKED",
+    reasons: reasons.length ? reasons : ["Pré-condição não satisfeita."],
+  };
 }
 
 /** Resultado final do fluxo automatizado — nunca PASS com falhas/bloqueios. */

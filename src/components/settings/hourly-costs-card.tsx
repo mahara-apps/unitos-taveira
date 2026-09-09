@@ -5,21 +5,12 @@ import { toast } from "sonner";
 import { Check, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { displayName } from "@/lib/identity";
 import { listBrandTeam } from "@/lib/team.functions";
-import {
-  listMemberHourlyCostsFn,
-  setMemberHourlyCostFn,
-} from "@/lib/timesheet-report.functions";
+import { listMemberHourlyCostsFn, setMemberHourlyCostFn } from "@/lib/timesheet-report.functions";
 
 /** Valor/hora por pessoa — base do custo no relatório de Timesheet. */
 export function HourlyCostsCard({ brandId }: { brandId: string }) {
@@ -46,10 +37,7 @@ export function HourlyCostsCard({ brandId }: { brandId: string }) {
     return map;
   }, [costsQ.data]);
 
-  const members = useMemo(
-    () => (teamQ.data?.members ?? []),
-    [teamQ.data],
-  );
+  const members = useMemo(() => teamQ.data?.members ?? [], [teamQ.data]);
 
   const save = useMutation({
     mutationFn: (v: { userId: string; hourlyCostCents: number }) =>
@@ -153,7 +141,11 @@ function CostRow({
           disabled={!dirty || saving}
           onClick={() => onSave(parsed)}
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
         </Button>
       </div>
     </li>

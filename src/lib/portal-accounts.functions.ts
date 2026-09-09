@@ -39,6 +39,9 @@ type ClientRow = {
 };
 
 type AnyClient = {
+  // O cliente admin é convertido nesta borda porque as consultas abaixo
+  // operam sobre tabelas conhecidas, mas compartilham um formato mínimo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (table: string) => any;
   rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
 };
@@ -103,18 +106,26 @@ async function listContacts(clientId: string): Promise<PortalContact[]> {
       members.map((m) => m.user_id),
     );
   const byId = new Map(
-    ((profiles ?? []) as Array<{
-      id: string;
-      full_name: string | null;
-      requires_password_change: boolean | null;
-    }>).map((p) => [p.id, p]),
+    (
+      (profiles ?? []) as Array<{
+        id: string;
+        full_name: string | null;
+        requires_password_change: boolean | null;
+      }>
+    ).map((p) => [p.id, p]),
   );
 
   const out: PortalContact[] = [];
   for (const member of members) {
     const { data: authUser } = await (
       supabaseAdmin as unknown as {
-        auth: { admin: { getUserById: (id: string) => Promise<{ data: { user?: { email?: string | null } | null } }> } };
+        auth: {
+          admin: {
+            getUserById: (
+              id: string,
+            ) => Promise<{ data: { user?: { email?: string | null } | null } }>;
+          };
+        };
       }
     ).auth.admin.getUserById(member.user_id);
     const profile = byId.get(member.user_id);
@@ -137,7 +148,11 @@ export const listPortalContactsFn = createServerFn({ method: "POST" })
     async ({
       data,
       context,
-    }): Promise<{ contacts: PortalContact[]; suggestedEmail: string | null; suggestedName: string | null }> => {
+    }): Promise<{
+      contacts: PortalContact[];
+      suggestedEmail: string | null;
+      suggestedName: string | null;
+    }> => {
       const client = await loadClient(context.supabase, data.clientId);
       await assertCanManage(context.supabase, client.brand_id, context.userId, client.id);
       return {
@@ -228,10 +243,18 @@ export const createPortalContactFn = createServerFn({ method: "POST" })
       }
       const newUserId = created.user.id;
 
-      await admin
-        .from("user_profiles")
-        .update({ requires_password_change: true, full_name: fullName })
-        .eq("id", newUserId);
+      try {
+        const { ensureUserProfile } = await import("@/lib/user-profile.server");
+        await ensureUserProfile(supabaseAdmin, {
+          userId: newUserId,
+          email,
+          fullName,
+          requiresPasswordChange: true,
+        });
+      } catch (error) {
+        await supabaseAdmin.auth.admin.deleteUser(newUserId);
+        throw error;
+      }
 
       const { error: cmErr } = await admin.from("client_members").insert({
         brand_id: client.brand_id,
@@ -276,7 +299,9 @@ export const createPortalContactFn = createServerFn({ method: "POST" })
 
 export const resetPortalContactPasswordFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => ContactInput.extend({ sendEmail: z.boolean().optional().default(false) }).parse(i))
+  .inputValidator((i: unknown) =>
+    ContactInput.extend({ sendEmail: z.boolean().optional().default(false) }).parse(i),
+  )
   .handler(
     async ({
       data,
@@ -303,7 +328,10 @@ export const resetPortalContactPasswordFn = createServerFn({ method: "POST" })
       });
       if (error) throw new Error(`reset_failed: ${error.message}`);
 
-      await admin.from("user_profiles").update({ requires_password_change: true }).eq("id", data.userId);
+      await admin
+        .from("user_profiles")
+        .update({ requires_password_change: true })
+        .eq("id", data.userId);
 
       const email = updated?.user?.email ?? "";
 

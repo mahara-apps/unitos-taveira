@@ -75,7 +75,10 @@ export const markNotificationReadFn = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .is("read_at", null);
     if (error) throw error;
-    return { ok: true, unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null) };
+    return {
+      ok: true,
+      unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null),
+    };
   });
 
 export const markAllNotificationsReadFn = createServerFn({ method: "POST" })
@@ -95,7 +98,10 @@ export const markAllNotificationsReadFn = createServerFn({ method: "POST" })
     if (data.brandId) q = q.eq("brand_id", data.brandId);
     const { error } = await q;
     if (error) throw error;
-    return { ok: true, unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null) };
+    return {
+      ok: true,
+      unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null),
+    };
   });
 
 /**
@@ -120,5 +126,8 @@ export const archiveReadNotificationsFn = createServerFn({ method: "POST" })
     if (data.brandId) q = q.eq("brand_id", data.brandId);
     const { error } = await q;
     if (error) throw error;
-    return { ok: true, unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null) };
+    return {
+      ok: true,
+      unreadTotal: await pendingCount(context.supabase, context.userId, data.brandId ?? null),
+    };
   });

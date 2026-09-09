@@ -36,7 +36,9 @@ export type MultimodalDownloadOutcome =
   | { kind: "timeout" }
   | { kind: "network" };
 
-export function classifyMultimodalOutcome(o: MultimodalDownloadOutcome): "recoverable" | "terminal" {
+export function classifyMultimodalOutcome(
+  o: MultimodalDownloadOutcome,
+): "recoverable" | "terminal" {
   if (o.kind === "timeout" || o.kind === "network") return "recoverable";
   if (o.status === 429 || o.status >= 500) return "recoverable";
   return "terminal";
@@ -53,7 +55,9 @@ export interface MultimodalDeps {
 function multimodalLog(logger: MultimodalDeps["logger"], line: Record<string, unknown>) {
   try {
     (logger ?? ((l) => console.warn("[multimodal]", JSON.stringify(l))))(line);
-  } catch { /* telemetria nunca derruba o fluxo */ }
+  } catch {
+    /* telemetria nunca derruba o fluxo */
+  }
 }
 
 export function multimodalBackoffMs(attempt: number, rand: () => number = Math.random): number {
@@ -100,7 +104,13 @@ export async function downloadAttachment(
       } else {
         const buf = new Uint8Array(await res.arrayBuffer());
         if (buf.length > MAX_FILE_MB * 1024 * 1024) {
-          multimodalLog(deps.logger, { event: "attachment_download", name, attempts: attempt, reason: "too_large", bytes: buf.length });
+          multimodalLog(deps.logger, {
+            event: "attachment_download",
+            name,
+            attempts: attempt,
+            reason: "too_large",
+            bytes: buf.length,
+          });
           if (lastFailure) lastFailure.current = { reason: "too_large", attempts: attempt };
           return null;
         }

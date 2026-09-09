@@ -42,8 +42,6 @@ const TABS = [
   { to: "/admin/ambiente", label: "Informações do ambiente", icon: Info },
 ] as const;
 
-
-
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { brandId } = useActiveContextOptional();

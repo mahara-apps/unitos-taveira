@@ -106,11 +106,7 @@ export function LiveOperationBar({
   );
 }
 
-export function OperationStatusBadge({
-  status,
-}: {
-  status: keyof typeof OPERATION_STATUS_LABEL;
-}) {
+export function OperationStatusBadge({ status }: { status: keyof typeof OPERATION_STATUS_LABEL }) {
   const tone =
     status === "success"
       ? "border-health-good/40 text-health-good"

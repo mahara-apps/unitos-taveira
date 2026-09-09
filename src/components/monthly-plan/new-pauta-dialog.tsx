@@ -58,7 +58,6 @@ export function NewPautaDialog({
   const organization = toOrganizationInput(org, false);
   const canSave = title.trim().length > 0 && organization !== null;
 
-
   const m = useMutation({
     mutationFn: async () => {
       if (!organization) throw new Error("organization_incomplete");
@@ -130,7 +129,6 @@ export function NewPautaDialog({
             onChange={setOrg}
             allowNone={false}
           />
-
         </div>
 
         <DialogFooter>

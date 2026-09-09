@@ -257,7 +257,6 @@ function AgencyMode({ brandId }: { brandId: string }) {
         <SlowLoadingNotice active={state === "loading"} onRetry={() => void q.refetch()} />
       )}
 
-
       <StatusBanner
         avgHealth={avgHealth}
         criticalAlerts={criticalAlerts}
@@ -728,7 +727,9 @@ function PublishTrendCard({
   const days = rangeDays ?? trend.length;
   const chartData = trend.map((v, i) => {
     const iso = trendDays?.[i];
-    const d = iso ? new Date(`${iso}T12:00:00`) : new Date(Date.now() - (trend.length - 1 - i) * 86400000);
+    const d = iso
+      ? new Date(`${iso}T12:00:00`)
+      : new Date(Date.now() - (trend.length - 1 - i) * 86400000);
     return { day: format(d, "dd/MM/yyyy"), label: format(d, "dd/MM"), posts: v };
   });
   const total = trend.reduce((a, b) => a + b, 0);
@@ -749,7 +750,9 @@ function PublishTrendCard({
         <div className="flex items-center gap-2 border-t border-border/60 pt-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
           <span className="inline-block h-2 w-2 rounded-[2px] bg-primary" aria-hidden />
           Publicações por dia
-          <span className="ml-auto tabular-nums normal-case tracking-normal">{total} no período</span>
+          <span className="ml-auto tabular-nums normal-case tracking-normal">
+            {total} no período
+          </span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="mb-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">

@@ -127,4 +127,3 @@ export function invalidateSharedScans(): void {
   scanCache.clear();
   deepScanned.clear();
 }
-

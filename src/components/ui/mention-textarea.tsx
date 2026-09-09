@@ -20,7 +20,8 @@ export type MentionPerson = {
 };
 
 /** `@[Nome](uuid)` */
-export const MENTION_TOKEN_RE = /@\[[^\]\n]+\]\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)/i;
+export const MENTION_TOKEN_RE =
+  /@\[[^\]\n]+\]\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)/i;
 
 const TOKEN_GLOBAL = new RegExp(MENTION_TOKEN_RE.source, "gi");
 
@@ -55,7 +56,6 @@ export function resolveMentions(text: string, people: MentionPerson[]): string[]
   }
   return Array.from(ids);
 }
-
 
 /** Trecho digitado após o `@` mais recente antes do caret, ou null. */
 function activeQuery(text: string, caret: number): { start: number; query: string } | null {
@@ -101,8 +101,7 @@ export function MentionTextarea({
     const list = q
       ? people.filter(
           (p) =>
-            personLabel(p).toLowerCase().includes(q) ||
-            (p.email ?? "").toLowerCase().includes(q),
+            personLabel(p).toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q),
         )
       : people;
     return list.slice(0, 8);
@@ -130,7 +129,6 @@ export function MentionTextarea({
       el?.setSelectionRange(pos, pos);
     });
   }
-
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (open) {
@@ -220,7 +218,6 @@ export function MentionTextarea({
               </button>
             </li>
           ))}
-
         </ul>
       ) : null}
     </div>

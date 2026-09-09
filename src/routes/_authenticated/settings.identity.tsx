@@ -121,7 +121,10 @@ function IdentityPage() {
   // Identidade visual é white label do AMBIENTE: só Super Admin vê a seção.
   const superAdminQ = useIsSuperAdmin();
   const canSeeVisualIdentity = canAccessVisualIdentity(superAdminQ.data?.isSuperAdmin);
-  usePageHeader({ title: "Agência", subtitle: "Administração do workspace e dados cadastrais" }, []);
+  usePageHeader(
+    { title: "Agência", subtitle: "Administração do workspace e dados cadastrais" },
+    [],
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 p-6">

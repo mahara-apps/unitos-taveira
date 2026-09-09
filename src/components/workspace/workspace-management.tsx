@@ -13,15 +13,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  Check,
-  Loader2,
-  Pencil,
-  PowerOff,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { Check, Loader2, Pencil, PowerOff, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

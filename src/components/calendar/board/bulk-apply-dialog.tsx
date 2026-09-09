@@ -111,8 +111,7 @@ export function BulkApplyDialog({
     return out;
   }, [connIds, formats, connections]);
 
-  const nothingSelected =
-    !useDestinations && !useSchedule && !useCaption && !sendToProduction;
+  const nothingSelected = !useDestinations && !useSchedule && !useCaption && !sendToProduction;
 
   const mut = useMutation({
     mutationFn: () =>
@@ -191,9 +190,7 @@ export function BulkApplyDialog({
                 <CheckCircle2 className="h-3 w-3" /> {result.applied} aplicada(s)
               </Badge>
               <Badge variant="outline">{result.skipped} ignorada(s)</Badge>
-              {result.errors ? (
-                <Badge variant="destructive">{result.errors} com erro</Badge>
-              ) : null}
+              {result.errors ? <Badge variant="destructive">{result.errors} com erro</Badge> : null}
               {result.scheduleConfidence ? (
                 <Badge variant="secondary">
                   Confiança do horário: {result.scheduleConfidence} ({result.scheduleSample ?? 0}{" "}
@@ -252,15 +249,10 @@ export function BulkApplyDialog({
                   ) : (
                     <div className="space-y-1.5">
                       {connections.map((c) => (
-                        <label
-                          key={c.connectionId}
-                          className="flex items-center gap-2 text-xs"
-                        >
+                        <label key={c.connectionId} className="flex items-center gap-2 text-xs">
                           <Checkbox
                             checked={connIds.includes(c.connectionId)}
-                            onCheckedChange={() =>
-                              toggle(connIds, c.connectionId, setConnIds)
-                            }
+                            onCheckedChange={() => toggle(connIds, c.connectionId, setConnIds)}
                           />
                           <span className="font-medium">{c.accountLabel}</span>
                           <span className="text-muted-foreground">
@@ -386,10 +378,7 @@ export function BulkApplyDialog({
             {/* --------------------------------------------------- legenda */}
             <section className="rounded-lg border border-border/60 p-3">
               <label className="flex items-center gap-2 text-sm font-medium">
-                <Checkbox
-                  checked={useCaption}
-                  onCheckedChange={(v) => setUseCaption(v === true)}
-                />
+                <Checkbox checked={useCaption} onCheckedChange={(v) => setUseCaption(v === true)} />
                 Acrescentar hashtags / primeiro comentário
               </label>
               {useCaption ? (
@@ -429,10 +418,7 @@ export function BulkApplyDialog({
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button
-                disabled={nothingSelected || mut.isPending}
-                onClick={() => mut.mutate()}
-              >
+              <Button disabled={nothingSelected || mut.isPending} onClick={() => mut.mutate()}>
                 {mut.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                 Aplicar em {postIds.length} peça(s)
               </Button>

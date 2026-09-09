@@ -94,7 +94,6 @@ function WorkspaceQueryReset() {
   return null;
 }
 
-
 function AppShell() {
   return (
     <ActiveContextProvider>

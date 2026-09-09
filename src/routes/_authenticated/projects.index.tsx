@@ -152,8 +152,6 @@ function useSlowHint(active: boolean, ms = SLOW_HINT_MS) {
   return slow;
 }
 
-
-
 const COLORS = [
   "#8b5cf6", // violet
   "#ec4899", // pink
@@ -208,8 +206,6 @@ const COLOR_BY_LABELS: Record<ColorBy, string> = {
   status: "Status",
   client: "Cliente",
 };
-
-
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(2, "Nome muito curto"),
@@ -419,8 +415,6 @@ function ProjectsIndexPage() {
     [navigate, search],
   );
 
-
-
   const projectsQ = useQuery({
     queryKey: ["projects", brandId, statusFilter, ownerFilter, effectiveClientId],
     queryFn: ({ signal }) =>
@@ -540,7 +534,6 @@ function ProjectsIndexPage() {
   const kpiValue = (v: number) => (hasProjectData ? v : "—");
   const showSlowHint = useSlowHint(projectsQ.isLoading || projectsQ.isRefetching);
 
-
   const createMut = useMutation({
     mutationFn: (values: ProjectFormValues) => create({ data: { brandId: brandId!, values } }),
     onSuccess: () => {
@@ -640,7 +633,6 @@ function ProjectsIndexPage() {
               : "—"
           }
         />
-
       </div>
 
       {/* Filtros */}
@@ -771,10 +763,7 @@ function ProjectsIndexPage() {
                         </SelectTrigger>
                         <SelectContent>
                           {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                            <SelectItem
-                              key={k}
-                              value={`${k}:${k === "progress" ? "desc" : "asc"}`}
-                            >
+                            <SelectItem key={k} value={`${k}:${k === "progress" ? "desc" : "asc"}`}>
                               {SORT_LABELS[k]}
                             </SelectItem>
                           ))}
@@ -813,8 +802,6 @@ function ProjectsIndexPage() {
             </div>
           </div>
         </div>
-
-
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] text-muted-foreground">
@@ -865,8 +852,8 @@ function ProjectsIndexPage() {
       {/* Informações complementares indisponíveis: os projetos continuam listados. */}
       {projectsQ.data?.degraded ? (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
-          Alguns dados complementares não carregaram ({projectsQ.data.degraded}). Os projetos
-          abaixo estão completos; apenas o selo da pauta e/ou o progresso podem faltar.
+          Alguns dados complementares não carregaram ({projectsQ.data.degraded}). Os projetos abaixo
+          estão completos; apenas o selo da pauta e/ou o progresso podem faltar.
         </div>
       ) : null}
 
@@ -919,7 +906,6 @@ function ProjectsIndexPage() {
           )}
         </div>
       ) : rows.length === 0 ? (
-
         <DashboardPanelSurface>
           <PanelEmptyState
             icon={<FileBarChart2 className="h-4 w-4" />}
@@ -931,7 +917,6 @@ function ProjectsIndexPage() {
                   : "Nenhum projeto encontrado. Crie o primeiro clicando em Novo projeto."
             }
           />
-
         </DashboardPanelSurface>
       ) : view === "cards" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -971,15 +956,12 @@ function ProjectsIndexPage() {
                 periodLabel={period}
                 published={stats.published}
                 total={stats.total || 0}
-                onOpen={() =>
-                  navigate({ to: "/projects/$projectId", params: { projectId: p.id } })
-                }
+                onOpen={() => navigate({ to: "/projects/$projectId", params: { projectId: p.id } })}
               />
             );
           })}
         </div>
       ) : (
-
         <DashboardPanelSurface className="overflow-hidden p-0">
           <Table>
             <TableHeader>

@@ -91,7 +91,9 @@ export const listWhatsappRecipients = createServerFn({ method: "GET" })
     // usuário interno é resolvido em uma consulta separada.
     const userIds = [
       ...new Set(
-        (rows ?? []).map((r) => (r as Row)["user_id"] as string | null).filter((v): v is string => !!v),
+        (rows ?? [])
+          .map((r) => (r as Row)["user_id"] as string | null)
+          .filter((v): v is string => !!v),
       ),
     ];
     const names = new Map<string, string | null>();
@@ -112,7 +114,6 @@ export const listWhatsappRecipients = createServerFn({ method: "GET" })
       });
     });
   });
-
 
 /** Cria um destinatário. Escopo do cliente e autoridade são validados aqui. */
 export const createWhatsappRecipient = createServerFn({ method: "POST" })
@@ -403,7 +404,11 @@ export const sendWhatsappTestMessage = createServerFn({ method: "POST" })
         status: "sent",
         recipient: maskDestination(destination),
         providerMessageId,
-        metadata: { test_send: true, instance_id: instance.id, message: data.message.slice(0, 500) },
+        metadata: {
+          test_send: true,
+          instance_id: instance.id,
+          message: data.message.slice(0, 500),
+        },
       }).catch(() => undefined);
       return { status: "sent" as const, error: null as string | null };
     } catch (error) {
@@ -414,7 +419,11 @@ export const sendWhatsappTestMessage = createServerFn({ method: "POST" })
         status: "failed",
         recipient: maskDestination(destination),
         errorMessage: message,
-        metadata: { test_send: true, instance_id: instance.id, message: data.message.slice(0, 500) },
+        metadata: {
+          test_send: true,
+          instance_id: instance.id,
+          message: data.message.slice(0, 500),
+        },
       }).catch(() => undefined);
       return { status: "failed" as const, error: message };
     }

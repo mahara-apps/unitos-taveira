@@ -24,7 +24,9 @@ export function AvatarStack({
           title={optionName(p)}
         >
           {p.avatar_url ? <AvatarImage src={p.avatar_url} alt="" /> : null}
-          <AvatarFallback className="text-[9px]">{initialsOf({ full_name: p.full_name, email: p.email ?? null })}</AvatarFallback>
+          <AvatarFallback className="text-[9px]">
+            {initialsOf({ full_name: p.full_name, email: p.email ?? null })}
+          </AvatarFallback>
         </Avatar>
       ))}
       {rest > 0 ? (

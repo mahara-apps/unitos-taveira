@@ -362,8 +362,7 @@ export const listPublicationBoardFn = createServerFn({ method: "POST" })
           nextAttemptAt: awaitingRetry
             ? ((inFlight?.next_attempt_at as string | null) ?? null)
             : null,
-          canCancelQueue:
-            !published && !!inFlight && !inFlight.publish_locked_at && !!connectionId,
+          canCancelQueue: !published && !!inFlight && !inFlight.publish_locked_at && !!connectionId,
         };
       });
 

@@ -152,7 +152,8 @@ export const refreshEvolutionInstanceState = createServerFn({ method: "POST" })
         connection_state: state.state,
         phone_number: state.phoneNumber,
         last_state_at: new Date().toISOString(),
-        last_error: state.state === "not_found" ? "Instância inexistente no servidor Evolution." : null,
+        last_error:
+          state.state === "not_found" ? "Instância inexistente no servidor Evolution." : null,
       })
       .eq("id", instance.id);
 
@@ -170,7 +171,8 @@ export const restartEvolutionInstance = createServerFn({ method: "POST" })
     await assertInstanceAdmin(context.supabase, context.userId, data.brandId, instance.client_id);
 
     const config = await resolveInstanceConfig(context.supabase, data.brandId);
-    const { restartEvolutionInstance: restartRemote } = await import("./evolution/instances.server");
+    const { restartEvolutionInstance: restartRemote } =
+      await import("./evolution/instances.server");
     await restartRemote(config, instance.instance_name);
 
     await context.supabase
@@ -320,7 +322,8 @@ export const configureEvolutionWebhook = createServerFn({ method: "POST" })
     await assertInstanceAdmin(context.supabase, context.userId, data.brandId, instance.client_id);
 
     const { getRequestHeader } = await import("@tanstack/react-start/server");
-    const configuredBase = process.env["EVOLUTION_WEBHOOK_BASE_URL"] ?? process.env["APP_PUBLIC_URL"];
+    const configuredBase =
+      process.env["EVOLUTION_WEBHOOK_BASE_URL"] ?? process.env["APP_PUBLIC_URL"];
     const host = getRequestHeader("x-forwarded-host") ?? getRequestHeader("host");
     const appBaseUrl = configuredBase ?? (host ? `https://${host}` : null);
     if (!appBaseUrl) {
@@ -372,7 +375,9 @@ export const listEvolutionInstanceEvents = createServerFn({ method: "GET" })
 
     const { data: rows, error } = await context.supabase
       .from("evolution_events")
-      .select("id, instance_id, instance_name, event_type, connection_state, phone_number, received_at")
+      .select(
+        "id, instance_id, instance_name, event_type, connection_state, phone_number, received_at",
+      )
       .eq("brand_id", data.brandId)
       .eq("instance_id", data.instanceId)
       .order("received_at", { ascending: false })

@@ -49,8 +49,7 @@ export const ROLE_SHORT: Record<BrandRole, string> = {
 
 /** Resumo do acesso real concedido pelo papel (fonte: RBAC/RLS do banco). */
 export const ROLE_ACCESS: Record<BrandRole, string> = {
-  owner:
-    "Proprietário da conta: administra tudo na marca e só pode ser alterado por super admin.",
+  owner: "Proprietário da conta: administra tudo na marca e só pode ser alterado por super admin.",
   admin:
     "Administra tudo na marca: equipe (exceto o Owner), identidade, clientes, SLA, conexões e portais.",
   manager:

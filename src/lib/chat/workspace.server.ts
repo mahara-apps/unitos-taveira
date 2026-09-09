@@ -17,10 +17,7 @@ export const CHAT_WORKSPACE_MISSING = "chat_workspace_missing";
  * Workspaces do usuário, priorizando papéis de maior autoridade. Roda com a
  * sessão do próprio usuário (RLS aplica), nunca com service role.
  */
-export async function resolveUserBrandId(
-  supabase: Db,
-  userId: string,
-): Promise<string | null> {
+export async function resolveUserBrandId(supabase: Db, userId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("brand_members")
     .select("brand_id, role, created_at")

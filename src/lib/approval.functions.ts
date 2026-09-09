@@ -59,8 +59,6 @@ export const createApprovalTokenFn = createServerFn({ method: "POST" })
     );
     if (!needsClient) throw new Error("client_approval_waived");
 
-
-
     const expiresAt = new Date(Date.now() + data.expiresInDays * 86_400_000).toISOString();
     const { data: row, error } = await context.supabase
       .from("card_approval_tokens")

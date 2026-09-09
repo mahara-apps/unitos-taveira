@@ -48,9 +48,8 @@ export async function resumeStaleAutomatedProvisions(limit = 3): Promise<{
     if (!installation) continue;
 
     const row = installation as Record<string, unknown>;
-    const { runAutomatedProvision, runAutomatedUpdate, runAutomatedValidate } = await import(
-      "./automation.server"
-    );
+    const { runAutomatedProvision, runAutomatedUpdate, runAutomatedValidate } =
+      await import("./automation.server");
     const { finalizeOperation } = await import("./runner.server");
     // Cada tipo de operação tem o próprio conjunto de etapas: retomar tudo como
     // provisionamento deixava UPDATE/VALIDATE presos reportando etapas inexistentes.

@@ -97,9 +97,7 @@ export function PortalAccessSection({
             </li>
           ))}
           {contacts.length > 6 && (
-            <li className="px-2 py-1 text-[11px] text-muted-foreground">
-              +{contacts.length - 6}
-            </li>
+            <li className="px-2 py-1 text-[11px] text-muted-foreground">+{contacts.length - 6}</li>
           )}
         </ul>
       )}

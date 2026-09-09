@@ -285,7 +285,9 @@ export function AppSidebar() {
               preload="intent"
               className="flex items-center gap-3 pl-[42px] text-[12.5px]"
             >
-              <span className={cn("text-muted-foreground", active && "font-semibold text-foreground")}>
+              <span
+                className={cn("text-muted-foreground", active && "font-semibold text-foreground")}
+              >
                 {item.title}
               </span>
             </Link>
@@ -386,9 +388,7 @@ export function AppSidebar() {
             <SidebarSeparator className="mx-3 mb-1 w-auto" />
             <SidebarGroupLabel className="opacity-70">{agencyGroup.label}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleAgencyItems.map((item) => renderItem(item, true))}
-              </SidebarMenu>
+              <SidebarMenu>{visibleAgencyItems.map((item) => renderItem(item, true))}</SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ) : null}

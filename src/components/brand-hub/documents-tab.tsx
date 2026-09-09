@@ -110,7 +110,10 @@ function isStalled(d: ClientDocumentAi): boolean {
 function statusBadge(s: ClientDocumentAi["ai_status"], stalled = false) {
   if (stalled) {
     return (
-      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+      <Badge
+        variant="outline"
+        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+      >
         <XCircle className="mr-1 h-3 w-3" /> Interrompida
       </Badge>
     );
@@ -162,7 +165,6 @@ export function DocumentsTab({
   clientId: string;
   onImportAi?: () => void;
 }) {
-
   const list = useServerFn(listClientDocumentsAi);
   const upload = useServerFn(uploadClientDocument);
   const remove = useServerFn(deleteClientDocument);
@@ -483,7 +485,6 @@ export function DocumentsTab({
         />
       </section>
 
-
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         {docsQ.isError ? (
           <div className="space-y-3 px-4 py-6 text-center text-sm text-destructive">
@@ -511,7 +512,6 @@ export function DocumentsTab({
               <Upload className="h-3 w-3" /> Enviar o primeiro arquivo
             </Button>
           </div>
-
         ) : (
           <>
             {/* Mobile (≤ md): mesma informação e ações, em cartões legíveis. */}

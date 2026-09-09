@@ -24,7 +24,9 @@ export type ImportRunListItem = ImportRunRow & {
 
 export const listBriefingImportRuns = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => Scope.extend({ limit: z.number().int().min(1).max(100).optional() }).parse(i))
+  .inputValidator((i: unknown) =>
+    Scope.extend({ limit: z.number().int().min(1).max(100).optional() }).parse(i),
+  )
   .handler(async ({ data, context }): Promise<ImportRunListItem[]> => {
     const { listImportRuns } = await import("@/lib/briefing-import.server");
     const runs = await listImportRuns(context.supabase, {
@@ -73,9 +75,8 @@ export const getBriefingImportRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => RunScope.parse(i))
   .handler(async ({ data, context }) => {
-    const { getImportRun, listImportChanges, listImportSteps } = await import(
-      "@/lib/briefing-import.server"
-    );
+    const { getImportRun, listImportChanges, listImportSteps } =
+      await import("@/lib/briefing-import.server");
     const run = await getImportRun(context.supabase, data);
     if (!run) return { run: null, changes: [], steps: [], documentName: null };
     const [changes, steps] = await Promise.all([

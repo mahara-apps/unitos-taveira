@@ -100,11 +100,13 @@ export function AdsReportPanel() {
   const [range, setRange] = useState<DateRange | undefined>(() => lastNDays(30));
   const [compare, setCompare] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [drill, setDrill] = useState<{ level: AdsLevel; parentId: string | null; trail: string[] }>({
-    level: "campaign",
-    parentId: null,
-    trail: [],
-  });
+  const [drill, setDrill] = useState<{ level: AdsLevel; parentId: string | null; trail: string[] }>(
+    {
+      level: "campaign",
+      parentId: null,
+      trail: [],
+    },
+  );
   const [detail, setDetail] = useState<AdsRowItem | null>(null);
 
   const accountsQ = useQuery({
@@ -165,7 +167,9 @@ export function AdsReportPanel() {
       void queryClient.invalidateQueries({ queryKey: ["ad-accounts", brandId] });
     },
     onError: (err: Error) =>
-      toast.error(err.message.replace("ADS_SCOPE_REQUIRED:", "").trim() || "Falha ao buscar contas."),
+      toast.error(
+        err.message.replace("ADS_SCOPE_REQUIRED:", "").trim() || "Falha ao buscar contas.",
+      ),
   });
 
   const sync = useMutation({
@@ -434,7 +438,9 @@ export function AdsReportPanel() {
                         <p className="truncate text-sm font-medium">{row.name}</p>
                         <p className="truncate text-[11px] text-muted-foreground">
                           {statusLabel(row.status)}
-                          {objectiveLabel(row.objective) ? ` · ${objectiveLabel(row.objective)}` : ""}
+                          {objectiveLabel(row.objective)
+                            ? ` · ${objectiveLabel(row.objective)}`
+                            : ""}
                         </p>
                       </div>
                       <div className="hidden shrink-0 gap-6 text-right sm:flex">

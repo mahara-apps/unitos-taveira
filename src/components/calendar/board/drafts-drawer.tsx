@@ -6,7 +6,13 @@
  */
 import { useMemo, useState } from "react";
 import { ImageOff, Layers, Loader2, PencilLine } from "lucide-react";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -119,7 +125,6 @@ export function DraftsDrawer({
                     : Array.from(new Set([...selected, ...ids])),
                 );
               }}
-
             />
             Selecionar todos os visíveis ({visible.length})
           </label>

@@ -25,7 +25,12 @@ export const listPortalSessionScheduleFn = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<ProposedScheduleItem[]> => {
     const { resolveSessionScope, scopedAdmin } = await import("@/lib/portal-scope.server");
     const { listScheduleForClient } = await import("@/lib/schedule-approval.server");
-    const scope = await resolvePortalSessionScope(context.supabase, data.clientId, "calendar", "view");
+    const scope = await resolvePortalSessionScope(
+      context.supabase,
+      data.clientId,
+      "calendar",
+      "view",
+    );
     return listScheduleForClient(await scopedAdmin(), { ...scope, from: data.from, to: data.to });
   });
 

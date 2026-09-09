@@ -40,7 +40,8 @@ export async function assertPortalAccess(
   need: "view" | "interact" = "view",
 ): Promise<PortalPermissions> {
   const perms = await readPortalPermissions(supabase, clientId);
-  const ok = need === "interact" ? portalCanInteract(perms, moduleId) : portalCanView(perms, moduleId);
+  const ok =
+    need === "interact" ? portalCanInteract(perms, moduleId) : portalCanView(perms, moduleId);
   if (!ok) throw new Error(`portal_permission_denied:${moduleId}:${need}`);
   return perms;
 }

@@ -172,8 +172,8 @@ function SetupPage() {
                 Criar Super Admin
               </Button>
               <p className="text-[11px] text-muted-foreground">
-                Meta, Resend, Evolution/WhatsApp e IA são configuráveis depois e não bloqueiam o
-                uso da instalação.
+                Meta, Resend, Evolution/WhatsApp e IA são configuráveis depois e não bloqueiam o uso
+                da instalação.
               </p>
             </form>
           </CardContent>

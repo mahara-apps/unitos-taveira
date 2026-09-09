@@ -251,10 +251,7 @@ export function normalizeModulePermissions(input: unknown): PartialModulePermiss
 }
 
 /** Perfil + ajustes individuais → mapa completo (chaves ausentes = `none`). */
-export function mergeModulePermissions(
-  profile: unknown,
-  override: unknown,
-): ModulePermissions {
+export function mergeModulePermissions(profile: unknown, override: unknown): ModulePermissions {
   const base = normalizeModulePermissions(profile);
   const over = normalizeModulePermissions(override);
   return MODULE_KEYS.reduce((acc, k) => {
@@ -303,10 +300,7 @@ export function can(
 }
 
 /** Rótulo do perfil na UI — "Atendimento (personalizado)" quando há ajustes. */
-export function profileLabel(
-  profileName: string | null | undefined,
-  customized: boolean,
-): string {
+export function profileLabel(profileName: string | null | undefined, customized: boolean): string {
   const base = (profileName ?? "").trim() || "Sem perfil";
   return customized ? `${base} (personalizado)` : base;
 }

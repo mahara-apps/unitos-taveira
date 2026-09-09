@@ -66,9 +66,7 @@ export function WhatsappManualTestCard({
       </div>
 
       {!instance ? (
-        <p className="text-xs text-muted-foreground">
-          Conecte o WhatsApp para habilitar o teste.
-        </p>
+        <p className="text-xs text-muted-foreground">Conecte o WhatsApp para habilitar o teste.</p>
       ) : (
         <div className="grid items-end gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">
           <div className="space-y-1.5">
@@ -132,4 +130,3 @@ export function WhatsappManualTestCard({
     </div>
   );
 }
-

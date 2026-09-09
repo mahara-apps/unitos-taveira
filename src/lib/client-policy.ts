@@ -85,9 +85,7 @@ function readScope(src: unknown): Partial<ScopePolicy> | null {
   if (isScopeMode(obj["mode"])) out.mode = obj["mode"];
   const applies = obj["applies"];
   if (Array.isArray(applies)) {
-    const fronts = applies.filter((f): f is ScopeFront =>
-      SCOPE_FRONTS.includes(f as ScopeFront),
-    );
+    const fronts = applies.filter((f): f is ScopeFront => SCOPE_FRONTS.includes(f as ScopeFront));
     out.applies = Array.from(new Set(fronts));
   }
   return Object.keys(out).length ? out : null;

@@ -92,9 +92,8 @@ export const Route = createFileRoute("/api/chat/stream")({
         if (convoErr || !convo) return new Response("Conversa não encontrada", { status: 404 });
 
         // 1.1) Workspace é obrigatório: resolve/backfilla conversas legadas.
-        const { ensureConversationBrandId, CHAT_WORKSPACE_MISSING } = await import(
-          "@/lib/chat/workspace.server"
-        );
+        const { ensureConversationBrandId, CHAT_WORKSPACE_MISSING } =
+          await import("@/lib/chat/workspace.server");
         let brandId: string;
         try {
           brandId = await ensureConversationBrandId(supabase, userId, convo);
@@ -127,7 +126,6 @@ export const Route = createFileRoute("/api/chat/stream")({
             headers: { "Content-Type": "text/plain; charset=utf-8" },
           });
         }
-
 
         // 2) Persistir mensagem do usuário
         const { data: userRow, error: userErr } = await supabase
@@ -402,9 +400,8 @@ export const Route = createFileRoute("/api/chat/stream")({
               }
             } catch (err) {
               console.error("[chat.stream] falha durante o streaming", err);
-              const { classifyAiError, FAILURE_MESSAGE_PT } = await import(
-                "@/lib/ai-failures.server"
-              );
+              const { classifyAiError, FAILURE_MESSAGE_PT } =
+                await import("@/lib/ai-failures.server");
               const { kind } = classifyAiError(err);
               failure = { kind };
               const notice = `\n\n_${FAILURE_MESSAGE_PT[kind].body}_`;
@@ -427,7 +424,6 @@ export const Route = createFileRoute("/api/chat/stream")({
             "Cache-Control": "no-store",
           },
         });
-
       },
     },
   },

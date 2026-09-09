@@ -194,7 +194,6 @@ export function statusDisplay(overall: PublicationOverall): StatusToken {
 }
 
 export const DESTINATION_STATUS_LABEL: Record<string, string> = {
-
   draft: "Rascunho",
   scheduled: "Agendado",
   publishing: "Publicando",

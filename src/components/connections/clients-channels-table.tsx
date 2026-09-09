@@ -589,7 +589,6 @@ export function ClientsChannelsTable({
                                 >
                                   <Link2 className="h-3.5 w-3.5" />
                                   Vincular a um cliente
-
                                 </Button>
                               ) : null
                             ) : null}

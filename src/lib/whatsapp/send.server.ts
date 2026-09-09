@@ -69,7 +69,6 @@ export async function sendWhatsappText(
   return { providerMessageId: id };
 }
 
-
 function safeError(error: unknown): string {
   if (error instanceof EvolutionApiError) return error.message;
   if (error instanceof EvolutionConfigError) return error.message;
@@ -262,4 +261,3 @@ export async function sendWhatsappToRecipients(
     results,
   };
 }
-

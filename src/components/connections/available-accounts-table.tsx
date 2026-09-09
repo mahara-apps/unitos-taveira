@@ -22,8 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  CHANNEL_ICON_SIZE, channelDef } from "@/components/connections/channel-meta";
+import { CHANNEL_ICON_SIZE, channelDef } from "@/components/connections/channel-meta";
 import type { DiscoveredAccountsResult } from "@/lib/meta/discovery.functions";
 import { cn } from "@/lib/utils";
 
@@ -241,153 +240,153 @@ export function AvailableAccountsTable({
       {/* -------------------------- barra de controle -------------------------- */}
       <div className="flex flex-wrap items-center gap-2">
         {hideControls ? null : (
-        <>
-        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={rawSearch}
-            onChange={(e) => setRawSearch(e.target.value)}
-            placeholder="Buscar contas, @username ou ID Meta..."
-            className="h-9 pl-8 pr-8 text-sm"
-          />
-          {rawSearch ? (
-            <button
-              type="button"
-              aria-label="Limpar busca"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setRawSearch("")}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
-        </div>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-sm">
-              <ListFilter className="h-4 w-4" />
-              Filtrar
-              {activeFilters ? (
-                <Badge className="ml-0.5 h-5 min-w-5 justify-center px-1 text-[11px]">
-                  {activeFilters}
-                </Badge>
-              ) : null}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Canal</Label>
-              <Select
-                value={filters.channel}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, channel: v as AvailableFilters["channel"] }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os canais</SelectItem>
-                  <SelectItem value="facebook">Facebook</SelectItem>
-                  <SelectItem value="instagram">Instagram</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tipo</Label>
-              <Select
-                value={filters.kind}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, kind: v as AvailableFilters["kind"] }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="page">Página do Facebook</SelectItem>
-                  <SelectItem value="instagram">Instagram Business</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Status</Label>
-              <Select
-                value={filters.status}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, status: v as AvailableFilters["status"] }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="ready">Pronto</SelectItem>
-                  <SelectItem value="attention">Com atenção</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Autorização</Label>
-              <Select
-                value={filters.auth}
-                onValueChange={(v) =>
-                  setFilters((f) => ({ ...f, auth: v as AvailableFilters["auth"] }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Qualquer autorização</SelectItem>
-                  <SelectItem value="authorized">Autorizada</SelectItem>
-                  <SelectItem value="problem">Problema</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {activeFilters ? (
-              <>
-                <Separator />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-full text-xs"
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
+          <>
+            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={rawSearch}
+                onChange={(e) => setRawSearch(e.target.value)}
+                placeholder="Buscar contas, @username ou ID Meta..."
+                className="h-9 pl-8 pr-8 text-sm"
+              />
+              {rawSearch ? (
+                <button
+                  type="button"
+                  aria-label="Limpar busca"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setRawSearch("")}
                 >
-                  Limpar filtros
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 text-sm">
+                  <ListFilter className="h-4 w-4" />
+                  Filtrar
+                  {activeFilters ? (
+                    <Badge className="ml-0.5 h-5 min-w-5 justify-center px-1 text-[11px]">
+                      {activeFilters}
+                    </Badge>
+                  ) : null}
                 </Button>
-              </>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Canal</Label>
+                  <Select
+                    value={filters.channel}
+                    onValueChange={(v) =>
+                      setFilters((f) => ({ ...f, channel: v as AvailableFilters["channel"] }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os canais</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tipo</Label>
+                  <Select
+                    value={filters.kind}
+                    onValueChange={(v) =>
+                      setFilters((f) => ({ ...f, kind: v as AvailableFilters["kind"] }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      <SelectItem value="page">Página do Facebook</SelectItem>
+                      <SelectItem value="instagram">Instagram Business</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Select
+                    value={filters.status}
+                    onValueChange={(v) =>
+                      setFilters((f) => ({ ...f, status: v as AvailableFilters["status"] }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os status</SelectItem>
+                      <SelectItem value="ready">Pronto</SelectItem>
+                      <SelectItem value="attention">Com atenção</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Autorização</Label>
+                  <Select
+                    value={filters.auth}
+                    onValueChange={(v) =>
+                      setFilters((f) => ({ ...f, auth: v as AvailableFilters["auth"] }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Qualquer autorização</SelectItem>
+                      <SelectItem value="authorized">Autorizada</SelectItem>
+                      <SelectItem value="problem">Problema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {activeFilters ? (
+                  <>
+                    <Separator />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full text-xs"
+                      onClick={() => setFilters(DEFAULT_FILTERS)}
+                    >
+                      Limpar filtros
+                    </Button>
+                  </>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+
+            <Select
+              value={filters.sort}
+              onValueChange={(v) => setFilters((f) => ({ ...f, sort: v as SortKey }))}
+            >
+              <SelectTrigger className="h-9 w-[168px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Mais recentes</SelectItem>
+                <SelectItem value="name_asc">Nome A–Z</SelectItem>
+                <SelectItem value="name_desc">Nome Z–A</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {hasQuery ? (
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-xs" onClick={clearAll}>
+                <X className="h-3.5 w-3.5" />
+                Limpar
+              </Button>
             ) : null}
-          </PopoverContent>
-        </Popover>
-
-        <Select
-          value={filters.sort}
-          onValueChange={(v) => setFilters((f) => ({ ...f, sort: v as SortKey }))}
-        >
-          <SelectTrigger className="h-9 w-[168px] text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">Mais recentes</SelectItem>
-            <SelectItem value="name_asc">Nome A–Z</SelectItem>
-            <SelectItem value="name_desc">Nome Z–A</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {hasQuery ? (
-          <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-xs" onClick={clearAll}>
-            <X className="h-3.5 w-3.5" />
-            Limpar
-          </Button>
-        ) : null}
-        </>
+          </>
         )}
 
         <div className="ml-auto flex items-center gap-2">

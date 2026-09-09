@@ -11,9 +11,7 @@
 export const MAX_EXTRACTED_CHARS = 60_000;
 
 /** Junta material de texto num único bloco rotulado. */
-export function composeTextMaterial(
-  blocks: Array<{ label: string; text: string }>,
-): string {
+export function composeTextMaterial(blocks: Array<{ label: string; text: string }>): string {
   return blocks
     .filter((b) => b.text.trim().length > 0)
     .map((b) => `### ${b.label}\n${b.text.trim()}`)

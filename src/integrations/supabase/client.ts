@@ -12,7 +12,8 @@ import { createRememberStorage } from "./remember-storage";
  * equivalentes sem prefixo, disponíveis em `process.env`.
  */
 function readEnv(...keys: string[]): string | undefined {
-  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+  const viteEnv =
+    (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
   const nodeEnv: Record<string, string | undefined> =
     typeof process !== "undefined" && process.env ? process.env : {};
   for (const key of keys) {
@@ -39,7 +40,6 @@ const SUPABASE_PUBLISHABLE_KEY =
     "SUPABASE_PUBLISHABLE_KEY",
     "SUPABASE_ANON_KEY",
   ) ?? DEFAULT_SUPABASE_PUBLISHABLE_KEY;
-
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

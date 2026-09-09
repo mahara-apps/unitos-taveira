@@ -337,7 +337,10 @@ function EventsTable({ events }: { events: LoginEventRow[] }) {
               </td>
               <td className="py-2.5 pr-3">
                 {e.event === "failed" ? (
-                  <Badge variant="outline" className="border-severity-warning/40 text-severity-warning">
+                  <Badge
+                    variant="outline"
+                    className="border-severity-warning/40 text-severity-warning"
+                  >
                     Falhou
                   </Badge>
                 ) : (

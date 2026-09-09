@@ -10,7 +10,10 @@ export type BriefingAlert = {
 
 export const CONCLUDED_BRIEFING_STATUSES = ["submitted", "in_review", "approved"] as const;
 
-export function isBriefingConcluded(status: string | null | undefined, completion: number): boolean {
+export function isBriefingConcluded(
+  status: string | null | undefined,
+  completion: number,
+): boolean {
   if (status && (CONCLUDED_BRIEFING_STATUSES as readonly string[]).includes(status)) return true;
   return completion >= 100;
 }

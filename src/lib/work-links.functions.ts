@@ -41,7 +41,10 @@ const targetIn = z.object({
 type AnyClient = RpcClient & {
   from: (t: string) => {
     select: (c: string) => {
-      eq: (k: string, v: string) => {
+      eq: (
+        k: string,
+        v: string,
+      ) => {
         maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }>;
         order?: unknown;
       };
@@ -59,7 +62,11 @@ export async function resolveLinkScope(
   targetId: string,
 ): Promise<Scope> {
   const read = async (table: string, cols: string) => {
-    const { data, error } = await supabase.from(table).select(cols).eq("id", targetId).maybeSingle();
+    const { data, error } = await supabase
+      .from(table)
+      .select(cols)
+      .eq("id", targetId)
+      .maybeSingle();
     if (error) throw error;
     if (!data) throw new Error("Forbidden: item fora do seu escopo");
     return data;

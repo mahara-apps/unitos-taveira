@@ -102,28 +102,28 @@ export async function syncPostPlacements(
       d.options,
     );
     return {
-    post_id: postId,
-    brand_id: brandId,
-    client_id: clientId,
-    format: d.format,
-    // Coluna canônica (Fase 1): FK real para social_connections.
-    connection_id: d.connectionId,
-    scheduled_at: scheduledIso,
-    copy_override: {
-      // Espelho legado — leitores antigos continuam funcionando.
+      post_id: postId,
+      brand_id: brandId,
+      client_id: clientId,
+      format: d.format,
+      // Coluna canônica (Fase 1): FK real para social_connections.
       connection_id: d.connectionId,
-      channel: d.channel,
-      ...(d.copyOverride ? { copy: d.copyOverride } : {}),
-      ...(hashtags.length ? { hashtags } : {}),
-      ...(firstComment ? { first_comment: firstComment } : {}),
-      ...(linkUrl ? { link: linkUrl } : {}),
-      ...(locationName ? { location_name: locationName } : {}),
-      ...(locationId ? { location_id: locationId } : {}),
-      ...(hasPlacementOptions(options) ? { options } : {}),
-    },
-    media: mediaJson,
-    status,
-    is_primary: i === 0,
+      scheduled_at: scheduledIso,
+      copy_override: {
+        // Espelho legado — leitores antigos continuam funcionando.
+        connection_id: d.connectionId,
+        channel: d.channel,
+        ...(d.copyOverride ? { copy: d.copyOverride } : {}),
+        ...(hashtags.length ? { hashtags } : {}),
+        ...(firstComment ? { first_comment: firstComment } : {}),
+        ...(linkUrl ? { link: linkUrl } : {}),
+        ...(locationName ? { location_name: locationName } : {}),
+        ...(locationId ? { location_id: locationId } : {}),
+        ...(hasPlacementOptions(options) ? { options } : {}),
+      },
+      media: mediaJson,
+      status,
+      is_primary: i === 0,
     };
   });
 

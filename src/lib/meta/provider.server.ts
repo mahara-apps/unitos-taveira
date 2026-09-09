@@ -75,7 +75,6 @@ export function getMetaScopesForChannel(channel?: MetaChannel | null): string[] 
   return META_DEFAULT_SCOPES;
 }
 
-
 export type MetaPageAsset = {
   pageId: string;
   pageName: string;
@@ -195,7 +194,11 @@ export const META_CALLBACK_PATH = "/api/public/meta/callback";
  * `VITE_PUBLIC_APP_URL`. Cada instalação registra este URI no App Meta.
  */
 function fallbackRedirectUri(origin?: string | null): string | null {
-  const candidates = [origin, readRuntimeEnv("PUBLIC_APP_URL"), readRuntimeEnv("VITE_PUBLIC_APP_URL")];
+  const candidates = [
+    origin,
+    readRuntimeEnv("PUBLIC_APP_URL"),
+    readRuntimeEnv("VITE_PUBLIC_APP_URL"),
+  ];
   for (const candidate of candidates) {
     if (!candidate) continue;
     try {
@@ -243,7 +246,6 @@ export function resolveMetaRedirectUri(origin?: string | null): string {
     return configured;
   }
 }
-
 
 /**
  * Facebook Login for Business — `config_id` de uma "Configuração de login"

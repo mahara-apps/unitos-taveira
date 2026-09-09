@@ -170,7 +170,6 @@ export async function materializePlanToKanban(
   }
   if (!projectId) throw new Error("plan_project_missing");
 
-
   const { data: stages } = await sb
     .from("content_pipeline_stages")
     .select("id, position, is_terminal")

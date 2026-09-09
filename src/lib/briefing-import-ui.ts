@@ -100,7 +100,6 @@ export function validateImportFile(file: { name: string; size: number }): FileVa
   return { ok: true };
 }
 
-
 export function formatBytes(n: number | null | undefined): string {
   if (!n) return "—";
   if (n < 1024) return `${n} B`;
@@ -127,7 +126,9 @@ const TRANSCRIPT_HINTS = [
  * documento: o backend preserva `source_kind`, e a extração de participantes
  * fica como ponto de extensão (ver `speakers` em `briefing_import_runs`).
  */
-export function inferSourceKind(filename: string): Extract<ImportSourceKind, "document" | "transcript"> {
+export function inferSourceKind(
+  filename: string,
+): Extract<ImportSourceKind, "document" | "transcript"> {
   const lower = filename.toLowerCase();
   const ext = extensionOf(lower);
   if (ext === ".vtt" || ext === ".srt") return "transcript";
@@ -158,7 +159,9 @@ export function looksLikeTranscript(text: string): boolean {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
-  const speakerLines = lines.filter((l) => /^(\[?\d{1,2}:\d{2}[^\]]*\]?\s*)?[\p{L}][\p{L}\s.'-]{1,30}:\s+\S/u.test(l));
+  const speakerLines = lines.filter((l) =>
+    /^(\[?\d{1,2}:\d{2}[^\]]*\]?\s*)?[\p{L}][\p{L}\s.'-]{1,30}:\s+\S/u.test(l),
+  );
   if (lines.length >= 4 && speakerLines.length >= Math.max(3, Math.ceil(lines.length * 0.3))) {
     return true;
   }
@@ -167,7 +170,9 @@ export function looksLikeTranscript(text: string): boolean {
 }
 
 /** Origem do texto colado, já considerando a heurística de transcrição. */
-export function inferPasteSourceKind(text: string): Extract<ImportSourceKind, "paste" | "transcript"> {
+export function inferPasteSourceKind(
+  text: string,
+): Extract<ImportSourceKind, "paste" | "transcript"> {
   return looksLikeTranscript(text) ? "transcript" : "paste";
 }
 
@@ -183,7 +188,6 @@ export const FILE_READ_STATUS_LABELS: Record<FileReadStatus, string> = {
   sent: "Em análise",
   error: "Erro",
 };
-
 
 /* --------------------------- Máquina de estados --------------------------- */
 
@@ -245,7 +249,6 @@ export const RUN_STATUS_LABELS: Record<ImportRunStatus, string> = {
   expired: "Expirou por tempo",
 };
 
-
 /* ---------------------------- Revisão de campos ---------------------------- */
 
 export const BRIEFING_FIELD_LABELS: Record<string, string> = {
@@ -289,7 +292,8 @@ export function changeState(change: {
   if (change.action === "keep") return "unchanged";
   if (change.action === "discard") return "empty";
   const flagged = change.evidence?.["conflict"] === true;
-  const lowConfidence = typeof change.confidence === "number" && change.confidence < CONFLICT_CONFIDENCE_FLOOR;
+  const lowConfidence =
+    typeof change.confidence === "number" && change.confidence < CONFLICT_CONFIDENCE_FLOOR;
   return flagged || lowConfidence ? "conflict" : "update";
 }
 
@@ -391,10 +395,18 @@ export function friendlyAnalysisError(error: unknown): string {
   if (/ai_payload_invalid|inline_data|inlineData|Invalid value at|Starting an object/i.test(raw)) {
     return "Não foi possível preparar este arquivo para a IA. Tente outro formato (PDF, DOCX, XLSX, CSV, TXT ou imagem).";
   }
-  if (/ai_output_truncated|max completion tokens|maximum context length|finish.?reason.{0,20}length/i.test(raw)) {
+  if (
+    /ai_output_truncated|max completion tokens|maximum context length|finish.?reason.{0,20}length/i.test(
+      raw,
+    )
+  ) {
     return "A análise ficou maior que o limite de resposta da IA. O material foi preservado; tente reprocessar após o ajuste ou envie um conteúdo menor.";
   }
-  if (/json_validate_failed|jsonschema|does not validate|failed_generation|não conseguiu estruturar/i.test(raw)) {
+  if (
+    /json_validate_failed|jsonschema|does not validate|failed_generation|não conseguiu estruturar/i.test(
+      raw,
+    )
+  ) {
     return "A IA leu o material, mas não conseguiu organizar a análise. Tente novamente em alguns instantes.";
   }
   if (/document_format_unsupported/i.test(raw)) {
@@ -440,4 +452,3 @@ export function importErrorMessage(error: unknown): string {
   }
   return raw || "Falha na importação.";
 }
-

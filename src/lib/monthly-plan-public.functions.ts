@@ -177,17 +177,18 @@ export const addPlanLinkPublic = createServerFn({ method: "POST" })
 
     // Avisa a equipe (best-effort): link novo enviado pelo cliente.
     try {
-      const { insertNotificationsDeduped, notificationDedupeKey } = await import(
-        "@/lib/notifications-dedupe"
-      );
+      const { insertNotificationsDeduped, notificationDedupeKey } =
+        await import("@/lib/notifications-dedupe");
       const { data: plan } = await sb
         .from("monthly_plans")
         .select("title, created_by, client_id")
         .eq("id", session.monthly_plan_id)
         .maybeSingle();
-      const planRow = plan as
-        | { created_by?: string | null; title?: string | null; client_id?: string | null }
-        | null;
+      const planRow = plan as {
+        created_by?: string | null;
+        title?: string | null;
+        client_id?: string | null;
+      } | null;
       const ownerId = planRow?.created_by ?? null;
       const planClientId = planRow?.client_id ?? null;
       if (ownerId) {

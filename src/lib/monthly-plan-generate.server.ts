@@ -82,7 +82,6 @@ const AiPlanSchema = z.object({
 /** Teto defensivo aplicado em código (antes vivia no schema do wire). */
 const MAX_AI_TOPICS = 60;
 
-
 export type GeneratePlanInput = {
   brandId: string;
   clientId: string;
@@ -530,7 +529,6 @@ export async function runPlanGeneration(args: {
   const consume = (topics: AiPlan["topics"]) => {
     // Clamp em código no lugar do bound de schema (que quebrava provedores estritos).
     for (const t of topics.slice(0, MAX_AI_TOPICS)) {
-
       if (allocator.left() <= 0) break;
       const wanted = normalizeContentFormat(t.content_format);
       const { channel, format } = allocator.allocate(t.channel, t.content_format);
@@ -554,10 +552,11 @@ export async function runPlanGeneration(args: {
         suggested_weekday: parseSuggestedWeekday(t.suggested_weekday),
         suggested_time: (() => {
           const p = parseSuggestedTime(t.suggested_time);
-          return p ? `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}` : null;
+          return p
+            ? `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`
+            : null;
         })(),
-        suggested_slot_rationale:
-          (t.slot_rationale ?? "").toString().trim().slice(0, 600) || null,
+        suggested_slot_rationale: (t.slot_rationale ?? "").toString().trim().slice(0, 600) || null,
       });
     }
   };

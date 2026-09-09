@@ -72,7 +72,6 @@ export const Route = createFileRoute("/api/public/installations/report")({
           state: parsed.event.state as "pending" | "running" | "done" | "error",
           detail: parsed.event.detail,
           percent: parsed.event.percent,
-
         });
         return Response.json({ ok: true, steps: steps.length });
       },

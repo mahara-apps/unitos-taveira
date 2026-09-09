@@ -43,7 +43,11 @@ async function normalizeCatastrophicSsrResponse(
     logServerFailure(request, errorId, new Error(`Server returned HTTP ${response.status}`));
     const headers = new Headers(response.headers);
     headers.set("x-error-id", errorId);
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
 
   const body = await response.clone().text();
@@ -51,7 +55,11 @@ async function normalizeCatastrophicSsrResponse(
     logServerFailure(request, errorId, new Error(`Server returned HTTP ${response.status}`));
     const headers = new Headers(response.headers);
     headers.set("x-error-id", errorId);
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
 
   logServerFailure(

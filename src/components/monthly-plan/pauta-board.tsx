@@ -61,8 +61,7 @@ export function describePlanDeleteError(e: unknown): string {
   const m = describeError(e);
   if (m.includes("plan_has_content"))
     return "Esta pauta já gerou peças de conteúdo. Arquive-a para preservar o histórico.";
-  if (m.includes("forbidden"))
-    return "Somente Owner, Admin ou Super Admin podem excluir pautas.";
+  if (m.includes("forbidden")) return "Somente Owner, Admin ou Super Admin podem excluir pautas.";
   if (m.includes("plan_not_found")) return "Pauta não encontrada neste cliente.";
   return `Não foi possível excluir: ${m}`;
 }
@@ -72,7 +71,6 @@ const ARCHIVE_TABS: Array<{ key: PlanArchiveFilter; label: string }> = [
   { key: "archived", label: "Arquivadas" },
   { key: "all", label: "Todas" },
 ];
-
 
 export function PautaBoard({
   brandId,
@@ -153,7 +151,6 @@ export function PautaBoard({
   const items = boardQ.data?.items ?? [];
   const canDelete = boardQ.data?.canDelete ?? false;
   const busy = archiveM.isPending || restoreM.isPending || deleteM.isPending;
-
 
   return (
     <section className="mt-8 space-y-3">

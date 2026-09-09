@@ -120,7 +120,6 @@ const ERRORS: Record<string, string> = {
   decision_failed: "Não conseguimos salvar sua resposta. Tente novamente em instantes.",
 };
 
-
 const PILL = "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium";
 
 const CHANNEL_PILL: Record<string, string> = {

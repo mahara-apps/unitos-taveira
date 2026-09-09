@@ -58,7 +58,6 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
     if (persisted) publishActiveWorkspace(persisted, true);
   }, []);
 
-
   /**
    * Transição de identidade (`resetIdentityState`): o estado local é limpo e o
    * workspace volta a ser indefinido — o contexto é reconstruído a partir dos
@@ -148,4 +147,3 @@ export function useWorkspaceStatus(): WorkspaceStatus {
     () => "resolving" as WorkspaceStatus,
   );
 }
-

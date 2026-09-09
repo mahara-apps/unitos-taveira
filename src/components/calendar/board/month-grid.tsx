@@ -92,22 +92,24 @@ export function MonthGrid({
                     ) : null}
                   </div>
                   <div className="flex-1 space-y-1 px-1.5 pt-1">
-                    {items.slice(0, maxVisible).map((it) =>
-                      it.kind === "post" ? (
-                        <PublicationCard
-                          key={it.data.postId}
-                          item={it.data}
-                          onOpen={onOpen}
-                          density={density}
-                        />
-                      ) : (
-                        <EventChip
-                          key={"e" + it.data.id}
-                          item={{ kind: "event", data: it.data }}
-                          onOpen={(x) => x.kind === "event" && onOpenEvent(x.data)}
-                        />
-                      ),
-                    )}
+                    {items
+                      .slice(0, maxVisible)
+                      .map((it) =>
+                        it.kind === "post" ? (
+                          <PublicationCard
+                            key={it.data.postId}
+                            item={it.data}
+                            onOpen={onOpen}
+                            density={density}
+                          />
+                        ) : (
+                          <EventChip
+                            key={"e" + it.data.id}
+                            item={{ kind: "event", data: it.data }}
+                            onOpen={(x) => x.kind === "event" && onOpenEvent(x.data)}
+                          />
+                        ),
+                      )}
                     {items.length > maxVisible ? (
                       <Popover>
                         <PopoverTrigger asChild>

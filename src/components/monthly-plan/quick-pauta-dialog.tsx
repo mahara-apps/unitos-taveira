@@ -235,7 +235,12 @@ export function QuickPautaDialog({
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button variant="ai" className="gap-2" disabled={busy || !orgInput} onClick={() => run.mutate()}>
+          <Button
+            variant="ai"
+            className="gap-2"
+            disabled={busy || !orgInput}
+            onClick={() => run.mutate()}
+          >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : error ? (

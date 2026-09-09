@@ -97,7 +97,6 @@ function ChannelStatusBadge({ status }: { status: StatusKey }) {
 
 const PROVIDER_LABEL: Record<string, string> = { meta: "Meta" };
 
-
 function accountType(row: LinkedChannel) {
   if (row.channel === "instagram") return "Instagram Business";
   if (row.channel === "facebook") return "Página do Facebook";

@@ -397,12 +397,7 @@ export const updateTaskFn = createServerFn({ method: "POST" })
       const brandId = current!.brand_id as string;
       const role = await assertBrandMember(context.supabase as never, context.userId, brandId);
       if (nextClientId) {
-        await assertClientInBrand(
-          context.supabase as never,
-          context.userId,
-          brandId,
-          nextClientId,
-        );
+        await assertClientInBrand(context.supabase as never, context.userId, brandId, nextClientId);
       } else if (role !== "super_admin" && role !== "admin") {
         throw new Error("Forbidden: tarefa sem cliente exige autoridade de workspace");
       }

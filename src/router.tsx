@@ -18,7 +18,6 @@ export const getRouter = () => {
         // `userId + brandId + clientId`, e manter os dados anteriores fazia o
         // Cliente X continuar renderizado sob o Cliente Y durante a troca.
         // Telas que realmente precisam (paginação/intervalo) optam localmente.
-
       },
     },
   });

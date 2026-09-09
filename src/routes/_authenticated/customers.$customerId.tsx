@@ -438,7 +438,6 @@ function CustomerDetailReady({
                 <ClientHoursTab brandId={brandId} clientId={customerId} />
               </TabsContent>
 
-
               {/* Aba única "Conta": cadastro (identidade/contato/redes) +
                   gestão (contrato/jornada). Cada informação tem uma só fonte. */}
               <TabsContent value="conta" className="mt-0 space-y-8">

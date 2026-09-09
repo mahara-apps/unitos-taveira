@@ -42,7 +42,10 @@ async function fetchPlanRefs(
   const map = new Map<string, ProjectPlanRef>();
   if (ids.length === 0) return { map, error: null };
   try {
-    const { data, error } = await sb.from("monthly_plans").select("id, title, status").in("id", ids);
+    const { data, error } = await sb
+      .from("monthly_plans")
+      .select("id, title, status")
+      .in("id", ids);
     if (error) throw error;
     for (const p of (data ?? []) as ProjectPlanRef[]) map.set(p.id, p);
     return { map, error: null };
@@ -477,7 +480,6 @@ export const setProjectArchivedFn = createServerFn({ method: "POST" })
     assertAffected(rows, data.archived ? "arquivar" : "restaurar");
     return { ok: true };
   });
-
 
 export const deleteProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

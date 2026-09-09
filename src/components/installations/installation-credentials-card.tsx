@@ -110,7 +110,6 @@ export function InstallationCredentialsCard({ installationId }: { installationId
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [repoDraft, setRepoDraft] = useState("");
 
-
   const status = useQuery({
     queryKey: ["installation-credentials", installationId],
     queryFn: () => statusFn({ data: { id: installationId } }),
@@ -173,7 +172,6 @@ export function InstallationCredentialsCard({ installationId }: { installationId
     onError: (error: unknown) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível adotar."),
   });
-
 
   const data = status.data;
   const anyConfigured =

@@ -48,9 +48,7 @@ function newOwner(): string {
 }
 
 /** Processa um lote limitado da fila. Nunca lança: sempre devolve relatório. */
-export async function processImportQueue(
-  opts: { limit?: number } = {},
-): Promise<WorkerReport> {
+export async function processImportQueue(opts: { limit?: number } = {}): Promise<WorkerReport> {
   const limit = Math.min(Math.max(opts.limit ?? DEFAULT_LIMIT, 1), 10);
   const owner = newOwner();
   const report: WorkerReport = { claimed: 0, processed: 0, proposed: 0, failed: 0, results: [] };
@@ -127,7 +125,10 @@ export async function processImportQueue(
             ...(failedStep ? { resume_step: failedStep } : {}),
           })
           .eq("id", run.id)
-          .then(() => undefined, () => undefined);
+          .then(
+            () => undefined,
+            () => undefined,
+          );
         await callRpc(supabaseAdmin, "briefing_import_heartbeat", {
           _run_id: run.id,
           _owner: owner,
@@ -139,7 +140,10 @@ export async function processImportQueue(
           .from("client_documents")
           .update({ ai_status: terminal ? "failed" : "queued", ai_error: friendly })
           .eq("id", run.document_id)
-          .then(() => undefined, () => undefined);
+          .then(
+            () => undefined,
+            () => undefined,
+          );
       }
       report.processed += 1;
       report.failed += 1;

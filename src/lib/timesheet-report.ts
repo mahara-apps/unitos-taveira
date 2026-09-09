@@ -280,7 +280,10 @@ export function buildHeatmap(
 ): Heatmap {
   const bucketOf = granularity === "week" ? weekKey : dayKey;
   const buckets = new Set<string>();
-  const rows = new Map<string, { userId: string; label: string; avatarUrl: string | null; seconds: number }>();
+  const rows = new Map<
+    string,
+    { userId: string; label: string; avatarUrl: string | null; seconds: number }
+  >();
   const cells = new Map<string, number>();
   let max = 0;
   for (const e of entries) {
@@ -320,10 +323,7 @@ export type MonthlyClosingRow = {
 };
 
 export function monthlyClosing(entries: TimesheetEntry[]): MonthlyClosingRow[] {
-  const map = new Map<
-    string,
-    MonthlyClosingRow & { _people: Set<string> }
-  >();
+  const map = new Map<string, MonthlyClosingRow & { _people: Set<string> }>();
   for (const e of entries) {
     const mk = monthKey(e.started_at);
     const cid = e.client_id ?? "__none__";
@@ -395,9 +395,7 @@ export function timesheetEntriesCsv(entries: TimesheetEntry[], withCost: boolean
   if (withCost) head.push("Custo (R$)");
   const rows: Array<Array<unknown>> = [head];
   const fmt = (iso: string | null) =>
-    iso
-      ? new Date(iso).toLocaleString("pt-BR", { timeZone: APP_TIMEZONE, hour12: false })
-      : "";
+    iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: APP_TIMEZONE, hour12: false }) : "";
   for (const e of entries) {
     const row: Array<unknown> = [
       dayKey(e.started_at).split("-").reverse().join("/"),

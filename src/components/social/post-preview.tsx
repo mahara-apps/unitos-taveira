@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import type { PlacementFormat } from "@/lib/scheduling-formats";
 import type { SocialChannel } from "@/lib/social-core/capabilities";
 
-
 /**
  * PostPreview — mock visual da peça no canal escolhido (feed, reels, stories).
  *
@@ -73,7 +72,6 @@ export function PostPreview({
     return media?.publicUrl ? [media] : [];
   }, [mediaItems, media]);
   const isCarousel = format === "carrossel" && slides.length > 1;
-
 
   if (vertical) {
     // Reels/TikTok/Shorts/Stories — full-bleed 9:16 com overlay.
@@ -230,7 +228,6 @@ export function PostPreview({
         </div>
       )}
 
-
       {/* Actions bar — Instagram/Facebook only */}
       {channel === "instagram" || channel === "facebook" ? (
         <div className="flex items-center justify-between px-3 pt-2.5">
@@ -374,8 +371,6 @@ function CarouselPreview({ slides, wide }: { slides: PreviewMedia[]; wide: boole
     </div>
   );
 }
-
-
 
 function channelChromeStyle(channel: SocialChannel) {
   switch (channel) {

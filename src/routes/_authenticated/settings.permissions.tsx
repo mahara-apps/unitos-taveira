@@ -247,16 +247,13 @@ function PermissionsPage() {
                     const role = toAssignableRole(m.role);
                     const isAdminRole = ["owner", "admin", "manager"].includes(role);
                     const profile = profiles.find((p) => p.id === m.access_profile_id) ?? null;
-                    const custom = hasCustomOverrides(
-                      profile?.permissions ?? {},
-                      { ...(profile?.permissions ?? {}), ...m.module_permissions },
-                    );
+                    const custom = hasCustomOverrides(profile?.permissions ?? {}, {
+                      ...(profile?.permissions ?? {}),
+                      ...m.module_permissions,
+                    });
                     const name = m.full_name ?? m.email ?? "Sem nome";
                     return (
-                      <div
-                        key={m.user_id}
-                        className="flex flex-wrap items-center gap-3 px-6 py-3"
-                      >
+                      <div key={m.user_id} className="flex flex-wrap items-center gap-3 px-6 py-3">
                         <Avatar className="h-9 w-9">
                           {m.avatar_url ? <AvatarImage src={m.avatar_url} alt={name} /> : null}
                           <AvatarFallback className="text-xs">
@@ -265,9 +262,7 @@ function PermissionsPage() {
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {m.email ?? "—"}
-                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{m.email ?? "—"}</p>
                         </div>
                         <Badge variant="outline" className="text-[11px]">
                           {ROLE_SHORT[role]}
@@ -317,9 +312,9 @@ function PermissionsPage() {
             <div>
               <p className="font-medium">Papel × perfil de acesso</p>
               <p className="text-muted-foreground">
-                O <strong>papel</strong> define a autoridade no workspace e o alcance de clientes.
-                O <strong>perfil de acesso</strong> refina o que um usuário pode fazer em cada
-                módulo. Admins e gerentes têm acesso total por papel.
+                O <strong>papel</strong> define a autoridade no workspace e o alcance de clientes. O{" "}
+                <strong>perfil de acesso</strong> refina o que um usuário pode fazer em cada módulo.
+                Admins e gerentes têm acesso total por papel.
               </p>
             </div>
           </div>

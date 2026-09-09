@@ -252,7 +252,6 @@ export const generateMonthlyPlanFn = createServerFn({ method: "POST" })
     }
   });
 
-
 /* ---------- Volumetria (pré-geração) ---------- */
 
 export const getPlanVolumetryFn = createServerFn({ method: "POST" })
@@ -310,11 +309,7 @@ export const getPlanVolumetryFn = createServerFn({ method: "POST" })
         clientId: data.clientId,
       }),
       /** Super Admin/Owner/Admin geram acima da cota sem pedir liberação. */
-      canBypassOverage: await canBypassOverage(
-        context.supabase,
-        context.userId,
-        data.brandId,
-      ),
+      canBypassOverage: await canBypassOverage(context.supabase, context.userId, data.brandId),
     };
   });
 
@@ -522,7 +517,6 @@ const RegenSchema = z.object({
   rationale: z.string().nullable(),
 });
 
-
 export const regenerateTopicFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
@@ -562,8 +556,7 @@ export const regenerateTopicFn = createServerFn({ method: "POST" })
         .select("topic_title, id")
         .eq("monthly_plan_id", plan.id),
       loadBriefingContext(context.supabase, plan.client_id, {
-        briefingId:
-          plan.context_sources?.briefing_version_id ?? plan.input_briefing_id,
+        briefingId: plan.context_sources?.briefing_version_id ?? plan.input_briefing_id,
       }),
       loadStrategyContext(context.supabase, plan.brand_id, plan.client_id).catch((err: unknown) => {
         console.warn("[monthly-plan] strategy context failed", err);
@@ -748,7 +741,6 @@ export const discardMonthlyPlanFn = createServerFn({ method: "POST" })
 
 /* ---------- Envio ao cliente ---------- */
 
-
 export type PlanClientLink = {
   /** Nulo quando o cliente não aprova pauta (etapa dispensada na regra do cliente). */
   token: string | null;
@@ -759,7 +751,6 @@ export type PlanClientLink = {
   /** Cards criados no Kanban quando a etapa é dispensada. */
   cardsCreated?: number;
 };
-
 
 export const submitPlanToClientFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -782,7 +773,6 @@ export const submitPlanToClientFn = createServerFn({ method: "POST" })
     });
   });
 
-
 /** Reconcilia o vínculo pauta ↔ projeto já escolhido. Não cria projeto. */
 export const ensurePlanProjectFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -804,8 +794,6 @@ export const ensurePlanProjectFn = createServerFn({ method: "POST" })
     });
     return { projectId: plan.project_id, created: false };
   });
-
-
 
 export const getPlanClientLinkFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1047,7 +1035,6 @@ export const createMonthlyPlanFn = createServerFn({ method: "POST" })
       organization: data.organization,
     });
 
-
     const { data: row, error } = await context.supabase
       .from("monthly_plans" as never)
       .insert({
@@ -1251,7 +1238,6 @@ export const canDeletePlansFn = createServerFn({ method: "POST" })
     };
   });
 
-
 /** Listagem da dashboard de pautas, escopada em brand + cliente. */
 export const listPlanBoardFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1324,7 +1310,6 @@ export const listPlanBoardFn = createServerFn({ method: "POST" })
     );
 
     if (rows.length === 0) return { items: [], summary, projects, canDelete };
-
 
     const planIds = rows.map((r) => r.id);
 
@@ -1554,10 +1539,10 @@ export const quickPlanFn = createServerFn({ method: "POST" })
       }
 
       const { submitPlanForApproval } = await import("@/lib/monthly-plan-submit.server");
-      const submitted = await submitPlanForApproval(
-        context.supabase as unknown as SupabaseClient,
-        { planId, userId: context.userId },
-      );
+      const submitted = await submitPlanForApproval(context.supabase as unknown as SupabaseClient, {
+        planId,
+        userId: context.userId,
+      });
 
       return {
         ok: true,

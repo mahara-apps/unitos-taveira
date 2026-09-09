@@ -53,7 +53,8 @@ export const BRANDING_SLOTS: SlotSpec[] = [
   {
     kind: "logo_dark",
     title: "Logo — tema escuro",
-    description: "Usada no sidebar em fundo escuro e nas telas de login/recuperação em modo escuro.",
+    description:
+      "Usada no sidebar em fundo escuro e nas telas de login/recuperação em modo escuro.",
     hint: "PNG ou SVG com fundo transparente • Dimensão ideal 480×120 px (proporção 4:1) • Mín. 240×60 • até 500 KB",
     minWidth: 240,
     minHeight: 60,

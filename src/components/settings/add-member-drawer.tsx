@@ -22,7 +22,6 @@ type Role = BrandRole;
 const ROLES = ASSIGNABLE_ROLES;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-
 export function AddMemberDrawer({
   open,
   onOpenChange,
@@ -105,7 +104,6 @@ function InvitePanel({
   const [draft, setDraft] = useState("");
   const [role, setRole] = useState<Role>("user");
   const [busy, setBusy] = useState(false);
-
 
   const commit = (raw: string) => {
     const clean = raw.trim().toLowerCase();

@@ -69,10 +69,7 @@ import {
   CONTENT_FORMAT_LABEL,
   normalizeContentFormat,
 } from "@/lib/content-formats";
-import {
-  updateScheduleSlotFn,
-  clearScheduleSlotFn,
-} from "@/lib/schedule-approval.functions";
+import { updateScheduleSlotFn, clearScheduleSlotFn } from "@/lib/schedule-approval.functions";
 import {
   scheduleDisplay,
   scheduleFullLabel,
@@ -2072,9 +2069,7 @@ function ScheduleAgendaBlock({
   const updateSlot = useServerFn(updateScheduleSlotFn);
   const clearSlot = useServerFn(clearScheduleSlotFn);
   const schedule = scheduleDisplay(post);
-  const [value, setValue] = useState(
-    post.proposed_at ? tzToLocalInputValue(post.proposed_at) : "",
-  );
+  const [value, setValue] = useState(post.proposed_at ? tzToLocalInputValue(post.proposed_at) : "");
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: invalidateKey });

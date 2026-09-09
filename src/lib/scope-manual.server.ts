@@ -4,7 +4,11 @@
 // em si continua vindo do briefing (escopo do contrato).
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { loadApprovedOverage, canBypassOverage, currentPeriodMonth } from "@/lib/plan-overage.server";
+import {
+  loadApprovedOverage,
+  canBypassOverage,
+  currentPeriodMonth,
+} from "@/lib/plan-overage.server";
 import { scopeBlocksFront } from "@/lib/client-policy.server";
 
 export type ManualScopeCheck = {

@@ -62,7 +62,6 @@ export const getMessagingKpis = createServerFn({ method: "GET" })
         .gte("sent_at", d30),
     );
 
-
     const rows30 = sent30dQ.data ?? [];
     const sent30d = rows30.length;
     const delivered30d = rows30.filter((r) => r.status === "delivered").length;

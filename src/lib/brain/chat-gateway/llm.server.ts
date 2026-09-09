@@ -134,7 +134,6 @@ export async function callLlm(args: {
   }
 }
 
-
 // ---------- Modo streaming com tools + multimodal (caminho principal) ----------
 export interface StreamAnswerArgs {
   supabase: SupabaseClient;
@@ -148,7 +147,6 @@ export interface StreamAnswerArgs {
   /** Permissões efetivas por módulo — definem quais tools existem no turno. */
   permissions?: ModulePermissions | null;
 }
-
 
 export async function streamAnswer(args: StreamAnswerArgs): Promise<{
   result: ReturnType<typeof streamText>;

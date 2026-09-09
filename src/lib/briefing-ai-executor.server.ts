@@ -12,10 +12,7 @@ import {
   normalizeBriefingAnalysis,
   type BriefingAnalysis,
 } from "./briefing-analysis-schema";
-import {
-  BRIEFING_MAX_OUTPUT_TOKENS,
-  briefingProviderOptions,
-} from "./briefing-generation.server";
+import { BRIEFING_MAX_OUTPUT_TOKENS, briefingProviderOptions } from "./briefing-generation.server";
 import { salvageStructuredOutput } from "./ai-output-salvage";
 
 export type BriefingGenerationResult = {
@@ -60,7 +57,8 @@ export async function generateBriefingAnalysis(input: {
         rawAnalysis = result.toolCalls.find(
           (call) => call.toolName === "extract_client_fields",
         )?.input;
-        if (!rawAnalysis) throw new Error("ai_no_structured_output: Gemini não chamou a ferramenta");
+        if (!rawAnalysis)
+          throw new Error("ai_no_structured_output: Gemini não chamou a ferramenta");
       } else {
         const result = await generateText({
           model: candidate.model,
@@ -97,7 +95,12 @@ export async function generateBriefingAnalysis(input: {
         normalizeBriefingAnalysis,
       );
       if (salvaged) {
-        return { analysis: salvaged, provider: candidate.provider, model: candidate.modelId, attempts };
+        return {
+          analysis: salvaged,
+          provider: candidate.provider,
+          model: candidate.modelId,
+          attempts,
+        };
       }
 
       const { kind, retryable } = classifyAiError(error);
@@ -108,10 +111,7 @@ export async function generateBriefingAnalysis(input: {
           kind === "provider_rate_limit" ||
           kind === "provider_quota");
       if (!canFallback) {
-        if (
-          NoOutputGeneratedError.isInstance(error) ||
-          NoObjectGeneratedError.isInstance(error)
-        ) {
+        if (NoOutputGeneratedError.isInstance(error) || NoObjectGeneratedError.isInstance(error)) {
           throw new Error(
             `ai_no_structured_output: a IA não produziu uma análise estruturada. Provider attempts: ${describeProviderAttempts(attempts)}`,
             { cause: error },

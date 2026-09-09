@@ -58,9 +58,7 @@ export const getPortalAccountFn = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
     const row = (data ?? {}) as Record<string, unknown>;
-    const email =
-      (context.claims as { email?: string | null } | undefined)?.email ??
-      null;
+    const email = (context.claims as { email?: string | null } | undefined)?.email ?? null;
     return {
       userId: context.userId,
       email,
@@ -105,12 +103,10 @@ export const updatePortalAccountFn = createServerFn({ method: "POST" })
 
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const path = `${context.userId}/${Date.now()}-${data.avatar.name.replace(/[^\w.-]+/g, "_").slice(-80)}`;
-      const up = await supabaseAdmin.storage
-        .from("avatars")
-        .upload(path, bytes, {
-          contentType: data.avatar.mime ?? "image/jpeg",
-          upsert: true,
-        });
+      const up = await supabaseAdmin.storage.from("avatars").upload(path, bytes, {
+        contentType: data.avatar.mime ?? "image/jpeg",
+        upsert: true,
+      });
       if (up.error) throw new Error(up.error.message);
       const signed = await supabaseAdmin.storage
         .from("avatars")

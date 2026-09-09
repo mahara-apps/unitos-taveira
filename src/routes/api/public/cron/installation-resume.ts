@@ -14,9 +14,8 @@ export const Route = createFileRoute("/api/public/cron/installation-resume")({
       POST: async ({ request }) => {
         const denied = assertCronRequest(request);
         if (denied) return denied;
-        const { resumeStaleAutomatedProvisions } = await import(
-          "@/lib/installation/resume-worker.server"
-        );
+        const { resumeStaleAutomatedProvisions } =
+          await import("@/lib/installation/resume-worker.server");
         const result = await resumeStaleAutomatedProvisions();
         return new Response(JSON.stringify({ ok: true, result }), {
           status: 200,

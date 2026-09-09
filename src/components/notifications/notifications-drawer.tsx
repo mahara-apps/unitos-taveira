@@ -199,7 +199,6 @@ export function NotificationsBell() {
             </Button>
             {/* O fechar (✕) já vem do SheetContent — não duplicar aqui. */}
             <span className="w-6 shrink-0" aria-hidden />
-
           </header>
 
           <ScrollArea className="min-h-0 flex-1">

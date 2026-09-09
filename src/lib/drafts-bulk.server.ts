@@ -25,7 +25,6 @@ import { resolveMonthlySchedule, type SlotSuggestion } from "@/lib/monthly-plan-
 /** Destino de placement no lote — mesmo contrato do save individual. */
 export type BulkDestination = PlacementDestination;
 
-
 export type BulkApplyInput = {
   brandId: string;
   clientId: string;
@@ -101,7 +100,6 @@ async function loadPostContext(sb: SupabaseClient, postId: string) {
           ? fmt
           : "feed") as BulkDestination["format"],
       });
-
     }
     if (Array.isArray(co.hashtags) && hashtags.length === 0) {
       hashtags = (co.hashtags as unknown[]).filter((h): h is string => typeof h === "string");
@@ -110,7 +108,9 @@ async function loadPostContext(sb: SupabaseClient, postId: string) {
     if (!linkUrl) linkUrl = str(co.link);
     if (!locationName) locationName = str(co.location_name);
     if (!locationId) locationId = str(co.location_id);
-    for (const m of Array.isArray((pl as PostRow).media) ? ((pl as PostRow).media as unknown[]) : []) {
+    for (const m of Array.isArray((pl as PostRow).media)
+      ? ((pl as PostRow).media as unknown[])
+      : []) {
       const p = str((m as Record<string, unknown>)?.storagePath);
       if (p) placementPaths.push(p);
     }
@@ -197,8 +197,7 @@ export async function bulkApplyToDrafts(
       let suggestions: SlotSuggestion[];
       if (input.schedule.mode === "fixed") {
         const time = input.schedule.time ?? "19:00";
-        const weekday =
-          typeof input.schedule.weekday === "number" ? input.schedule.weekday : null;
+        const weekday = typeof input.schedule.weekday === "number" ? input.schedule.weekday : null;
         suggestions = candidates.map((id) => ({ key: id, weekday, time }));
       } else {
         const best = await loadBestTimesContext(sb, {
@@ -352,11 +351,11 @@ export async function bulkApplyToDrafts(
 
       // ---- enviar para produção ----
       if (input.sendToProduction && row.stage === "idea") {
-        const stageId = await resolveStageIdByKey(
-          sb,
-          str(row.pipeline_id),
-          ["production", "producao", "in_progress"],
-        );
+        const stageId = await resolveStageIdByKey(sb, str(row.pipeline_id), [
+          "production",
+          "producao",
+          "in_progress",
+        ]);
         const patch: Record<string, unknown> = { stage: "production" };
         if (stageId) patch.stage_id = stageId;
         const { error: stErr } = await sb

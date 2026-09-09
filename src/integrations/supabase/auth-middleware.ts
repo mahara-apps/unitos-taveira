@@ -107,7 +107,6 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       claims = (claims ?? { sub: userId }) as typeof claims;
     }
 
-
     return next({
       context: {
         supabase,
@@ -115,6 +114,5 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
         claims: claims!,
       },
     });
-
   },
 );

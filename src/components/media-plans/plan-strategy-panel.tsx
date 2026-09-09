@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  AlertTriangle,
-  ChevronDown,
-  Lightbulb,
-  Loader2,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { AlertTriangle, ChevronDown, Lightbulb, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { aiErrorMessage } from "@/lib/ai-error-display";
 import { Button } from "@/components/ui/button";
@@ -41,18 +34,15 @@ export function PlanStrategyPanel({ plan, items }: { plan: MediaPlan; items: Med
 
   const strategy = plan.strategy ?? {};
   const regenMut = useMutation({
-    mutationFn: () =>
-      regenFn({ data: { planId: plan.id, refinement: refinement.trim() || null } }),
+    mutationFn: () => regenFn({ data: { planId: plan.id, refinement: refinement.trim() || null } }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["media-plan", plan.id] });
       setRefineOpen(false);
       setRefinement("");
       toast.success("Plano regerado com as novas instruções");
     },
-    onError: (e: unknown) =>
-      toast.error(aiErrorMessage(e, "Não foi possível regerar o plano")),
+    onError: (e: unknown) => toast.error(aiErrorMessage(e, "Não foi possível regerar o plano")),
   });
-
 
   const interviewSaved = Object.keys(plan.interview ?? {}).length > 0;
   if (!strategy.summary) return null;
@@ -124,7 +114,11 @@ export function PlanStrategyPanel({ plan, items }: { plan: MediaPlan; items: Med
               description={currency(((split[k] ?? 0) / 100) * plan.monthly_budget)}
             />
           ))}
-          <PageKpi label="Campanhas" value={String(campaigns.length)} description="prontas para subir" />
+          <PageKpi
+            label="Campanhas"
+            value={String(campaigns.length)}
+            description="prontas para subir"
+          />
         </PageKpiGrid>
 
         {strategy.funnel_rationale && (
@@ -168,13 +162,7 @@ export function PlanStrategyPanel({ plan, items }: { plan: MediaPlan; items: Med
   );
 }
 
-function CampaignCard({
-  item,
-  monthlyBudget,
-}: {
-  item: MediaPlanItem;
-  monthlyBudget: number;
-}) {
+function CampaignCard({ item, monthlyBudget }: { item: MediaPlanItem; monthlyBudget: number }) {
   const [open, setOpen] = useState(false);
   const amount = (monthlyBudget * (Number(item.budget_pct) || 0)) / 100;
   const creative = item.creative_brief ?? {};

@@ -14,8 +14,8 @@ function MessagesEmpty() {
       <div>
         <p className="text-sm font-medium">Escolha uma conversa</p>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Conversas de cliente ficam agrupadas por cliente. Conversas de equipe são internas e
-          nunca aparecem para o cliente.
+          Conversas de cliente ficam agrupadas por cliente. Conversas de equipe são internas e nunca
+          aparecem para o cliente.
         </p>
       </div>
     </div>

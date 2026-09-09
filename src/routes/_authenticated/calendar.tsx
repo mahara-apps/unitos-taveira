@@ -444,31 +444,30 @@ function CalendarPage() {
         : new Date(d.getFullYear(), d.getMonth() + dir, 1),
     );
 
-  const newAction =
-    brandId ? (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="sm" className="h-9 gap-1.5">
-            <Plus className="h-4 w-4" /> Novo
-            <ChevronDown className="ml-0.5 h-3.5 w-3.5 opacity-70" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {clientId ? (
-            <DropdownMenuItem onClick={() => newPublication()}>
-              <CalendarClock className="mr-2 h-4 w-4" /> Nova publicação
-            </DropdownMenuItem>
-          ) : null}
-          {clientId ? <DropdownMenuSeparator /> : null}
-          <DropdownMenuItem onClick={() => setNewEventCtx({ type: "appointment", date: null })}>
-            <CalendarDays className="mr-2 h-4 w-4" /> Novo compromisso
+  const newAction = brandId ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" className="h-9 gap-1.5">
+          <Plus className="h-4 w-4" /> Novo
+          <ChevronDown className="ml-0.5 h-3.5 w-3.5 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {clientId ? (
+          <DropdownMenuItem onClick={() => newPublication()}>
+            <CalendarClock className="mr-2 h-4 w-4" /> Nova publicação
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setNewEventCtx({ type: "seasonal", date: null })}>
-            <Sparkles className="mr-2 h-4 w-4" /> Nova data sazonal
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ) : null;
+        ) : null}
+        {clientId ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem onClick={() => setNewEventCtx({ type: "appointment", date: null })}>
+          <CalendarDays className="mr-2 h-4 w-4" /> Novo compromisso
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setNewEventCtx({ type: "seasonal", date: null })}>
+          <Sparkles className="mr-2 h-4 w-4" /> Nova data sazonal
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
 
   if (!brandId) {
     return (

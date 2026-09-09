@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import {
   assertAdminAuthority,
   assertBrandAdmin,
   assertClientInBrand,
   resolveAuthorityRole,
-
 } from "@/lib/access-guard";
 
 import { callRpc } from "@/lib/supabase-rpc";
@@ -44,10 +44,7 @@ export const listMyBrands = createServerFn({ method: "GET" })
         role: string;
         is_active: boolean;
       }>;
-    let query = supabase
-      .from("brands")
-      .select("id, name, slug, color, is_active")
-      .order("name");
+    let query = supabase.from("brands").select("id, name, slug, color, is_active").order("name");
     if (!isSuperAdmin) query = query.in("id", ids);
     const { data: brands, error } = await query;
     if (error) throw error;
@@ -74,8 +71,6 @@ export const listMyBrands = createServerFn({ method: "GET" })
         (isSuperAdmin ? "owner" : "user"),
     }));
   });
-
-
 
 const CreateBrandInput = z.object({
   name: z.string().trim().min(2).max(80),
@@ -119,7 +114,6 @@ export const createBrand = createServerFn({ method: "POST" })
       if ((count ?? 0) > 0) throw new Error(SINGLE_WORKSPACE_ERROR);
       throw new Error("Usuários do Portal do Cliente não podem criar workspaces.");
     }
-
 
     const id = crypto.randomUUID();
 
@@ -334,6 +328,8 @@ export const updateClient = createServerFn({ method: "POST" })
 const DeleteClientInput = z.object({
   brandId: z.string().uuid(),
   clientId: z.string().uuid(),
+  /** Nome exato do cliente digitado na dupla confirmação. */
+  confirmLabel: z.string().min(1),
 });
 
 export const deleteClient = createServerFn({ method: "POST" })
@@ -348,6 +344,27 @@ export const deleteClient = createServerFn({ method: "POST" })
       allowManager: false,
     });
     await assertClientInBrand(context.supabase, context.userId, data.brandId, data.clientId);
+
+    // Dupla confirmação revalidada no servidor: o frontend nunca é a única
+    // barreira de uma exclusão em cascata.
+    const { data: target, error: targetError } = await context.supabase
+      .from("clients")
+      .select("id,name")
+      .eq("id", data.clientId)
+      .eq("brand_id", data.brandId)
+      .maybeSingle();
+    if (targetError) throw targetError;
+    if (!target) throw new Error("Cliente não encontrado.");
+    assertConfirmLabel(data.confirmLabel, target.name as string);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "client.delete",
+      actorId: context.userId,
+      targetId: data.clientId,
+      targetLabel: target.name as string,
+      brandId: data.brandId,
+    });
+
     const { data: removed, error } = await context.supabase
       .from("clients")
       .delete()
@@ -361,7 +378,6 @@ export const deleteClient = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
-
 
 const SeedInput = z.object({ brandId: z.string().uuid() });
 
@@ -625,6 +641,15 @@ export const deleteBrand = createServerFn({ method: "POST" })
     if (brand.name.trim().toLowerCase() !== data.confirmName.trim().toLowerCase()) {
       throw new Error("Confirmação inválida: digite o nome exato do workspace");
     }
+
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "workspace.delete",
+      actorId: context.userId,
+      targetId: data.brandId,
+      targetLabel: brand.name as string,
+      brandId: data.brandId,
+    });
 
     const { error } = await context.supabase.from("brands").delete().eq("id", data.brandId);
     if (error) throw error;

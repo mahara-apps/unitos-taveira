@@ -57,7 +57,12 @@ export function UndatedTray({
         </div>
         <div className="flex items-center gap-1.5">
           {selectedId ? (
-            <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" onClick={() => onSelect(null)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 gap-1 text-[11px]"
+              onClick={() => onSelect(null)}
+            >
               <X className="h-3 w-3" />
               Cancelar seleção
             </Button>

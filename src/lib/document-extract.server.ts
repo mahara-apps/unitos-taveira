@@ -63,7 +63,14 @@ function ext(filename: string): string {
   return m ? m[1]!.toLowerCase() : "";
 }
 
-export type MediaKind = "image" | "pdf" | "text" | "docx" | "spreadsheet" | "legacy-doc" | "unknown";
+export type MediaKind =
+  | "image"
+  | "pdf"
+  | "text"
+  | "docx"
+  | "spreadsheet"
+  | "legacy-doc"
+  | "unknown";
 
 /** Classifica pelo MIME e, quando genérico/ausente, pela extensão. */
 export function classifyMedia(mediaType: string | null, filename: string): MediaKind {
@@ -212,7 +219,6 @@ export async function prepareDocumentContent(args: {
   // Integridade antes de qualquer chamada de IA: arquivo corrompido para aqui.
   assertFileIntegrity(bytes, kind, filename);
 
-
   if (kind === "image" || kind === "pdf") {
     const mediaType =
       kind === "pdf"
@@ -224,11 +230,12 @@ export async function prepareDocumentContent(args: {
       mode: "inline",
       mediaType,
       base64,
-      note: kind === "pdf" ? "PDF enviado ao modelo (texto + conteúdo visual)." : "Imagem enviada ao modelo (multimodal).",
+      note:
+        kind === "pdf"
+          ? "PDF enviado ao modelo (texto + conteúdo visual)."
+          : "Imagem enviada ao modelo (multimodal).",
     };
   }
-
-
 
   if (kind === "docx") {
     const text = clip(await extractDocx(bytes));

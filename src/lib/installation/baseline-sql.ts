@@ -132,13 +132,17 @@ export function summarizeVerificationRows(rows: readonly unknown[]): Verificatio
     };
   }
   const failedChecks = parsed
-    .filter((row) => String(row["status"] ?? "").trim().toUpperCase() === "FAIL")
+    .filter(
+      (row) =>
+        String(row["status"] ?? "")
+          .trim()
+          .toUpperCase() === "FAIL",
+    )
     .map((row) => {
       const name = String(row["check_name"] ?? row["check"] ?? "verificação sem nome");
       const value = String(row["value"] ?? row["observed"] ?? "").trim();
       return value ? `${name} (observado: ${value})` : name;
     });
-
 
   return {
     total: parsed.length,
@@ -151,7 +155,6 @@ export function summarizeVerificationRows(rows: readonly unknown[]): Verificatio
         : `${failedChecks.length} verificação(ões) em FAIL: ${failedChecks.slice(0, 5).join("; ")}`,
   };
 }
-
 
 /* ------------------------------------------------------------------ *
  * Reexecução idempotente do baseline
@@ -176,9 +179,11 @@ const DUPLICATE_SQLSTATES = [
 /** True quando o erro é apenas "objeto já existe" (retry idempotente). */
 export function isDuplicateObjectError(message: string | null | undefined): boolean {
   if (!message) return false;
-  return DUPLICATE_SQLSTATES.some((code) => message.includes(code))
-    || (/42P16/i.test(message) && /multiple primary keys?/i.test(message))
-    || /already exists/i.test(message);
+  return (
+    DUPLICATE_SQLSTATES.some((code) => message.includes(code)) ||
+    (/42P16/i.test(message) && /multiple primary keys?/i.test(message)) ||
+    /already exists/i.test(message)
+  );
 }
 
 /**

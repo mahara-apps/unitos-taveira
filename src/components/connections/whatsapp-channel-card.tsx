@@ -19,12 +19,7 @@ import { getEvolutionStatus } from "@/lib/evolution.functions";
 import { listEvolutionInstances } from "@/lib/evolution-instances.functions";
 import { EvolutionConfigCard } from "./evolution-config-card";
 import { EvolutionConnectionCard } from "./evolution-connection-card";
-import {
-  deriveStage,
-  formatPhone,
-  WHATSAPP_STAGE_LABELS,
-  stageDot,
-} from "./whatsapp/status";
+import { deriveStage, formatPhone, WHATSAPP_STAGE_LABELS, stageDot } from "./whatsapp/status";
 
 export function WhatsappChannelCard({
   brandId,
@@ -78,19 +73,13 @@ export function WhatsappChannelCard({
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-2">
           <dt className="text-muted-foreground">Conexão</dt>
           <dd className="truncate text-right font-medium">
-            {connected
-              ? "Ativa"
-              : configured
-                ? "Pendente"
-                : "Nenhuma credencial configurada"}
+            {connected ? "Ativa" : configured ? "Pendente" : "Nenhuma credencial configurada"}
           </dd>
         </div>
         {instance?.phoneNumber ? (
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-2">
             <dt className="text-muted-foreground">Número</dt>
-            <dd className="truncate text-right font-medium">
-              {formatPhone(instance.phoneNumber)}
-            </dd>
+            <dd className="truncate text-right font-medium">{formatPhone(instance.phoneNumber)}</dd>
           </div>
         ) : null}
         {instance?.instanceName ? (
@@ -111,7 +100,6 @@ export function WhatsappChannelCard({
           {configured ? "Gerenciar" : "Configurar"}
         </Button>
       </div>
-
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">

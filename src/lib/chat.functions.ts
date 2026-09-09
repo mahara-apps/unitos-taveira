@@ -96,7 +96,6 @@ export const createChatConversationFn = createServerFn({ method: "POST" })
     return row as ChatConversationRow;
   });
 
-
 // ============ rename / delete ============
 export const renameChatConversationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -175,8 +174,6 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       // Workspace obrigatório: resolve/backfilla conversas legadas.
       const { ensureConversationBrandId } = await import("./chat/workspace.server");
       const brandId = await ensureConversationBrandId(context.supabase, context.userId, convo);
-
-
 
       // 2) Persist user message immediately
       const { data: userRow, error: userErr } = await context.supabase

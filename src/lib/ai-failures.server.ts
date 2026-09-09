@@ -128,7 +128,7 @@ export function classifyAiError(err: unknown): { kind: FailureKind; retryable: b
   if (
     msg.includes("max completion tokens") ||
     msg.includes("maximum context length") ||
-    msg.includes("finish_reason\":\"length")
+    msg.includes('finish_reason":"length')
   ) {
     return { kind: "output_truncated", retryable: false };
   }
@@ -170,11 +170,7 @@ export function classifyAiError(err: unknown): { kind: FailureKind; retryable: b
   }
   // Saída ausente/malformada não é indisponibilidade do provider: repetir em
   // outro provider pode multiplicar custo sem corrigir o contrato da saída.
-  if (
-    msg.includes("ai_invalid_output") ||
-    msg.includes("empty_caption") ||
-    msg.includes("json")
-  ) {
+  if (msg.includes("ai_invalid_output") || msg.includes("empty_caption") || msg.includes("json")) {
     return { kind: "invalid_output", retryable: false };
   }
   if (hadNoOutput) return { kind: "invalid_output", retryable: false };

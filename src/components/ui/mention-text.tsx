@@ -37,9 +37,7 @@ function linkify(text: string, keyPrefix: string): ReactNode[] {
 }
 
 function Chip({ label }: { label: string }) {
-  return (
-    <span className="rounded bg-primary/10 px-1 font-medium text-primary">{label}</span>
-  );
+  return <span className="rounded bg-primary/10 px-1 font-medium text-primary">{label}</span>;
 }
 
 export function MentionText({ text, people }: { text: string; people?: MentionPerson[] }) {

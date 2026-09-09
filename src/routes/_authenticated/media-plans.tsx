@@ -61,9 +61,7 @@ function MediaPlansIndex() {
           <button
             key={t.key}
             type="button"
-            onClick={() =>
-              navigate({ search: { tab: t.key }, replace: true, resetScroll: false })
-            }
+            onClick={() => navigate({ search: { tab: t.key }, replace: true, resetScroll: false })}
             className={cn(
               "flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition",
               tab === t.key

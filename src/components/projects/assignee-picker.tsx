@@ -62,7 +62,9 @@ export function AssigneePicker({
             <span className="flex items-center gap-2">
               <Avatar className="h-5 w-5">
                 {o.avatar_url ? <AvatarImage src={o.avatar_url} alt="" /> : null}
-                <AvatarFallback className="text-[9px]">{identityInitials({ full_name: o.full_name, email: o.email ?? null })}</AvatarFallback>
+                <AvatarFallback className="text-[9px]">
+                  {identityInitials({ full_name: o.full_name, email: o.email ?? null })}
+                </AvatarFallback>
               </Avatar>
               <span className="truncate">{optionName(o)}</span>
             </span>
@@ -88,7 +90,11 @@ export function AssigneeAvatar({
   return (
     <Avatar className={className} title={person ? optionName(person) : "Responsável"}>
       {person?.avatar_url ? <AvatarImage src={person.avatar_url} alt="" /> : null}
-      <AvatarFallback className="text-[9px]">{identityInitials(person ? { full_name: person.full_name, email: person.email ?? null } : null)}</AvatarFallback>
+      <AvatarFallback className="text-[9px]">
+        {identityInitials(
+          person ? { full_name: person.full_name, email: person.email ?? null } : null,
+        )}
+      </AvatarFallback>
     </Avatar>
   );
 }

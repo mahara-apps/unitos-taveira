@@ -99,7 +99,6 @@ export function GeneratePlanWizard({
   // Projeto é obrigatório na criação da pauta: "nenhum" não é aceito.
   const organization = toOrganizationInput(org, false);
 
-
   const channels = useMemo(
     () => PLAN_CHANNELS.filter((c) => (volumetry?.monthlyQuota[c] ?? 0) > 0),
     [volumetry],
@@ -164,7 +163,8 @@ export function GeneratePlanWizard({
    * Excedente liberado sem aprovação: autoridade do usuário (Super Admin /
    * Owner / Admin) ou política de volumetria livre no cliente/workspace.
    */
-  const overageAllowed = Boolean(volumetry?.canBypassOverage) || volumetry?.overagePolicy === "warn";
+  const overageAllowed =
+    Boolean(volumetry?.canBypassOverage) || volumetry?.overagePolicy === "warn";
   const missingFormats = channels.filter((c) => enabled[c] && qtyOf(c) === 0);
 
   const setFormatQty = (c: string, f: ContentFormat, n: number) =>

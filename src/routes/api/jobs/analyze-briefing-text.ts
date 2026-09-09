@@ -62,13 +62,11 @@ export const Route = createFileRoute("/api/jobs/analyze-briefing-text")({
         }
         if (!userId) return new Response("Unauthorized", { status: 401 });
 
-
         const denied = await guardClientScope(supabase, userId, parsed.data.clientId);
         if (denied) return denied;
 
-        const { buildInputFingerprint, startImportRun } = await import(
-          "@/lib/briefing-import.server"
-        );
+        const { buildInputFingerprint, startImportRun } =
+          await import("@/lib/briefing-import.server");
         const sourceKind = parsed.data.sourceKind ?? "paste";
         const fingerprint = await buildInputFingerprint({
           sourceKind,

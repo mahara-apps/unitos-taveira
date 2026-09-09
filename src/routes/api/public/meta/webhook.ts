@@ -8,7 +8,6 @@ import {
 } from "@/lib/meta/installation.server";
 import { readRuntimeEnv } from "@/lib/runtime-env.server";
 
-
 /**
  * Meta Webhooks — single endpoint that receives events for both `page`
  * (Facebook) and `instagram` products and dispatches to the right brand

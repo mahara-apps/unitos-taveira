@@ -151,9 +151,9 @@ export const listPortalMessages = createServerFn({ method: "GET" })
       ? await sb.from("user_profiles").select("id, full_name, email").in("id", authorIds)
       : { data: [] as Array<{ id: string; full_name: string | null; email: string | null }> };
     const nameOf = new Map(
-      ((profiles ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>).map(
-        (p) => [p.id, p.full_name ?? p.email ?? "Equipe"],
-      ),
+      (
+        (profiles ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>
+      ).map((p) => [p.id, p.full_name ?? p.email ?? "Equipe"]),
     );
 
     return list
@@ -162,7 +162,8 @@ export const listPortalMessages = createServerFn({ method: "GET" })
         body: r.removed_at ? "" : r.body,
         links: r.removed_at ? [] : parseLinks(r.links),
         authorName: nameOf.get(r.author_id) ?? "Equipe",
-        authorKind: r.author_kind === "portal_client" ? ("portal_client" as const) : ("team" as const),
+        authorKind:
+          r.author_kind === "portal_client" ? ("portal_client" as const) : ("team" as const),
         mine: r.author_id === context.userId,
         removed: !!r.removed_at,
         createdAt: r.created_at,

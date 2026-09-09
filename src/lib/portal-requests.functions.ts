@@ -156,12 +156,12 @@ async function notifyTeam(input: {
   });
 }
 
-async function signAttachments(items: PortalRequestAttachment[]): Promise<PortalRequestAttachment[]> {
+async function signAttachments(
+  items: PortalRequestAttachment[],
+): Promise<PortalRequestAttachment[]> {
   if (!items.length) return items;
   const { signPortalDocument } = await import("@/lib/portal-media.server");
-  return Promise.all(
-    items.map(async (a) => ({ ...a, url: await signPortalDocument(a.path) })),
-  );
+  return Promise.all(items.map(async (a) => ({ ...a, url: await signPortalDocument(a.path) })));
 }
 
 export const listPortalRequestsFn = createServerFn({ method: "POST" })

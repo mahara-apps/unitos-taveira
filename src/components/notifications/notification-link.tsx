@@ -1,10 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useActiveContextOptional } from "@/hooks/use-active-context";
-import {
-  resolveNotificationTarget,
-  type NotificationTargetLike,
-} from "@/lib/notification-target";
+import { resolveNotificationTarget, type NotificationTargetLike } from "@/lib/notification-target";
 
 /**
  * Clique no aviso: troca o cliente ativo quando o item pertence a outro

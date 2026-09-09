@@ -55,12 +55,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AvailableAccountsTable } from "@/components/connections/available-accounts-table";
 import { formatRelative } from "@/components/connections/channel-meta";
 import { useRefreshCooldown } from "@/hooks/use-refresh-cooldown";
@@ -165,10 +160,7 @@ function StateBadge({ state, reason }: { state: PortfolioState; reason: string }
         <TooltipTrigger asChild>
           <Badge
             variant="outline"
-            className={cn(
-              "h-5 shrink-0 cursor-help gap-1 px-1.5 text-[11px] font-medium",
-              m.chip,
-            )}
+            className={cn("h-5 shrink-0 cursor-help gap-1 px-1.5 text-[11px] font-medium", m.chip)}
           >
             <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} />
             {m.label}

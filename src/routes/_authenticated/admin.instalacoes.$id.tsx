@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -104,6 +104,8 @@ import {
   failedStepLabel,
 } from "@/components/installations/operation-views";
 import { InstallationCredentialsCard } from "@/components/installations/installation-credentials-card";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
+import { CRITICAL_ACTIONS, type CriticalActionKey } from "@/lib/critical-actions";
 
 export const Route = createFileRoute("/_authenticated/admin/instalacoes/$id")({
   validateSearch: (search: Record<string, unknown>): { novo?: true } =>
@@ -204,6 +206,11 @@ function InstallationDetailPage() {
   const editFn = useServerFn(updateInstallationFn);
 
   const [runCommand, setRunCommand] = useState<string | null>(null);
+  const [critical, setCritical] = useState<{
+    action: CriticalActionKey;
+    details?: { label: string; value: ReactNode }[];
+    run: (confirmLabel: string) => void;
+  } | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationsInspection | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
@@ -252,12 +259,17 @@ function InstallationDetailPage() {
   };
 
   const start = useMutation({
-    mutationFn: (input: { kind: InstallationOperationKind; confirm?: boolean }) =>
+    mutationFn: (input: {
+      kind: InstallationOperationKind;
+      confirm?: boolean;
+      confirmLabel: string;
+    }) =>
       startFn({
         data: {
           id,
           kind: input.kind as "provision" | "validate" | "update",
           confirm: input.confirm,
+          confirmLabel: input.confirmLabel,
         },
       }),
     onSuccess: (result) => {
@@ -274,7 +286,8 @@ function InstallationDetailPage() {
   });
 
   const autoProvision = useMutation({
-    mutationFn: () => autoFn({ data: { id } }),
+    mutationFn: (input: { confirmLabel: string }) =>
+      autoFn({ data: { id, confirmLabel: input.confirmLabel } }),
     onSuccess: (result) => {
       if (result.result === "STARTED") {
         toast.success("Provisionamento iniciado. Acompanhe o progresso por etapa abaixo.");
@@ -289,7 +302,8 @@ function InstallationDetailPage() {
   // Validação: READ-ONLY e executada pelo próprio MASTER. O comando manual só
   // volta a aparecer quando a automação estiver realmente indisponível.
   const autoValidate = useMutation({
-    mutationFn: () => autoValidateFn({ data: { id } }),
+    mutationFn: (input: { confirmLabel: string }) =>
+      autoValidateFn({ data: { id, confirmLabel: input.confirmLabel } }),
     onSuccess: (result) => {
       if (result.result === "STARTED") {
         toast.success("Validação iniciada. Acompanhe o resultado por etapa abaixo.");
@@ -303,8 +317,10 @@ function InstallationDetailPage() {
 
   // Traz o código publicado no MASTER para o deploy da instalação.
   const autoUpdate = useMutation({
-    mutationFn: (input?: { commitSha?: string | null }) =>
-      autoUpdateFn({ data: { id, commitSha: input?.commitSha ?? null } }),
+    mutationFn: (input: { commitSha?: string | null; confirmLabel: string }) =>
+      autoUpdateFn({
+        data: { id, commitSha: input.commitSha ?? null, confirmLabel: input.confirmLabel },
+      }),
     onSuccess: (result) => {
       if (result.result === "STARTED") {
         toast.success("Atualização iniciada. Acompanhe o progresso por etapa abaixo.");
@@ -319,7 +335,8 @@ function InstallationDetailPage() {
   // Reconcilia o registro com a versão que está DE FATO publicada na instalação
   // (quando uma operação subiu o código mas terminou sem gravar a versão).
   const syncVersion = useMutation({
-    mutationFn: () => syncVersionFn({ data: { id } }),
+    mutationFn: (input: { confirmLabel: string }) =>
+      syncVersionFn({ data: { id, confirmLabel: input.confirmLabel } }),
     onSuccess: (result) => {
       if (result.ok) toast.success(`Versão sincronizada: ${result.version}`);
       else toast.error(result.reason);
@@ -329,7 +346,8 @@ function InstallationDetailPage() {
   });
 
   const restartProvision = useMutation({
-    mutationFn: (input: { force: boolean }) => restartFn({ data: { id, force: input.force } }),
+    mutationFn: (input: { force: boolean; confirmLabel: string }) =>
+      restartFn({ data: { id, force: input.force, confirmLabel: input.confirmLabel } }),
     onSuccess: (result) => {
       if (result.result === "STARTED") toast.success("Provisionamento reiniciado.");
       else toast.error(`BLOCKED: ${result.reasons.join(" | ")}`);
@@ -367,8 +385,12 @@ function InstallationDetailPage() {
   }, [detail.data?.operations]);
 
   const complete = useMutation({
-    mutationFn: (input: { operationId: string; ok: boolean; version?: string | null }) =>
-      completeFn({ data: input }),
+    mutationFn: (input: {
+      operationId: string;
+      ok: boolean;
+      version?: string | null;
+      confirmLabel: string;
+    }) => completeFn({ data: input }),
     onSuccess: () => {
       toast.success("Resultado registrado.");
       invalidate();
@@ -377,7 +399,7 @@ function InstallationDetailPage() {
   });
 
   const cancel = useMutation({
-    mutationFn: (operationId: string) => cancelFn({ data: { operationId } }),
+    mutationFn: (input: { operationId: string; confirmLabel: string }) => cancelFn({ data: input }),
     onSuccess: () => {
       toast.success("Operação cancelada. Resultado parcial preservado.");
       invalidate();
@@ -506,13 +528,33 @@ function InstallationDetailPage() {
     setEditOpen(true);
   };
 
+  /**
+   * Ação CRÍTICA: nada executa com um clique. Abre a dupla confirmação por
+   * escrita (nome exato da instalação) e só então dispara. O servidor revalida
+   * o mesmo texto e registra a ação no histórico.
+   */
+  const askCritical = (
+    action: CriticalActionKey,
+    run: (confirmLabel: string) => void,
+    details?: { label: string; value: ReactNode }[],
+  ) => setCritical({ action, run, details });
+
+  const versionDetails = () => [
+    { label: "Instalação", value: inst.name },
+    { label: "Versão instalada", value: installedRelease ?? "—" },
+    { label: "Versão de destino", value: masterVersion.data?.release ?? inst.availableVersion },
+  ];
+
   const runProvision = () => {
     setProvisionOpen(false);
-    if (automated) {
-      autoProvision.mutate();
-      return;
-    }
-    start.mutate({ kind: "provision" });
+    askCritical(
+      inst.lastProvisionedAt ? "installation.reprovision" : "installation.provision",
+      (confirmLabel) => {
+        if (automated) autoProvision.mutate({ confirmLabel });
+        else start.mutate({ kind: "provision", confirmLabel });
+      },
+      versionDetails(),
+    );
   };
   const provisionAction = () => {
     if (inst.lastProvisionedAt) {
@@ -522,7 +564,10 @@ function InstallationDetailPage() {
     runProvision();
   };
   const validateAction = () =>
-    automated ? autoValidate.mutate() : start.mutate({ kind: "validate" });
+    askCritical("installation.validate", (confirmLabel) => {
+      if (automated) autoValidate.mutate({ confirmLabel });
+      else start.mutate({ kind: "validate", confirmLabel });
+    });
   const updateAction = () => {
     if (masterVersion.data?.masterPublished === false) {
       toast.error(
@@ -531,7 +576,15 @@ function InstallationDetailPage() {
       return;
     }
     if (deployAutomated) {
-      autoUpdate.mutate({ commitSha: masterVersion.data?.commitSha ?? null });
+      askCritical(
+        "installation.update",
+        (confirmLabel) =>
+          autoUpdate.mutate({
+            commitSha: masterVersion.data?.commitSha ?? null,
+            confirmLabel,
+          }),
+        versionDetails(),
+      );
       return;
     }
     setUpdateOpen(true);
@@ -671,7 +724,11 @@ function InstallationDetailPage() {
             size="sm"
             variant="outline"
             disabled={restartProvision.isPending}
-            onClick={() => restartProvision.mutate({ force: !staleActive })}
+            onClick={() =>
+              askCritical("installation.reprovision", (confirmLabel) =>
+                restartProvision.mutate({ force: !staleActive, confirmLabel }),
+              )
+            }
           >
             {restartProvision.isPending ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -684,7 +741,11 @@ function InstallationDetailPage() {
             size="sm"
             variant="ghost"
             disabled={cancel.isPending}
-            onClick={() => cancel.mutate(activeOp.id)}
+            onClick={() =>
+              askCritical("installation.cancel_operation", (confirmLabel) =>
+                cancel.mutate({ operationId: activeOp.id, confirmLabel }),
+              )
+            }
           >
             <XCircle className="mr-1.5 h-3.5 w-3.5" /> Cancelar
           </Button>
@@ -989,7 +1050,15 @@ function InstallationDetailPage() {
                     !canStartOperation("update", inst.status)
                   }
                   onClick={() =>
-                    autoUpdate.mutate({ commitSha: masterVersion.data?.commitSha ?? null })
+                    askCritical(
+                      "installation.update",
+                      (confirmLabel) =>
+                        autoUpdate.mutate({
+                          commitSha: masterVersion.data?.commitSha ?? null,
+                          confirmLabel,
+                        }),
+                      versionDetails(),
+                    )
                   }
                 >
                   {autoUpdate.isPending ? (
@@ -1003,7 +1072,11 @@ function InstallationDetailPage() {
                   size="sm"
                   variant="outline"
                   disabled={!!activeOp || syncVersion.isPending}
-                  onClick={() => syncVersion.mutate()}
+                  onClick={() =>
+                    askCritical("installation.sync_version", (confirmLabel) =>
+                      syncVersion.mutate({ confirmLabel }),
+                    )
+                  }
                 >
                   {syncVersion.isPending ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1140,7 +1213,11 @@ function InstallationDetailPage() {
                   size="sm"
                   variant={failedProvision ? "default" : "outline"}
                   disabled={autoProvision.isPending || !canStartOperation("provision", inst.status)}
-                  onClick={() => autoProvision.mutate()}
+                  onClick={() =>
+                    askCritical("installation.provision", (confirmLabel) =>
+                      autoProvision.mutate({ confirmLabel }),
+                    )
+                  }
                 >
                   {autoProvision.isPending ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1248,11 +1325,14 @@ function InstallationDetailPage() {
                           variant="outline"
                           disabled={complete.isPending}
                           onClick={() =>
-                            complete.mutate({
-                              operationId: op.id,
-                              ok: true,
-                              version: inst.availableVersion,
-                            })
+                            askCritical("installation.complete_operation", (confirmLabel) =>
+                              complete.mutate({
+                                operationId: op.id,
+                                ok: true,
+                                version: inst.availableVersion,
+                                confirmLabel,
+                              }),
+                            )
                           }
                         >
                           <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Registrar sucesso
@@ -1263,7 +1343,11 @@ function InstallationDetailPage() {
                           size="sm"
                           variant="outline"
                           disabled={complete.isPending}
-                          onClick={() => complete.mutate({ operationId: op.id, ok: false })}
+                          onClick={() =>
+                            askCritical("installation.complete_operation", (confirmLabel) =>
+                              complete.mutate({ operationId: op.id, ok: false, confirmLabel }),
+                            )
+                          }
                         >
                           <XCircle className="mr-1.5 h-3.5 w-3.5" /> Registrar falha
                         </Button>
@@ -1272,7 +1356,11 @@ function InstallationDetailPage() {
                         size="sm"
                         variant="ghost"
                         disabled={cancel.isPending}
-                        onClick={() => cancel.mutate(op.id)}
+                        onClick={() =>
+                          askCritical("installation.cancel_operation", (confirmLabel) =>
+                            cancel.mutate({ operationId: op.id, confirmLabel }),
+                          )
+                        }
                       >
                         Cancelar operação
                       </Button>
@@ -1332,7 +1420,13 @@ function InstallationDetailPage() {
             <Button
               size="sm"
               disabled={start.isPending}
-              onClick={() => start.mutate({ kind: "update", confirm: true })}
+              onClick={() =>
+                askCritical(
+                  "installation.update",
+                  (confirmLabel) => start.mutate({ kind: "update", confirm: true, confirmLabel }),
+                  versionDetails(),
+                )
+              }
             >
               {start.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar atualização
@@ -1417,6 +1511,25 @@ function InstallationDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {critical && (
+        <CriticalConfirmDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setCritical(null);
+          }}
+          title={CRITICAL_ACTIONS[critical.action].title}
+          impact={CRITICAL_ACTIONS[critical.action].impact}
+          irreversible={CRITICAL_ACTIONS[critical.action].irreversible}
+          confirmText={inst.name}
+          details={critical.details}
+          onConfirm={() => {
+            const run = critical.run;
+            setCritical(null);
+            run(inst.name);
+          }}
+        />
+      )}
     </div>
   );
 }

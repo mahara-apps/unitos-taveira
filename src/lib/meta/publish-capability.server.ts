@@ -484,7 +484,6 @@ export async function resolvePublishTarget(
         ),
       };
     }
-
   }
 
   const capability = await getConnectionCapability(db, row, {

@@ -35,7 +35,6 @@ export const CUSTOMER_TAB_ALIASES = {
   channels: "publicacoes", // canais são os destinos das publicações
   pedidos: "area-cliente", // pedidos do cliente vivem na conversa da Área do cliente
   requests: "area-cliente", // idem, em links antigos em inglês
-
 } as const satisfies Record<string, CustomerTab>;
 
 export type CustomerTabAlias = keyof typeof CUSTOMER_TAB_ALIASES;

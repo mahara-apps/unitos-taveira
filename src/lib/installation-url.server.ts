@@ -62,11 +62,7 @@ async function readStoredUrl(
   brandId: string,
 ): Promise<string | null> {
   try {
-    const res = await supabase
-      .from("brands")
-      .select("app_url")
-      .eq("id", brandId)
-      .maybeSingle();
+    const res = await supabase.from("brands").select("app_url").eq("id", brandId).maybeSingle();
     const row = (res?.data ?? null) as BrandUrlRow | null;
     return normalize(row?.app_url ?? null);
   } catch {

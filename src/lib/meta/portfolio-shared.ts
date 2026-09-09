@@ -21,7 +21,6 @@ export type PortfolioPage = {
   businessName?: string | null;
 };
 
-
 export type PortfolioThreadsAccount = {
   threadsUserId: string;
   username: string | null;
@@ -183,7 +182,6 @@ export function readPagesPayload(raw: unknown): CachedPagesPayload {
   return empty;
 }
 
-
 /**
  * Guard against concurrent discovery for the same session/channel. A double
  * click on "Sincronizar" (or a client+server duplicate call) must result in ONE
@@ -275,4 +273,3 @@ export function accountStatusReason(
   if (ch.broad || ch.targets.includes(String(targetId))) return null;
   return `Este ativo existe no Business Portfolio, mas não foi selecionado durante o consentimento. Clique em "Autorizar na Meta" e marque este ${label} na tela de escolha de ativos.`;
 }
-

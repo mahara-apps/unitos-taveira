@@ -51,8 +51,14 @@ async function assertStructuralBrandClient(
     supabase as unknown as {
       from: (t: string) => {
         select: (c: string) => {
-          eq: (k: string, v: string) => {
-            maybeSingle: () => Promise<{ data: ClientRow | null; error: { message: string } | null }>;
+          eq: (
+            k: string,
+            v: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: ClientRow | null;
+              error: { message: string } | null;
+            }>;
           };
         };
       };

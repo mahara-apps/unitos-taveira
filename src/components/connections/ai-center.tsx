@@ -111,7 +111,6 @@ export const AI_PROVIDERS: ProviderDef[] = [
       { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant", kind: "text" },
     ],
   },
-
 ];
 
 const PROVIDER_BY_ID = Object.fromEntries(AI_PROVIDERS.map((p) => [p.id, p])) as Record<
@@ -151,7 +150,6 @@ function modelLabel(providerId: string, modelId: string) {
 function providerLabel(providerId: string) {
   return PROVIDER_BY_ID[providerId as AiProviderId]?.name ?? providerId;
 }
-
 
 export type AiCenterData = {
   monthlyBudgetUsd?: number;
@@ -551,8 +549,7 @@ function HealthPanel({
         toast.success(`Todos os modelos ativos${noKeys}`);
       }
     },
-    onError: (e: unknown) =>
-      toast.error(aiErrorMessage(e, "Falha ao verificar modelos")),
+    onError: (e: unknown) => toast.error(aiErrorMessage(e, "Falha ao verificar modelos")),
   });
 
   const connectedProviders = AI_PROVIDERS.filter((p) => providers?.[p.id]?.connected);
@@ -649,9 +646,8 @@ function HealthPanel({
             >
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
               <span>
-                {providerLabel(m.provider)}: o modelo{" "}
-                {modelLabel(m.provider, m.replacedModelId!)} saiu do ar e foi substituído
-                automaticamente por {modelLabel(m.provider, m.modelId)}
+                {providerLabel(m.provider)}: o modelo {modelLabel(m.provider, m.replacedModelId!)}{" "}
+                saiu do ar e foi substituído automaticamente por {modelLabel(m.provider, m.modelId)}
                 {m.updatedAt ? ` em ${new Date(m.updatedAt).toLocaleString("pt-BR")}` : ""}.
               </span>
             </div>
@@ -724,7 +720,6 @@ function ProviderCard({
     onError: (e: unknown) => toast.error(aiErrorMessage(e, "Falha ao desconectar")),
   });
 
-
   const connected = !!config?.connected;
   const Icon = provider.icon;
 
@@ -787,7 +782,6 @@ function ProviderCard({
               )}
             >
               {keyStateLabel(config)}
-
             </div>
           </>
         ) : (

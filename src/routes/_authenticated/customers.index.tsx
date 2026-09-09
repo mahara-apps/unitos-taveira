@@ -71,8 +71,7 @@ import { KpiCard } from "@/components/ui/kpi-card";
 import { DashboardPageShell } from "@/components/ui/dashboard-primitives";
 import { CustomerAvatar } from "@/components/customer/customer-avatar";
 import { NewCustomerWizard, CUSTOMER_SEGMENTS } from "@/components/customer/new-customer-wizard";
-import {
-  CHANNEL_ICON_SIZE, channelDef } from "@/components/connections/channel-meta";
+import { CHANNEL_ICON_SIZE, channelDef } from "@/components/connections/channel-meta";
 import { usePageHeader } from "@/hooks/use-page-header";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { listClients, updateClient, deleteClient } from "@/lib/workspace.functions";
@@ -272,7 +271,10 @@ function CustomersIndexPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (clientId: string) => remove({ data: { brandId: brandId!, clientId } }),
+    mutationFn: (args: { clientId: string; confirmLabel: string }) =>
+      remove({
+        data: { brandId: brandId!, clientId: args.clientId, confirmLabel: args.confirmLabel },
+      }),
     onSuccess: () => {
       toast.success("Cliente excluído");
       qc.invalidateQueries({ queryKey: ["clients", brandId] });
@@ -605,8 +607,8 @@ function CustomersIndexPage() {
                 <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
                   Todos os dados deste cliente serão excluídos permanentemente: briefing, documentos
                   e arquivos, pautas e planejamentos, posts, projetos, tarefas, conexões e
-                  histórico. <strong>Esta ação é irreversível e os dados não poderão ser
-                  recuperados.</strong>
+                  histórico.{" "}
+                  <strong>Esta ação é irreversível e os dados não poderão ser recuperados.</strong>
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="delete-client-confirm" className="text-xs">
@@ -630,7 +632,7 @@ function CustomersIndexPage() {
               onClick={(e) => {
                 e.preventDefault();
                 if (toDelete && deleteConfirmName.trim() === toDelete.name.trim()) {
-                  deleteMut.mutate(toDelete.id);
+                  deleteMut.mutate({ clientId: toDelete.id, confirmLabel: deleteConfirmName });
                 }
               }}
               disabled={

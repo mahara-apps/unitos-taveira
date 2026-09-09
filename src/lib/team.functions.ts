@@ -3,6 +3,7 @@ import type { SupabaseLike } from "@/lib/email/resend-types";
 import { z } from "zod";
 import { callRpc } from "@/lib/supabase-rpc";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import { ALL_PERMISSION_IDS, normalizePermissions, type PermissionId } from "@/lib/permissions";
 import { normalizeModulePermissions } from "@/lib/module-permissions";
 import {
@@ -30,7 +31,9 @@ export const listBrandTeam = createServerFn({ method: "GET" })
     const [membersRes, invitesRes, clientsRes] = await Promise.all([
       supabase
         .from("brand_members")
-        .select("brand_id, user_id, role, permissions, created_at, access_profile_id, module_permissions")
+        .select(
+          "brand_id, user_id, role, permissions, created_at, access_profile_id, module_permissions",
+        )
         .eq("brand_id", data.brandId),
       supabase
         .from("brand_invites")
@@ -207,7 +210,6 @@ async function sendInviteEmail(opts: {
   return { sent: res.sent, ...(res.error ? { error: res.error } : {}) };
 }
 
-
 export const inviteBrandMembers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InviteInput.parse(input))
@@ -270,6 +272,7 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
       //    with a random temporary password and force a password change on first login.
       let provisioned = false;
       let tempPassword: string | undefined;
+      let createdUserId: string | null = null;
       try {
         const { data: existing } = await supabaseAdmin.auth.admin.listUsers({
           page: 1,
@@ -289,16 +292,25 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
             continue;
           }
           if (created?.user?.id) {
-            // Force password change on first login
-            await supabaseAdmin
-              .from("user_profiles")
-              .update({ requires_password_change: true })
-              .eq("id", created.user.id);
+            createdUserId = created.user.id;
+            const { ensureUserProfile } = await import("@/lib/user-profile.server");
+            await ensureUserProfile(supabaseAdmin, {
+              userId: created.user.id,
+              email,
+              requiresPasswordChange: true,
+            });
             provisioned = true;
           }
         }
       } catch (e) {
         console.error("[invite provision] failed", e);
+        if (createdUserId) await supabaseAdmin.auth.admin.deleteUser(createdUserId);
+        results.push({
+          email,
+          status: "error",
+          error: e instanceof Error ? e.message : "profile_provision_failed",
+        });
+        continue;
       }
 
       const insertPayload = {
@@ -389,18 +401,34 @@ export const updateBrandMember = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const RemoveMemberInput = z.object({ brandId: z.string().uuid(), userId: z.string().uuid() });
+const RemoveMemberInput = z.object({
+  brandId: z.string().uuid(),
+  userId: z.string().uuid(),
+  /** E-mail exato do membro, digitado na dupla confirmação. */
+  confirmLabel: z.string().min(1),
+});
 export const removeBrandMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RemoveMemberInput.parse(input))
   .handler(async ({ data, context }) => {
     await assertBrandAdmin(context.supabase, context.userId, data.brandId);
-    await assertCanManageBrandMember(
-      context.supabase,
-      context.userId,
-      data.brandId,
-      data.userId,
-    );
+    await assertCanManageBrandMember(context.supabase, context.userId, data.brandId, data.userId);
+    const { data: target, error: targetError } = await context.supabase
+      .from("user_profiles")
+      .select("id,email,full_name")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (targetError) throw targetError;
+    const label = (target?.email as string | null) ?? (target?.full_name as string | null) ?? null;
+    assertConfirmLabel(data.confirmLabel, label);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "member.remove",
+      actorId: context.userId,
+      targetId: data.userId,
+      targetLabel: label,
+      brandId: data.brandId,
+    });
     const { error } = await context.supabase
       .from("brand_members")
       .delete()
@@ -410,11 +438,33 @@ export const removeBrandMember = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const RevokeInviteInput = z.object({ brandId: z.string().uuid(), inviteId: z.string().uuid() });
+const RevokeInviteInput = z.object({
+  brandId: z.string().uuid(),
+  inviteId: z.string().uuid(),
+  /** E-mail exato do convite, digitado na dupla confirmação. */
+  confirmLabel: z.string().min(1),
+});
 export const revokeBrandInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RevokeInviteInput.parse(input))
   .handler(async ({ data, context }) => {
+    const { data: invite, error: inviteError } = await context.supabase
+      .from("brand_invites")
+      .select("id,email")
+      .eq("id", data.inviteId)
+      .eq("brand_id", data.brandId)
+      .maybeSingle();
+    if (inviteError) throw inviteError;
+    if (!invite) throw new Error("Convite não encontrado.");
+    assertConfirmLabel(data.confirmLabel, invite.email as string);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "invite.revoke",
+      actorId: context.userId,
+      targetId: data.inviteId,
+      targetLabel: invite.email as string,
+      brandId: data.brandId,
+    });
     const { error } = await context.supabase
       .from("brand_invites")
       .update({ revoked_at: new Date().toISOString(), revoked_by: context.userId })
@@ -646,11 +696,18 @@ export const provisionUser = createServerFn({ method: "POST" })
     }
     const newUserId = created.user.id;
 
-    // Marca reset obrigatório + garante nome no perfil
-    await supabaseAdmin
-      .from("user_profiles")
-      .update({ requires_password_change: true, full_name: data.fullName } as never)
-      .eq("id", newUserId);
+    try {
+      const { ensureUserProfile } = await import("@/lib/user-profile.server");
+      await ensureUserProfile(supabaseAdmin, {
+        userId: newUserId,
+        email,
+        fullName: data.fullName,
+        requiresPasswordChange: true,
+      });
+    } catch (error) {
+      await supabaseAdmin.auth.admin.deleteUser(newUserId);
+      throw error;
+    }
 
     // Atribui workspaces e projetos
     const workspaceInfo: Array<{ name: string; clients: string[] }> = [];
@@ -800,11 +857,11 @@ export const listProvisionableBrands = createServerFn({ method: "GET" })
  */
 function mapLinkError(message: string): string {
   if (/not_authenticated/.test(message)) return "Sessão expirada. Entre novamente.";
-  if (/forbidden/.test(message)) return "Apenas Admin, Manager ou Super Admin podem vincular contas.";
+  if (/forbidden/.test(message))
+    return "Apenas Admin, Manager ou Super Admin podem vincular contas.";
   if (/role_authority_invalid/.test(message))
     return "Seu papel não permite conceder esse papel nesta marca.";
-  if (/self_promotion_blocked/.test(message))
-    return "Não é possível alterar o seu próprio papel.";
+  if (/self_promotion_blocked/.test(message)) return "Não é possível alterar o seu próprio papel.";
   return message;
 }
 
@@ -965,10 +1022,18 @@ export const addPerson = createServerFn({ method: "POST" })
       }
       targetId = created.user.id;
       mode = "provisioned";
-      await supabaseAdmin
-        .from("user_profiles")
-        .update({ requires_password_change: true, full_name: data.fullName } as never)
-        .eq("id", targetId);
+      try {
+        const { ensureUserProfile } = await import("@/lib/user-profile.server");
+        await ensureUserProfile(supabaseAdmin, {
+          userId: targetId,
+          email: data.email,
+          fullName: data.fullName,
+          requiresPasswordChange: true,
+        });
+      } catch (error) {
+        await supabaseAdmin.auth.admin.deleteUser(targetId);
+        throw error;
+      }
     }
 
     // Vincula ao workspace (upsert brand_members)
@@ -985,9 +1050,7 @@ export const addPerson = createServerFn({ method: "POST" })
         user_id: targetId,
         role: data.role,
         permissions: data.permissions,
-        ...(data.accessProfileId !== undefined
-          ? { access_profile_id: data.accessProfileId }
-          : {}),
+        ...(data.accessProfileId !== undefined ? { access_profile_id: data.accessProfileId } : {}),
       },
       { onConflict: "brand_id,user_id" },
     );

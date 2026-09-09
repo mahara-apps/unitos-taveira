@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { assertCronRequest } from "@/lib/cron-auth.server";
 import { isMetaRateLimit, nextRateLimitRetryAt, rateLimitMessage } from "@/lib/meta/rate-limit";
 
-
 /**
  * Erro determinístico de autorização/vínculo: NUNCA deve consumir retries.
  * O destino é marcado como `blocked` (placement `connection_required` /
@@ -86,7 +85,6 @@ export const Route = createFileRoute("/api/public/meta/publish-scheduled")({
         const results: Array<{ id: string; ok: boolean; error?: string }> = [];
         const seenConnections = new Map<string, number>();
 
-
         for (const post of claimed as Array<{
           id: string;
           brand_id: string;
@@ -106,7 +104,6 @@ export const Route = createFileRoute("/api/public/meta/publish-scheduled")({
           seenConnections.set(post.connection_id, seenBefore + 1);
 
           try {
-
             // ---- PRÉ-FLIGHT (2ª barreira, fail closed) ----------------------
             // A autorização pode ter mudado depois do agendamento: revalidamos
             // toda a cadeia (marca → cliente → vínculo → conexão → canal →
@@ -284,7 +281,11 @@ export const Route = createFileRoute("/api/public/meta/publish-scheduled")({
                 p_error: rateLimitMessage(retryAt, msg, err),
                 p_retry_at: retryAt.toISOString(),
               });
-              results.push({ id: post.id, ok: false, error: rateLimitMessage(retryAt, undefined, err) });
+              results.push({
+                id: post.id,
+                ok: false,
+                error: rateLimitMessage(retryAt, undefined, err),
+              });
 
               continue;
             }
@@ -294,7 +295,6 @@ export const Route = createFileRoute("/api/public/meta/publish-scheduled")({
               p_error: msg,
             });
             results.push({ id: post.id, ok: false, error: msg });
-
           }
         }
 
@@ -439,7 +439,6 @@ async function resolveMediaForPublish(
   if (media?.imageUrl) out.imageUrl = media.imageUrl;
   return out;
 }
-
 
 function isVideoPath(path: string): boolean {
   return /\.(mp4|mov|m4v|webm|3gp)$/i.test(path);

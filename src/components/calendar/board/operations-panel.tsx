@@ -73,7 +73,6 @@ function Block({
   );
 }
 
-
 function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="px-3.5 py-4 text-[11px] leading-relaxed text-muted-foreground">
@@ -130,7 +129,6 @@ export function OperationsPanel({
   onOpenDraft,
   onSeeAllDrafts,
   layout = "column",
-
 }: {
   upcoming: PublicationItem[];
   attention: PublicationItem[];
@@ -158,7 +156,6 @@ export function OperationsPanel({
         title="Próximas publicações"
         big={big(upcoming.length)}
         count={`${upcoming.length} na fila`}
-
       >
         {upcoming.length === 0 ? (
           <Empty title="Nada agendado à frente" hint="Agende uma peça aprovada para vê-la aqui." />
@@ -210,7 +207,6 @@ export function OperationsPanel({
         icon={<AlertTriangle className="h-4 w-4" />}
         title="Precisam de atenção"
         big={big(attention.length)}
-
         count={
           attention.length === 0
             ? "Nada pendente"
@@ -272,7 +268,6 @@ export function OperationsPanel({
         icon={<XCircle className="h-4 w-4" />}
         title="Falhas recentes"
         big={big(failures.length)}
-
         count={
           failures.length === 0
             ? "Nenhuma falha"
@@ -329,7 +324,6 @@ export function OperationsPanel({
         icon={<FileText className="h-4 w-4" />}
         title="Rascunhos"
         big={big(drafts.length)}
-
         count={
           draftsLoading
             ? "Carregando…"
@@ -420,7 +414,6 @@ export function OperationsPanel({
             ))}
           </ul>
         )}
-
       </Block>
     </div>
   );

@@ -6,12 +6,7 @@ import type { EvolutionConfig } from "./config.server";
 import { EvolutionApiError, evolutionRequest } from "./client.server";
 
 /** Estados normalizados de conexão de uma instância. */
-export type EvolutionConnectionState =
-  | "open"
-  | "connecting"
-  | "close"
-  | "unknown"
-  | "not_found";
+export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown" | "not_found";
 
 export type EvolutionInstanceState = {
   state: EvolutionConnectionState;

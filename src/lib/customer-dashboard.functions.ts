@@ -124,10 +124,10 @@ export const loadCustomerDashboardFn = createServerFn({ method: "POST" })
     const briefingStatus =
       ((client.data as { briefing_status?: string } | null)?.briefing_status as string | null) ??
       "draft";
-    const briefingCompletion = computeBriefingCompletion(
-      (brandHub ?? {}) as BrandHubData,
-      { tone_of_voice: (client.data as { tone_of_voice?: string | null } | null)?.tone_of_voice ?? null },
-    );
+    const briefingCompletion = computeBriefingCompletion((brandHub ?? {}) as BrandHubData, {
+      tone_of_voice:
+        (client.data as { tone_of_voice?: string | null } | null)?.tone_of_voice ?? null,
+    });
 
     const defaultPipeline = (pipelinesRes.data ?? [])[0] ?? null;
 

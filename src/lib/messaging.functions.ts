@@ -156,11 +156,9 @@ export const listThreads = createServerFn({ method: "GET" })
           "id",
           Array.from(new Set(rows.map((r) => r.project_id).filter((v): v is string => !!v))),
         ),
-      callRpc<Array<{ thread_id: string; unread: number }>>(
-        supabase,
-        "message_unread_counts",
-        { _brand_id: data.brandId },
-      ),
+      callRpc<Array<{ thread_id: string; unread: number }>>(supabase, "message_unread_counts", {
+        _brand_id: data.brandId,
+      }),
     ]);
 
     const profiles = await loadProfiles(
@@ -200,10 +198,7 @@ export const listThreads = createServerFn({ method: "GET" })
         lastAuthorIds.set(m.thread_id as string, m.author_id as string);
       }
     }
-    const authorProfiles = await loadProfiles(
-      supabase as never,
-      [...lastAuthorIds.values()],
-    );
+    const authorProfiles = await loadProfiles(supabase as never, [...lastAuthorIds.values()]);
     for (const [threadId, authorId] of lastAuthorIds) {
       lastAuthorName.set(threadId, nameOf(authorProfiles.get(authorId)));
     }
@@ -236,7 +231,9 @@ export const listMessages = createServerFn({ method: "GET" })
     const { supabase } = context;
     const { data: rows, error } = await supabase
       .from("messages")
-      .select("id, thread_id, author_id, author_kind, body, links, mentions, removed_at, created_at")
+      .select(
+        "id, thread_id, author_id, author_kind, body, links, mentions, removed_at, created_at",
+      )
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: false })
       .limit(data.limit);
@@ -272,11 +269,9 @@ export const countUnreadMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ brandId: uuid.nullish() }).parse(i))
   .handler(async ({ data, context }): Promise<number> => {
-    const { data: total, error } = await callRpc<number>(
-      context.supabase,
-      "message_unread_total",
-      { _brand_id: data.brandId ?? null },
-    );
+    const { data: total, error } = await callRpc<number>(context.supabase, "message_unread_total", {
+      _brand_id: data.brandId ?? null,
+    });
     if (error) return 0;
     return Number(total) || 0;
   });
@@ -358,9 +353,7 @@ async function addParticipantsInternal(
     .eq("brand_id", input.brandId)
     .in("user_id", ids);
   const teamIds = new Set(
-    (members ?? [])
-      .filter((m) => (m.role as string) !== "client")
-      .map((m) => m.user_id as string),
+    (members ?? []).filter((m) => (m.role as string) !== "client").map((m) => m.user_id as string),
   );
 
   // Contatos do cliente só entram em conversa compartilhada daquele cliente.
@@ -576,9 +569,7 @@ async function notifyThreadSafe(
 
 export const listThreadCandidates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
-    z.object({ brandId: uuid, clientId: uuid.nullish() }).parse(i),
-  )
+  .inputValidator((i: unknown) => z.object({ brandId: uuid, clientId: uuid.nullish() }).parse(i))
   .handler(
     async ({
       data,
@@ -628,9 +619,7 @@ export const listThreadCandidates = createServerFn({ method: "GET" })
 
       return {
         team: teamIds.map(shape).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
-        clientContacts: contactIds
-          .map(shape)
-          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+        clientContacts: contactIds.map(shape).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
       };
     },
   );

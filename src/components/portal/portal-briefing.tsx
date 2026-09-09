@@ -209,21 +209,21 @@ function RequestForm({ request }: { request: PortalBriefingRequest }) {
       !canAct
         ? Promise.reject(new Error("Este acesso é somente de acompanhamento."))
         : api.submitBriefing({
-        requestId: request.id,
-        answers: Object.fromEntries(
-          fields.map((f) => [
-            f.key,
-            f.type === "list"
-              ? (answers[f.key] ?? "")
-                  .split("\n")
-                  .map((v) => v.trim())
-                  .filter(Boolean)
-              : (answers[f.key] ?? ""),
-          ]),
-        ),
-        note: note.trim() || undefined,
-        attachments: files.length ? files : undefined,
-      }),
+            requestId: request.id,
+            answers: Object.fromEntries(
+              fields.map((f) => [
+                f.key,
+                f.type === "list"
+                  ? (answers[f.key] ?? "")
+                      .split("\n")
+                      .map((v) => v.trim())
+                      .filter(Boolean)
+                  : (answers[f.key] ?? ""),
+              ]),
+            ),
+            note: note.trim() || undefined,
+            attachments: files.length ? files : undefined,
+          }),
     onSuccess: () => {
       toast.success("Resposta enviada. A equipe vai analisar.");
       setFiles([]);

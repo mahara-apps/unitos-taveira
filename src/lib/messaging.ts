@@ -71,8 +71,7 @@ export const VISIBILITY_LABEL: Record<ThreadVisibility, string> = {
 const isThreadScope = (v: unknown): v is ThreadScope =>
   v === "client" || v === "team_dm" || v === "project";
 
-export const normalizeThreadScope = (v: unknown): ThreadScope =>
-  isThreadScope(v) ? v : "team_dm";
+export const normalizeThreadScope = (v: unknown): ThreadScope => (isThreadScope(v) ? v : "team_dm");
 
 export const normalizeVisibility = (v: unknown): ThreadVisibility =>
   v === "shared_with_client" ? "shared_with_client" : "internal";

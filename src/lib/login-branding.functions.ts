@@ -18,7 +18,8 @@ import { createServerFn } from "@tanstack/react-start";
  * - sem configuração ⇒ `null` e a UI usa o branding institucional local.
  */
 
-const SAFE_PATH = /^(installation|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/[^/]+$/;
+const SAFE_PATH =
+  /^(installation|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/[^/]+$/;
 
 export function isSafeLoginLogoPath(path: string | null | undefined): boolean {
   const value = (path ?? "").trim();

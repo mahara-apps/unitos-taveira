@@ -101,7 +101,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-
 /* ----------------------------- Types / helpers ----------------------------- */
 
 type SocialKey = PlanChannel;
@@ -319,13 +318,11 @@ export function BriefingWorkspace({
     setIncomingVersion(version ?? signature);
   }, [hubQ.data, form, dirty, syncedVersion, syncedSignature, applyServerData]);
 
-
   /** Toda edição do formulário passa por aqui para marcar alterações pendentes. */
   const updateForm = useCallback((next: FormState) => {
     setDirty(true);
     setForm(next);
   }, []);
-
 
   const completion = useMemo(() => (form ? computeCompletion(form) : 0), [form]);
 
@@ -521,7 +518,6 @@ export function BriefingWorkspace({
   // A importação por IA agora acontece no modal `BriefingImportDialog`
   // (upload → análise → revisão). O antigo `window.prompt` foi removido.
 
-
   if (hubQ.isLoading || !form || !hubQ.data) {
     return (
       <div className="space-y-4 py-6">
@@ -601,9 +597,7 @@ export function BriefingWorkspace({
       />
     </>
   );
-
 }
-
 
 /* ------------------------------ Shared blocks ------------------------------ */
 
@@ -1510,11 +1504,7 @@ function AiActionsMenu({
             </span>
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={onGenerateIdeas}
-          disabled={!strategyReady}
-          className="gap-2"
-        >
+        <DropdownMenuItem onClick={onGenerateIdeas} disabled={!strategyReady} className="gap-2">
           <Lightbulb className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0">
             <span className="block text-xs font-medium">Gerar ideias de conteúdo</span>
@@ -1549,7 +1539,6 @@ function AiActionsMenu({
     </DropdownMenu>
   );
 }
-
 
 type StackedProps = {
   brandId: string;
@@ -1680,11 +1669,7 @@ function StackedBrainLayout(props: StackedProps) {
               onClick={onSave}
               disabled={saving}
             >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar
             </Button>
             <AiActionsMenu
@@ -1703,7 +1688,6 @@ function StackedBrainLayout(props: StackedProps) {
           <Progress value={completion} className="h-1.5" />
         </div>
       </div>
-
 
       <div className="grid gap-8 pt-6 md:grid-cols-[200px_minmax(0,1fr)]">
         {/* Left anchor nav */}
@@ -1766,8 +1750,6 @@ function StackedBrainLayout(props: StackedProps) {
               <BriefingImportHistory brandId={brandId} clientId={clientId} />
             </div>
           </BrainSection>
-
-
 
           <BrainSection id="briefing-cliente" title="Briefing com o cliente">
             <BriefingRequestPanel brandId={brandId} clientId={clientId} />
@@ -1834,7 +1816,9 @@ function StackedBrainLayout(props: StackedProps) {
             </Button>
             <Button
               onClick={() => void runIdeas()}
-              disabled={genIdeas || !toOrganizationInput(ideasOrg, false)} className="gap-1.5">
+              disabled={genIdeas || !toOrganizationInput(ideasOrg, false)}
+              className="gap-1.5"
+            >
               {genIdeas ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (

@@ -16,7 +16,6 @@ import {
   startCooldown,
 } from "@/lib/whatsapp/budget";
 
-
 export type EvolutionErrorCode =
   | "unauthorized"
   | "not_found"
@@ -48,7 +47,6 @@ export class EvolutionApiError extends Error {
 
 const DEFAULT_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
 const MAX_ATTEMPTS = MAX_ATTEMPTS_PER_MESSAGE;
-
 
 function messageForStatus(status: number): { code: EvolutionErrorCode; message: string } {
   if (status === 401 || status === 403) {
@@ -308,7 +306,6 @@ export async function evolutionRequest<T = unknown>(
       clearTimeout(timer);
     }
   }
-
 
   throw (
     lastError ?? new EvolutionApiError("network_error", "Falha ao contatar o servidor Evolution.")

@@ -227,12 +227,7 @@ export async function ensureInstallationSecrets(input: {
   }
 
   if (created.length > 0) {
-    await writeGeneratedSecrets(
-      input.client,
-      input.installationId,
-      input.actorId ?? null,
-      secrets,
-    );
+    await writeGeneratedSecrets(input.client, input.installationId, input.actorId ?? null, secrets);
   }
   return { secrets, created, reused };
 }
@@ -251,12 +246,7 @@ export async function rotateInstallationSecret(input: {
 }): Promise<void> {
   const existing = await readGeneratedSecrets(input.client, input.installationId);
   existing[input.name] = input.generate();
-  await writeGeneratedSecrets(
-    input.client,
-    input.installationId,
-    input.actorId ?? null,
-    existing,
-  );
+  await writeGeneratedSecrets(input.client, input.installationId, input.actorId ?? null, existing);
 }
 
 /** Quais secrets da instalação já estão persistidos (nunca os valores). */
@@ -327,7 +317,10 @@ export async function resolveInstallationEnv(
     }
   };
 
-  await put(AUTOMATION_CREDENTIAL_VARS.supabaseManagement, row.supabase_management_token_ciphertext);
+  await put(
+    AUTOMATION_CREDENTIAL_VARS.supabaseManagement,
+    row.supabase_management_token_ciphertext,
+  );
   await put(AUTOMATION_CREDENTIAL_VARS.vercel, row.vercel_token_ciphertext);
   await put(AUTOMATION_CREDENTIAL_VARS.github, row.github_token_ciphertext);
   const team = (row.vercel_team_id ?? "").trim();

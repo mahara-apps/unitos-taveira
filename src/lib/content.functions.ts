@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { displayName } from "@/lib/identity";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 // Brain-First: acessos ao Brain só via API pública. Este módulo consome o
 // helper de ingest via `@/lib/brain/api` — nunca toca `brain_*` diretamente.
 import { brain } from "@/lib/brain/api";
@@ -852,6 +853,8 @@ export const bulkDeletePostsFn = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         pipelineId: z.string().uuid(),
         postIds: z.array(z.string().uuid()).min(1).max(200),
+        /** Quantidade digitada na dupla confirmação (revalidada no servidor). */
+        confirmLabel: z.string().min(1),
       })
       .parse(i),
   )
@@ -869,6 +872,18 @@ export const bulkDeletePostsFn = createServerFn({ method: "POST" })
     if (readError) throw readError;
     const allowedIds = (rows ?? []).map((row) => row.id as string);
     if (allowedIds.length === 0) throw new Error("Nenhum conteúdo válido foi selecionado.");
+
+    // Dupla confirmação: o número de conteúdos selecionados, digitado à mão.
+    assertConfirmLabel(data.confirmLabel, String(allowedIds.length));
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "content.bulk_delete",
+      actorId: context.userId,
+      targetId: data.pipelineId,
+      targetLabel: `${allowedIds.length} conteúdo(s)`,
+      brandId: data.brandId,
+      impact: { count: allowedIds.length },
+    });
 
     await context.supabase
       .from("social_posts")
@@ -920,9 +935,15 @@ export const deletePipelineFn = createServerFn({ method: "POST" })
     if (!pipeline) throw new Error("Pipeline não encontrado.");
     if (pipeline.is_default) throw new Error("O pipeline padrão não pode ser excluído.");
     if ((pipelines ?? []).length <= 1) throw new Error("O último pipeline não pode ser excluído.");
-    if (data.confirmation.trim().toLowerCase() !== String(pipeline.name).trim().toLowerCase()) {
-      throw new Error("Digite o nome exato do pipeline para confirmar.");
-    }
+    assertConfirmLabel(data.confirmation, pipeline.name as string);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "content.pipeline_delete",
+      actorId: context.userId,
+      targetId: data.pipelineId,
+      targetLabel: pipeline.name as string,
+      brandId: data.brandId,
+    });
 
     const { data: postRows, error: postsError } = await context.supabase
       .from("posts")

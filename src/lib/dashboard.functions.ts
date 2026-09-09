@@ -13,7 +13,6 @@ import {
   connectionHandle,
 } from "@/lib/channel-display-name";
 
-
 type SupaCtx = { supabase: SupabaseClient<Database>; userId: string };
 
 const BrandInput = z.object({
@@ -568,7 +567,6 @@ export const getDashboardStats = createServerFn({ method: "POST" })
     }
     return computeStats(context, data.brandId, data.clientId ?? null, data.range);
   });
-
 
 // ==================== Agency dashboard ====================
 

@@ -52,7 +52,12 @@ export function buildChatTools(
   }
 
   /** Aplica brand + devolve resultado padronizado. */
-  const done = (name: string, input: unknown, error: { message: string } | null, payload: object) => {
+  const done = (
+    name: string,
+    input: unknown,
+    error: { message: string } | null,
+    payload: object,
+  ) => {
     const out = error ? { error: error.message } : payload;
     record(name, input, out, !error);
     return out;
@@ -62,7 +67,7 @@ export function buildChatTools(
 
   // ---------------------------------------------------------------- Brain
   if (can("brain")) {
-    tools['brain_recall'] = tool({
+    tools["brain_recall"] = tool({
       description:
         "Consulta semântica ao Brain (memórias consolidadas + eventos). Use para 'lembra quando…', 'já discutimos X?', 'o que sabemos sobre Y'.",
       inputSchema: z.object({
@@ -92,7 +97,7 @@ export function buildChatTools(
 
   // -------------------------------------------------------------- Clientes
   if (can("clients")) {
-    tools['search_clients'] = tool({
+    tools["search_clients"] = tool({
       description:
         "Busca clientes/contas do workspace por nome ou nicho. Use para 'meus clientes', 'quem é X', ou para resolver um nome antes de outra ação.",
       inputSchema: z.object({
@@ -121,7 +126,7 @@ export function buildChatTools(
 
   // -------------------------------------------------------------- Projetos
   if (can("projects")) {
-    tools['list_projects'] = tool({
+    tools["list_projects"] = tool({
       description:
         "Lista projetos do workspace com status, prazo e andamento. Filtre por cliente ou status quando o usuário indicar.",
       inputSchema: z.object({
@@ -150,7 +155,7 @@ export function buildChatTools(
 
   // --------------------------------------------------------------- Tarefas
   if (can("tasks")) {
-    tools['list_tasks'] = tool({
+    tools["list_tasks"] = tool({
       description:
         "Lista tarefas do workspace. Use `only_overdue` para atrasos, `mine` para as do próprio usuário, e filtros de cliente/projeto/status.",
       inputSchema: z.object({
@@ -187,7 +192,7 @@ export function buildChatTools(
     });
 
     // Compatibilidade: atalho ainda usado em prompts antigos.
-    tools['list_overdue_tasks'] = tool({
+    tools["list_overdue_tasks"] = tool({
       description: "Lista tarefas em atraso (vencidas e não concluídas) do workspace.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(50).default(20) }),
       execute: async ({ limit }) => {
@@ -210,7 +215,7 @@ export function buildChatTools(
   }
 
   if (can("tasks", "full")) {
-    tools['create_task'] = tool({
+    tools["create_task"] = tool({
       description:
         "Cria uma tarefa no workspace ativo. Use apenas quando o usuário pedir explicitamente para criar/adicionar uma tarefa.",
       inputSchema: z.object({
@@ -257,7 +262,7 @@ export function buildChatTools(
 
   // ------------------------------------------------------- Conteúdo / posts
   if (can("content")) {
-    tools['search_content'] = tool({
+    tools["search_content"] = tool({
       description:
         "Busca posts/conteúdos por título, estágio (rascunho, aprovação, agendado, publicado) ou cliente.",
       inputSchema: z.object({
@@ -287,7 +292,7 @@ export function buildChatTools(
 
   // ------------------------------------------------------------ Calendário
   if (can("calendar")) {
-    tools['list_calendar'] = tool({
+    tools["list_calendar"] = tool({
       description:
         "Agenda do período: publicações agendadas e compromissos/prazos do calendário. Datas em ISO (America/Sao_Paulo é o fuso oficial).",
       inputSchema: z.object({
@@ -336,7 +341,7 @@ export function buildChatTools(
 
   // ------------------------------------------------- Planejamento / pautas
   if (can("planning")) {
-    tools['list_monthly_plans'] = tool({
+    tools["list_monthly_plans"] = tool({
       description:
         "Lista pautas/planejamentos mensais com status (rascunho, aprovação interna, enviado ao cliente, aprovado) e, opcionalmente, os temas de uma pauta.",
       inputSchema: z.object({
@@ -384,7 +389,7 @@ export function buildChatTools(
 
   // ------------------------------------------------------------ Aprovações
   if (can("approvals")) {
-    tools['list_pending_approvals'] = tool({
+    tools["list_pending_approvals"] = tool({
       description:
         "Itens aguardando aprovação: posts em estágio de aprovação e decisões pendentes do cliente.",
       inputSchema: z.object({
@@ -412,7 +417,7 @@ export function buildChatTools(
 
   // -------------------------------------------------------------- Briefing
   if (can("briefing")) {
-    tools['get_briefing_status'] = tool({
+    tools["get_briefing_status"] = tool({
       description:
         "Situação do briefing de um cliente: completude, última atualização e se há dados registrados.",
       inputSchema: z.object({ client_id: z.string().uuid() }),
@@ -432,7 +437,7 @@ export function buildChatTools(
 
   // ------------------------------------------- Área do cliente / pedidos
   if (can("portal")) {
-    tools['list_client_requests'] = tool({
+    tools["list_client_requests"] = tool({
       description:
         "Pedidos e solicitações vindos da Área do Cliente, com status e prazo desejado pelo cliente.",
       inputSchema: z.object({
@@ -461,7 +466,7 @@ export function buildChatTools(
 
   // ------------------------------------------------- Horas / relatórios
   if (can("reports")) {
-    tools['timesheet_summary'] = tool({
+    tools["timesheet_summary"] = tool({
       description:
         "Horas apontadas no período, agrupadas por pessoa, cliente, projeto ou tarefa. Datas em ISO.",
       inputSchema: z.object({
@@ -474,7 +479,9 @@ export function buildChatTools(
       execute: async (input) => {
         let qb = supabase
           .from("task_time_entries")
-          .select("id, user_id, minutes, seconds, started_at, task_id, tasks(client_id, project_id)")
+          .select(
+            "id, user_id, minutes, seconds, started_at, task_id, tasks(client_id, project_id)",
+          )
           .gte("started_at", input.from)
           .lte("started_at", input.to)
           .limit(input.limit);
@@ -524,7 +531,7 @@ export function buildChatTools(
 
   // ---------------------------------------------------- Equipe / usuários
   if (can("users")) {
-    tools['list_team'] = tool({
+    tools["list_team"] = tool({
       description:
         "Pessoas do workspace com papel e nome/e-mail. Use para saber quem é quem antes de atribuir tarefas.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(100).default(50) }),
@@ -564,7 +571,7 @@ export function buildChatTools(
 
   // ------------------------------------------------------------- Conexões
   if (can("connections")) {
-    tools['list_connections_status'] = tool({
+    tools["list_connections_status"] = tool({
       description:
         "Situação das contas conectadas (Meta/Instagram/Facebook/WhatsApp) e a qual cliente estão vinculadas. Nunca retorna tokens ou chaves.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(100).default(50) }),

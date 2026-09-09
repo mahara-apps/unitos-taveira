@@ -9,12 +9,7 @@
  *    esgotadas as tentativas, vai para a próxima ocorrência do mesmo dia da semana;
  *  - sem sugestão utilizável, o item é distribuído de forma estável pelos dias úteis.
  */
-import {
-  zonedParts,
-  zonedTimeToUtc,
-  startOfMonthInTz,
-  endOfMonthInTz,
-} from "@/lib/timezone";
+import { zonedParts, zonedTimeToUtc, startOfMonthInTz, endOfMonthInTz } from "@/lib/timezone";
 
 export type SlotSuggestion = {
   /** Chave estável do item (posição/índice na pauta). */
@@ -40,7 +35,7 @@ export function parseSuggestedTime(raw: unknown): { hour: number; minute: number
   const minute = Number(m[2] ?? "0");
   if (!Number.isFinite(hour) || hour < 0 || hour > 23) return null;
   if (!Number.isFinite(minute) || minute < 0 || minute > 59) return null;
-  return { hour, minute: Math.round(minute / 5) * 5 % 60 };
+  return { hour, minute: (Math.round(minute / 5) * 5) % 60 };
 }
 
 export function parseSuggestedWeekday(raw: unknown): number | null {
@@ -85,14 +80,20 @@ export function resolveMonthlySchedule(args: {
   const nowP = zonedParts(now);
   const sameMonth = anchorP.year === nowP.year && anchorP.month === nowP.month;
   // No mês corrente a proposta começa amanhã (dá folga de produção).
-  const minDay = sameMonth ? Math.min(nowP.day + 1, zonedParts(endOfMonthInTz(args.monthAnchor)).day) : 1;
+  const minDay = sameMonth
+    ? Math.min(nowP.day + 1, zonedParts(endOfMonthInTz(args.monthAnchor)).day)
+    : 1;
   const lastDay = zonedParts(endOfMonthInTz(args.monthAnchor)).day;
 
   const taken = new Set<string>();
   const usedByWeekday = new Map<number, number>();
   const out: ResolvedSlot[] = [];
 
-  const place = (day: number, hour: number, minute: number): { day: number; hour: number; minute: number } => {
+  const place = (
+    day: number,
+    hour: number,
+    minute: number,
+  ): { day: number; hour: number; minute: number } => {
     let d = day;
     let h = hour;
     let mi = minute;
@@ -110,7 +111,7 @@ export function resolveMonthlySchedule(args: {
       if (h > 21) {
         h = 9;
         mi = 0;
-        d = d + 7 <= lastDay ? d + 7 : Math.max(minDay, ((d % lastDay) + 1));
+        d = d + 7 <= lastDay ? d + 7 : Math.max(minDay, (d % lastDay) + 1);
       }
     }
     return { day: d, hour: h, minute: mi };
@@ -118,8 +119,7 @@ export function resolveMonthlySchedule(args: {
 
   args.items.forEach((item, index) => {
     const time = parseSuggestedTime(item.time) ?? DEFAULT_TIME;
-    const weekday =
-      item.weekday ?? FALLBACK_WEEKDAYS[index % FALLBACK_WEEKDAYS.length] ?? 2;
+    const weekday = item.weekday ?? FALLBACK_WEEKDAYS[index % FALLBACK_WEEKDAYS.length] ?? 2;
 
     let days = occurrences(args.monthAnchor, weekday, minDay);
     if (days.length === 0) days = occurrences(args.monthAnchor, weekday, 1);

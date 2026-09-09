@@ -25,10 +25,7 @@ import {
 } from "@/lib/publication-status-tokens";
 import { SOCIAL_NETWORKS, classifySocialNetwork } from "@/lib/calendar-tokens";
 import type { PublicationItem } from "@/lib/calendar-board.functions";
-import {
-  cancelQueuedPlacementFn,
-  retryFailedPlacementFn,
-} from "@/lib/publish-retry.functions";
+import { cancelQueuedPlacementFn, retryFailedPlacementFn } from "@/lib/publish-retry.functions";
 import { cancelPostScheduleFn } from "@/lib/scheduling-wizard.functions";
 import { PostPreview } from "@/components/social/post-preview";
 import type { PlacementFormat } from "@/lib/scheduling-formats";
@@ -437,9 +434,7 @@ export function PublicationDetailModal({
                               Ver <ExternalLink className="h-3 w-3" />
                             </a>
                           ) : null}
-                          {d.status === "awaiting_retry" &&
-                          d.canCancelQueue &&
-                          d.placementId ? (
+                          {d.status === "awaiting_retry" && d.canCancelQueue && d.placementId ? (
                             <Button
                               variant="outline"
                               size="sm"

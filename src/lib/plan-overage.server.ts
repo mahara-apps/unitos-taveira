@@ -47,9 +47,6 @@ export async function loadApprovedOverage(
 /** `block` = excedente exige liberação. `warn` = volumetria livre (só aviso). */
 export type OveragePolicy = "block" | "warn";
 
-
-
-
 /**
  * Política efetiva: override do cliente vence; sem override usa o padrão do
  * workspace; sem nada, `block` (comportamento histórico).
@@ -69,7 +66,6 @@ export async function resolveOveragePolicy(
   return policy.mode === "block" && policy.applies.includes("ai") ? "block" : "warn";
 }
 
-
 /**
  * Papéis com autoridade para gerar acima da volumetria sem pedir liberação:
  * Super Admin, Owner e Admin (o banco mapeia owner→admin em `app_access_role`).
@@ -80,10 +76,13 @@ export async function canBypassOverage(
   userId: string,
   brandId: string,
 ): Promise<boolean> {
-  const { data, error } = await supabase.rpc("app_access_role" as never, {
-    _user_id: userId,
-    _brand_id: brandId,
-  } as never);
+  const { data, error } = await supabase.rpc(
+    "app_access_role" as never,
+    {
+      _user_id: userId,
+      _brand_id: brandId,
+    } as never,
+  );
   if (error) return false;
   return data === "super_admin" || data === "admin";
 }

@@ -9,7 +9,16 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarClock, Check, Copy, ExternalLink, Loader2, Lock, Sparkles, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Lock,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -116,10 +125,9 @@ export function ScheduleApprovalPanel({
     setBusy(true);
     try {
       const res = await reserve({ data: { brandId, clientId, postIds } });
-      toast.success(
-        res.updated === 1 ? "Data reservada." : `${res.updated} datas reservadas.`,
-        { description: "Reservar apenas fixa a data — nada é publicado." },
-      );
+      toast.success(res.updated === 1 ? "Data reservada." : `${res.updated} datas reservadas.`, {
+        description: "Reservar apenas fixa a data — nada é publicado.",
+      });
       setSelected([]);
       refresh();
     } catch (err) {
@@ -151,7 +159,9 @@ export function ScheduleApprovalPanel({
           : `${res.updated} datas aprovadas — envie o link do Portal para o cliente confirmar.`,
         {
           ...(res.skipped > 0
-            ? { description: `${res.skipped} item(ns) já não estavam aguardando aprovação interna.` }
+            ? {
+                description: `${res.skipped} item(ns) já não estavam aguardando aprovação interna.`,
+              }
             : {}),
           ...(url ? { action: { label: "Copiar link", onClick: () => void copyLink(url) } } : {}),
         },
@@ -221,8 +231,17 @@ export function ScheduleApprovalPanel({
         </div>
         <div className="flex items-center gap-2">
           {selected.length > 0 ? (
-            <Button size="sm" className="h-8 gap-1.5" disabled={busy} onClick={() => runApprove(selected)}>
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            <Button
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={busy}
+              onClick={() => runApprove(selected)}
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
               Aprovar {selected.length} selecionada(s)
             </Button>
           ) : null}
@@ -243,7 +262,7 @@ export function ScheduleApprovalPanel({
               className="h-8 gap-1.5"
               disabled={busy || pending.length === 0}
               onClick={() =>
-                runReserve((selected.length > 0 ? selected : pending.map((i) => i.postId)))
+                runReserve(selected.length > 0 ? selected : pending.map((i) => i.postId))
               }
               title="Reserva a data sem esperar o cliente (Owner/Admin)"
             >

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -133,11 +134,24 @@ export const upsertAiUsageLimitFn = createServerFn({ method: "POST" })
     return { id: inserted.id };
   });
 
-const DeleteLimitInput = z.object({ id: z.string().uuid() });
+const DeleteLimitInput = z.object({
+  id: z.string().uuid(),
+  /** Confirmação por escrito: "limite de IA". */
+  confirmLabel: z.string().min(1),
+});
 export const deleteAiUsageLimitFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => DeleteLimitInput.parse(i))
   .handler(async ({ data, context }) => {
+    assertConfirmLabel(data.confirmLabel, "limite de IA");
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "ai_limits.update",
+      actorId: context.userId,
+      targetId: data.id,
+      targetLabel: "limite de IA",
+      impact: { operation: "delete" },
+    });
     const { error } = await context.supabase.from("ai_usage_limits").delete().eq("id", data.id);
     if (error) throw error;
     return { ok: true };

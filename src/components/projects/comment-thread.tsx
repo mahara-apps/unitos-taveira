@@ -173,7 +173,9 @@ export function CommentThread({
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-xs font-medium">{displayName(authorOf(c), "Usuário")}</span>
+                  <span className="truncate text-xs font-medium">
+                    {displayName(authorOf(c), "Usuário")}
+                  </span>
                   <span className="text-[10px] text-muted-foreground">
                     {formatWhen(c.created_at)}
                   </span>

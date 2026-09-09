@@ -6,7 +6,6 @@ import { LoginLogo } from "@/components/brand/login-logo";
 import { supabase } from "@/integrations/supabase/client";
 import { callRpc } from "@/lib/supabase-rpc";
 
-
 export const Route = createFileRoute("/login")({
   // Esta rota é inteiramente pública e não depende de dados do servidor.
   // Renderizá-la no cliente evita que redirects vindos de layouts `ssr:false`
@@ -167,7 +166,6 @@ function BrandPanel() {
     </aside>
   );
 }
-
 
 function sanitizeNext(next: string | undefined): string | null {
   if (!next) return null;

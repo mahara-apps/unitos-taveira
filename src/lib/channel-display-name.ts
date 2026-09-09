@@ -23,7 +23,9 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 /** Nome do canal = plataforma. Nunca o nome do perfil. */
 export function channelDisplayLabel(raw: string | null | undefined): string {
-  const key = String(raw ?? "").trim().toLowerCase();
+  const key = String(raw ?? "")
+    .trim()
+    .toLowerCase();
   if (!key) return "Canal";
   return CHANNEL_LABEL[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }

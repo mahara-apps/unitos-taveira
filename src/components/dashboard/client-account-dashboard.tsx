@@ -113,9 +113,7 @@ export function ClientAccountDashboard({
     return (
       <Shell>
         <Panel
-          title={
-            state === "empty" ? "Sem dados para exibir" : "Não foi possível carregar o painel"
-          }
+          title={state === "empty" ? "Sem dados para exibir" : "Não foi possível carregar o painel"}
         >
           <div className="flex flex-col items-start gap-3 px-4 py-6">
             <p className="text-sm text-muted-foreground">{message}</p>
@@ -147,7 +145,6 @@ export function ClientAccountDashboard({
 
       {/* ── Linha de contexto ─────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-
         <span className="font-medium text-muted-foreground">Visão operacional da conta</span>
         <span className="text-border">•</span>
         <span className="text-muted-foreground/80">Últimos {d.rangeDays} dias</span>
@@ -373,10 +370,7 @@ function StageChip({
 function PublishRhythm({ data }: { data: ClientDashboard }) {
   const hasPrevious = data.publishTrend.some((p) => p.previous != null);
   return (
-    <Panel
-      title="Publicações no período"
-      subtitle="Ritmo de publicação por dia"
-    >
+    <Panel title="Publicações no período" subtitle="Ritmo de publicação por dia">
       {data.publishedInRange === 0 ? (
         <PanelEmpty
           title="Nenhuma publicação no período"
@@ -461,7 +455,8 @@ function PublishRhythm({ data }: { data: ClientDashboard }) {
               label="Canal líder"
               value={
                 data.channelBreakdown[0]
-                  ? (data.channelBreakdown[0].label ?? channelLabel(data.channelBreakdown[0].channel))
+                  ? (data.channelBreakdown[0].label ??
+                    channelLabel(data.channelBreakdown[0].channel))
                   : "—"
               }
             />

@@ -213,7 +213,9 @@ function ScopeSection({ brandId, scope }: { brandId: string; scope: WorkStatusSc
               <input
                 type="color"
                 value={s.color}
-                onChange={(e) => patchMut.mutate({ statusId: s.id, patch: { color: e.target.value } })}
+                onChange={(e) =>
+                  patchMut.mutate({ statusId: s.id, patch: { color: e.target.value } })
+                }
                 className="h-6 w-8 cursor-pointer rounded border border-border/60 bg-transparent"
                 aria-label={`Cor de ${s.name}`}
               />

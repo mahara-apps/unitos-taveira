@@ -26,7 +26,6 @@ import {
 } from "@/lib/credentials-crypto.server";
 import { readRuntimeEnv } from "@/lib/runtime-env.server";
 
-
 export type MetaAppType = "unitos" | "client";
 
 export type MetaAppCredentials = {

@@ -339,7 +339,6 @@ export async function tokenDecide(): Promise<never> {
   throw new Error("portal_token_read_only");
 }
 
-
 export async function sessionDecide(
   context: SessionContext,
   clientId: string | undefined,

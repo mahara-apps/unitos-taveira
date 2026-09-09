@@ -228,7 +228,11 @@ export function PortalAccount() {
         </Button>
       </Section>
 
-      <Section icon={KeyRound} title="Senha" description="Use pelo menos 8 caracteres, com letras e números.">
+      <Section
+        icon={KeyRound}
+        title="Senha"
+        description="Use pelo menos 8 caracteres, com letras e números."
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
             <Label htmlFor="acc-pass">Nova senha</Label>
@@ -250,7 +254,11 @@ export function PortalAccount() {
         </div>
       </Section>
 
-      <Section icon={Mail} title="E-mail de acesso" description="É com este e-mail que você entra na sua área.">
+      <Section
+        icon={Mail}
+        title="E-mail de acesso"
+        description="É com este e-mail que você entra na sua área."
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
             <Label htmlFor="acc-email">E-mail</Label>

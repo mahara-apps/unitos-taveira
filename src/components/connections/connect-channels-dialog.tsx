@@ -347,169 +347,42 @@ export function ConnectChannelsDialog({
             </div>
           </>
         ) : (
-
-        <div className="max-h-[62vh] space-y-5 overflow-y-auto border-t px-6 py-5">
-          {/* --------------------------- erro terminal do fluxo -------------------------- */}
-          {errorCopy ? (
-            <section
-              className={cn(
-                "rounded-xl p-4",
-                errorCopy.severity === "critical" ? "bg-destructive/10" : "bg-amber-500/10",
-              )}
-            >
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle
-                  className={cn(
-                    "mt-0.5 h-4 w-4 shrink-0",
-                    errorCopy.severity === "critical" ? "text-destructive" : "text-amber-600",
-                  )}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{errorCopy.title}</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                    {errorCopy.summary}
-                  </p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                    {errorCopy.action !== "close" ? (
-                      <Button
-                        size="sm"
-                        className="h-7 text-[11px]"
-                        onClick={() =>
-                          onConnect((state.kind === "error" && state.channel) || "facebook")
-                        }
-                      >
-                        <RefreshCw className="mr-1.5 h-3 w-3" />
-                        {errorCopy.actionLabel}
-                      </Button>
-                    ) : null}
-                    {state.kind === "error" && state.detail ? (
-                      <Collapsible>
-                        <CollapsibleTrigger asChild>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                          >
-                            Ver detalhes
-                            <ChevronDown className="h-3 w-3" />
-                          </button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <p className="mt-2 break-words font-mono text-[10px] text-muted-foreground/80">
-                            {state.detail}
-                          </p>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          {/* ------------------------- autorização em andamento ------------------------- */}
-          {busy ? (
-            <section className="space-y-4 rounded-xl border bg-card p-4">
-              <div className="flex items-start gap-2.5">
-                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">Autorização em andamento</p>
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    Conclua o consentimento na janela oficial da Meta. Você pode manter esta tela
-                    aberta — avisaremos aqui quando a autorização retornar.
-                  </p>
-                </div>
-              </div>
-
-              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-500"
-                  style={{ width: `${authProgress(state)}%` }}
-                />
-              </div>
-
-              <Checklist items={authChecklist(state)} />
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[11px] text-muted-foreground"
-                onClick={onCancel}
+          <div className="max-h-[62vh] space-y-5 overflow-y-auto border-t px-6 py-5">
+            {/* --------------------------- erro terminal do fluxo -------------------------- */}
+            {errorCopy ? (
+              <section
+                className={cn(
+                  "rounded-xl p-4",
+                  errorCopy.severity === "critical" ? "bg-destructive/10" : "bg-amber-500/10",
+                )}
               >
-                Cancelar acompanhamento
-              </Button>
-            </section>
-          ) : null}
-
-          {/* ------------------------- autorização concluída -------------------------- */}
-          {state.kind === "authorized" ? (
-            <>
-              <section className="rounded-xl border bg-card p-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <p className="text-sm font-medium">Conexão autorizada</p>
-                </div>
-                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  Sua conta foi autorizada. Estamos carregando os ativos disponíveis — algumas
-                  informações podem aparecer alguns segundos depois.
-                </p>
-                <div className="mt-3">
-                  <SummaryGrid
-                    items={[
-                      ["Portfólios", summary?.portfolios ?? "—"],
-                      ["Páginas", summary?.pages ?? "—"],
-                      ["Instagram", summary?.instagram ?? "—"],
-                      ["Ativos", summary?.total ?? "—"],
-                    ]}
-                  />
-                </div>
-              </section>
-
-              <section className="rounded-xl bg-muted/40 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {syncing ? "Sincronizando ativos" : "Sincronização"}
-                </p>
-                <div className="mt-2.5">
-                  <Checklist items={syncItems} />
-                </div>
-              </section>
-
-              {issue ? (
-                <Collapsible>
-                  <section
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle
                     className={cn(
-                      "rounded-xl p-4",
-                      issue.severity === "critical" ? "bg-destructive/10" : "bg-amber-500/10",
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      errorCopy.severity === "critical" ? "text-destructive" : "text-amber-600",
                     )}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {issue.kind === "rate_limit"
-                            ? "Sincronização temporariamente limitada"
-                            : "Alguns ativos não puderam ser carregados"}
-                        </p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                          {issue.kind === "rate_limit"
-                            ? "A Meta atingiu o limite de consultas neste momento. Não é necessário autorizar novamente: os dados já carregados continuam válidos. Siga com os ativos disponíveis ou tente sincronizar em alguns minutos."
-                            : "A Meta não liberou parte dos ativos deste portfólio. Os ativos já listados podem ser usados normalmente; se faltar alguma conta, refaça a autorização marcando as Páginas e contas desejadas."}
-
-                        </p>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[11px]"
-                            onClick={onRefreshDiscovery}
-                            disabled={syncing}
-                          >
-                            {syncing ? (
-                              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="mr-1.5 h-3 w-3" />
-                            )}
-                            Tentar novamente
-                          </Button>
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{errorCopy.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                      {errorCopy.summary}
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      {errorCopy.action !== "close" ? (
+                        <Button
+                          size="sm"
+                          className="h-7 text-[11px]"
+                          onClick={() =>
+                            onConnect((state.kind === "error" && state.channel) || "facebook")
+                          }
+                        >
+                          <RefreshCw className="mr-1.5 h-3 w-3" />
+                          {errorCopy.actionLabel}
+                        </Button>
+                      ) : null}
+                      {state.kind === "error" && state.detail ? (
+                        <Collapsible>
                           <CollapsibleTrigger asChild>
                             <button
                               type="button"
@@ -519,119 +392,244 @@ export function ConnectChannelsDialog({
                               <ChevronDown className="h-3 w-3" />
                             </button>
                           </CollapsibleTrigger>
-                        </div>
-                        <CollapsibleContent>
-                          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                            {issue.recommendation}
-                          </p>
-                          {discovery?.error ? (
-                            <p className="mt-1.5 break-words font-mono text-[10px] text-muted-foreground/80">
-                              {discovery.error}
+                          <CollapsibleContent>
+                            <p className="mt-2 break-words font-mono text-[10px] text-muted-foreground/80">
+                              {state.detail}
                             </p>
-                          ) : null}
-                          {(discovery?.warnings ?? []).slice(0, 4).map((w) => (
-                            <p
-                              key={w}
-                              className="mt-1 break-words font-mono text-[10px] text-muted-foreground/80"
-                            >
-                              {w}
-                            </p>
-                          ))}
-                        </CollapsibleContent>
-                      </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ) : null}
                     </div>
-                  </section>
-                </Collapsible>
-              ) : null}
-            </>
-          ) : null}
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
-          {/* --------------------------- estado inicial / retry -------------------------- */}
-          {!busy && state.kind !== "authorized" ? (
-            <>
-              <section className="space-y-2.5">
-                <div>
-                  <h3 className="text-sm font-semibold">Conectar com a Meta</h3>
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    Autorize o Unitos a acessar suas contas profissionais. Você será direcionado
-                    para a plataforma oficial da Meta.
+            {/* ------------------------- autorização em andamento ------------------------- */}
+            {busy ? (
+              <section className="space-y-4 rounded-xl border bg-card p-4">
+                <div className="flex items-start gap-2.5">
+                  <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Autorização em andamento</p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Conclua o consentimento na janela oficial da Meta. Você pode manter esta tela
+                      aberta — avisaremos aqui quando a autorização retornar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    style={{ width: `${authProgress(state)}%` }}
+                  />
+                </div>
+
+                <Checklist items={authChecklist(state)} />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[11px] text-muted-foreground"
+                  onClick={onCancel}
+                >
+                  Cancelar acompanhamento
+                </Button>
+              </section>
+            ) : null}
+
+            {/* ------------------------- autorização concluída -------------------------- */}
+            {state.kind === "authorized" ? (
+              <>
+                <section className="rounded-xl border bg-card p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <p className="text-sm font-medium">Conexão autorizada</p>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                    Sua conta foi autorizada. Estamos carregando os ativos disponíveis — algumas
+                    informações podem aparecer alguns segundos depois.
                   </p>
-                </div>
-                <div className="space-y-2">
-                  {CONNECTABLE_CHANNELS.map((def) => {
-                    const Icon = def.icon;
-                    const key = def.key as MetaConnectChannel;
-                    return (
-                      <button
-                        key={def.key}
-                        type="button"
-                        onClick={() => onConnect(key)}
-                        disabled={!!busyChannelKey}
-                        className="group flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border bg-card p-4 text-left transition-all duration-150 hover:border-primary/40 hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <span
-                          className={cn(
-                            "grid h-11 w-11 shrink-0 place-items-center rounded-xl",
-                            key === "instagram" ? "bg-pink-500/10" : "bg-sky-500/10",
-                          )}
-                        >
-                          <Icon className={cn("h-5 w-5", def.tone)} />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold">{def.label}</span>
-                          <span className="block text-[11px] text-muted-foreground">
-                            {def.hint ?? "Meta · autorização oficial"}
-                          </span>
-                        </span>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                            def.recommended
-                              ? "bg-primary/10 text-primary"
-                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                          )}
-                        >
-                          {def.recommended ? "Recomendado" : "Disponível"}
-                        </span>
-                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+                  <div className="mt-3">
+                    <SummaryGrid
+                      items={[
+                        ["Portfólios", summary?.portfolios ?? "—"],
+                        ["Páginas", summary?.pages ?? "—"],
+                        ["Instagram", summary?.instagram ?? "—"],
+                        ["Ativos", summary?.total ?? "—"],
+                      ]}
+                    />
+                  </div>
+                </section>
 
-              <section className="space-y-2.5">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Em breve
-                </h3>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {UPCOMING_CHANNELS.map((def) => {
-                    const Icon = def.icon;
-                    return (
-                      <div
-                        key={def.key}
-                        aria-disabled
-                        className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2.5 opacity-70"
-                      >
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-background">
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
-                          {def.label}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          Em breve
-                        </span>
+                <section className="rounded-xl bg-muted/40 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {syncing ? "Sincronizando ativos" : "Sincronização"}
+                  </p>
+                  <div className="mt-2.5">
+                    <Checklist items={syncItems} />
+                  </div>
+                </section>
+
+                {issue ? (
+                  <Collapsible>
+                    <section
+                      className={cn(
+                        "rounded-xl p-4",
+                        issue.severity === "critical" ? "bg-destructive/10" : "bg-amber-500/10",
+                      )}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            {issue.kind === "rate_limit"
+                              ? "Sincronização temporariamente limitada"
+                              : "Alguns ativos não puderam ser carregados"}
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                            {issue.kind === "rate_limit"
+                              ? "A Meta atingiu o limite de consultas neste momento. Não é necessário autorizar novamente: os dados já carregados continuam válidos. Siga com os ativos disponíveis ou tente sincronizar em alguns minutos."
+                              : "A Meta não liberou parte dos ativos deste portfólio. Os ativos já listados podem ser usados normalmente; se faltar alguma conta, refaça a autorização marcando as Páginas e contas desejadas."}
+                          </p>
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px]"
+                              onClick={onRefreshDiscovery}
+                              disabled={syncing}
+                            >
+                              {syncing ? (
+                                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="mr-1.5 h-3 w-3" />
+                              )}
+                              Tentar novamente
+                            </Button>
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                              >
+                                Ver detalhes
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            </CollapsibleTrigger>
+                          </div>
+                          <CollapsibleContent>
+                            <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                              {issue.recommendation}
+                            </p>
+                            {discovery?.error ? (
+                              <p className="mt-1.5 break-words font-mono text-[10px] text-muted-foreground/80">
+                                {discovery.error}
+                              </p>
+                            ) : null}
+                            {(discovery?.warnings ?? []).slice(0, 4).map((w) => (
+                              <p
+                                key={w}
+                                className="mt-1 break-words font-mono text-[10px] text-muted-foreground/80"
+                              >
+                                {w}
+                              </p>
+                            ))}
+                          </CollapsibleContent>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
+                    </section>
+                  </Collapsible>
+                ) : null}
+              </>
+            ) : null}
 
-              <HowItWorks />
-            </>
-          ) : null}
-        </div>
+            {/* --------------------------- estado inicial / retry -------------------------- */}
+            {!busy && state.kind !== "authorized" ? (
+              <>
+                <section className="space-y-2.5">
+                  <div>
+                    <h3 className="text-sm font-semibold">Conectar com a Meta</h3>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Autorize o Unitos a acessar suas contas profissionais. Você será direcionado
+                      para a plataforma oficial da Meta.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {CONNECTABLE_CHANNELS.map((def) => {
+                      const Icon = def.icon;
+                      const key = def.key as MetaConnectChannel;
+                      return (
+                        <button
+                          key={def.key}
+                          type="button"
+                          onClick={() => onConnect(key)}
+                          disabled={!!busyChannelKey}
+                          className="group flex w-full cursor-pointer items-center gap-3.5 rounded-2xl border bg-card p-4 text-left transition-all duration-150 hover:border-primary/40 hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span
+                            className={cn(
+                              "grid h-11 w-11 shrink-0 place-items-center rounded-xl",
+                              key === "instagram" ? "bg-pink-500/10" : "bg-sky-500/10",
+                            )}
+                          >
+                            <Icon className={cn("h-5 w-5", def.tone)} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">{def.label}</span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              {def.hint ?? "Meta · autorização oficial"}
+                            </span>
+                          </span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                              def.recommended
+                                ? "bg-primary/10 text-primary"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                            )}
+                          >
+                            {def.recommended ? "Recomendado" : "Disponível"}
+                          </span>
+                          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="space-y-2.5">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Em breve
+                  </h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {UPCOMING_CHANNELS.map((def) => {
+                      const Icon = def.icon;
+                      return (
+                        <div
+                          key={def.key}
+                          aria-disabled
+                          className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2.5 opacity-70"
+                        >
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-background">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+                            {def.label}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Em breve
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <HowItWorks />
+              </>
+            ) : null}
+          </div>
         )}
 
         {!inAssets ? (

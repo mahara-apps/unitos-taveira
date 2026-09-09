@@ -36,7 +36,10 @@ export function redactAiDetail(text: string, max = 500): string {
   return (text || "")
     .replace(/\b(sk|sk-proj|sk-ant|gsk|AIza)[A-Za-z0-9_\-]{8,}/g, "[redacted-key]")
     .replace(/(bearer\s+)[A-Za-z0-9._\-]+/gi, "$1[redacted]")
-    .replace(/("?(api[_-]?key|x-goog-api-key|authorization)"?\s*[:=]\s*)"?[^"\s,}]+/gi, "$1[redacted]")
+    .replace(
+      /("?(api[_-]?key|x-goog-api-key|authorization)"?\s*[:=]\s*)"?[^"\s,}]+/gi,
+      "$1[redacted]",
+    )
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);

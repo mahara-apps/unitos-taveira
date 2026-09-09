@@ -116,7 +116,6 @@ export async function getPublicAppUrl(): Promise<string> {
   throw new AppUrlNotConfiguredError();
 }
 
-
 /** Igual a `getPublicAppUrl`, mas retorna null em vez de lançar. */
 export async function tryGetPublicAppUrl(): Promise<string | null> {
   try {

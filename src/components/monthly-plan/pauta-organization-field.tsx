@@ -47,7 +47,6 @@ export function toOrganizationInput(
   };
 }
 
-
 const MODES: Array<{
   mode: OrganizationDraft["mode"];
   label: string;
@@ -128,7 +127,6 @@ export function PautaOrganizationField({
 
       <div className={cn("grid gap-2", allowNone ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         {modes.map((m) => {
-
           const active = value.mode === m.mode;
           return (
             <button

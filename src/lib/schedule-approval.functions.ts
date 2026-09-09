@@ -76,7 +76,6 @@ export const reserveScheduleFn = createServerFn({ method: "POST" })
       }),
   );
 
-
 export const updateScheduleSlotFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>

@@ -39,7 +39,6 @@ export const MODEL_CATALOG: Record<ProviderName, Record<ProviderRole, string | n
     // Imagen exige projeto com faturamento; `gemini-*-image` funciona com a
     // mesma chave da API Gemini e é o padrão de geração de imagem.
     image: "gemini-2.5-flash-image",
-
   },
   groq: {
     // Groq expõe a API compatível com OpenAI; ids conforme o catálogo atual.
@@ -48,7 +47,6 @@ export const MODEL_CATALOG: Record<ProviderName, Record<ProviderRole, string | n
     operational: "openai/gpt-oss-20b",
     image: null, // Groq não gera imagem
   },
-
 };
 
 /**
@@ -76,17 +74,11 @@ export const MODEL_FALLBACKS: Record<ProviderName, Record<ProviderRole, string[]
       "imagen-4.0-generate-001",
       "imagen-4.0-fast-generate-001",
     ],
-
   },
   groq: {
-    strategic: [
-      "openai/gpt-oss-120b",
-      "moonshotai/kimi-k2-instruct-0905",
-      "openai/gpt-oss-20b",
-    ],
+    strategic: ["openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct-0905", "openai/gpt-oss-20b"],
     operational: ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.1-8b-instant"],
     image: [],
-
   },
 };
 

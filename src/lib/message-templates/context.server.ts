@@ -151,7 +151,11 @@ export async function resolveEventContext(
         .select("id, full_name")
         .eq("id", input.userId)
         .maybeSingle();
-      put(out, "user.full_name", (profRes?.data as { full_name?: string | null } | null)?.full_name);
+      put(
+        out,
+        "user.full_name",
+        (profRes?.data as { full_name?: string | null } | null)?.full_name,
+      );
     }
     if (!out["user.role"]) {
       const memberRes = await supabase
@@ -188,7 +192,9 @@ export async function resolveEventContext(
       .is("revoked_at", null)
       .order("created_at", { ascending: false })
       .limit(1);
-    const row = ((tokenRes?.data ?? []) as Array<{ token?: string; expires_at?: string | null }>)[0];
+    const row = (
+      (tokenRes?.data ?? []) as Array<{ token?: string; expires_at?: string | null }>
+    )[0];
     if (row?.token) {
       portalToken = row.token;
       portalExpires = portalExpires ?? row.expires_at ?? null;

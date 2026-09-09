@@ -19,8 +19,6 @@ const BodySchema = z.object({
   force: z.boolean().optional(),
 });
 
-
-
 function buildUserClient(token: string) {
   const url = process.env.SUPABASE_URL!;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -32,11 +30,7 @@ function buildUserClient(token: string) {
 
 export type DocumentAiSummary = BriefingAnalysis;
 
-
-
-
 /** Execução real acontece no worker da fila (retomável, com lease e reaper). */
-
 
 export const Route = createFileRoute("/api/jobs/analyze-document")({
   server: {
@@ -105,9 +99,8 @@ export const Route = createFileRoute("/api/jobs/analyze-document")({
           .maybeSingle();
         if (!meta) return new Response("Not found", { status: 404 });
 
-        const { buildInputFingerprint, startImportRun } = await import(
-          "@/lib/briefing-import.server"
-        );
+        const { buildInputFingerprint, startImportRun } =
+          await import("@/lib/briefing-import.server");
         const fingerprint = await buildInputFingerprint({
           sourceKind: "document",
           documentPath: meta.storage_path,
@@ -124,7 +117,6 @@ export const Route = createFileRoute("/api/jobs/analyze-document")({
           inputFingerprint: fingerprint,
           force: parsed.data.force === true,
         });
-
 
         // Reuso: já existe execução viva para o mesmo arquivo — não gasta IA.
         if (reused && run.status !== "queued") {
@@ -154,7 +146,6 @@ export const Route = createFileRoute("/api/jobs/analyze-document")({
           status: 202,
           headers: { "Content-Type": "application/json" },
         });
-
       },
     },
   },

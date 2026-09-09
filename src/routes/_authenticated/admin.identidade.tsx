@@ -7,11 +7,9 @@ import { Loader2, Palette, Save } from "lucide-react";
 
 import { useActiveContext } from "@/hooks/use-active-context";
 import { BrandingSlots } from "@/components/settings/branding-slots";
-import {
-  getEnvironmentInfoFn,
-  updateEnvironmentNameFn,
-} from "@/lib/admin-environment.functions";
+import { getEnvironmentInfoFn, updateEnvironmentNameFn } from "@/lib/admin-environment.functions";
 import { Button } from "@/components/ui/button";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,9 +62,13 @@ function EnvironmentNameCard({ brandId }: { brandId: string }) {
     if (q.data && !name) setName(q.data.name === "—" ? "" : q.data.name);
   }, [q.data, name]);
 
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+
   const m = useMutation({
-    mutationFn: () => renameFn({ data: { brandId, name } }),
+    mutationFn: (vars: { confirmLabel: string }) =>
+      renameFn({ data: { brandId, name, confirmLabel: vars.confirmLabel } }),
     onSuccess: async () => {
+      setConfirmOpen(false);
       toast.success("Nome do ambiente atualizado");
       await qc.invalidateQueries({ queryKey: ["admin-environment", brandId] });
       await qc.invalidateQueries({ queryKey: ["brands"] });
@@ -92,7 +94,10 @@ function EnvironmentNameCard({ brandId }: { brandId: string }) {
             placeholder={q.isLoading ? "Carregando…" : "Ex.: Taveira"}
           />
         </div>
-        <Button onClick={() => m.mutate()} disabled={m.isPending || name.trim().length < 2}>
+        <Button
+          onClick={() => setConfirmOpen(true)}
+          disabled={m.isPending || name.trim().length < 2}
+        >
           {m.isPending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -100,6 +105,21 @@ function EnvironmentNameCard({ brandId }: { brandId: string }) {
           )}
           Salvar
         </Button>
+        <CriticalConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Renomear ambiente"
+          actionLabel="Renomear ambiente"
+          pending={m.isPending}
+          impact="O nome do ambiente muda para todos os usuários, no seletor de workspace e nos cabeçalhos do sistema."
+          details={[
+            { label: "Nome atual", value: q.data?.name ?? "—" },
+            { label: "Novo nome", value: name.trim() },
+          ]}
+          fieldLabel="Para confirmar, digite o nome atual do ambiente"
+          confirmText={q.data?.name ?? ""}
+          onConfirm={() => m.mutate({ confirmLabel: q.data?.name ?? "" })}
+        />
       </CardContent>
     </Card>
   );

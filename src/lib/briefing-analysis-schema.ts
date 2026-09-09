@@ -103,7 +103,8 @@ export function normalizeBriefingAnalysis(value: unknown): BriefingAnalysis | nu
     material_type: clip(parsed.data.material_type, 120),
     briefing,
     extracted_text: clip(parsed.data.extracted_text, 4_000),
-    evidence: (parsed.data.evidence ?? []).slice(0, 20)
+    evidence: (parsed.data.evidence ?? [])
+      .slice(0, 20)
       .filter((item) => typeof item.field === "string" && item.field.length > 0)
       .map((item) => ({
         field: item.field as string,

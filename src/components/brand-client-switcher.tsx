@@ -95,12 +95,9 @@ export function ContextSwitcher() {
     if (customerMatch) void navigate({ to: "/customers", replace: true });
   };
 
-
-
   // A resolução do workspace ativo NÃO vive mais aqui: ela é feita por
   // `<WorkspaceResolver />` (montado em `_authenticated`), para que o contexto
   // não dependa desta UI estar montada nem da query desta tela.
-
 
   const activeBrand = brandsQ.data?.find((b) => b.id === brandId) ?? null;
   const visibleClients = (clientsQ.data ?? []).filter(
@@ -225,8 +222,6 @@ export function ContextSwitcher() {
           </Command>
         </PopoverContent>
       </Popover>
-
-
 
       <QuickCreateCustomerDrawer
         brandId={brandId}

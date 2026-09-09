@@ -228,9 +228,8 @@ export const testProviderKey = createServerFn({ method: "POST" })
       throw new Error("Nenhuma chave cadastrada para este provedor.");
     }
 
-    const { decryptCredential, isCredentialDecryptError } = await import(
-      "./credentials-crypto.server"
-    );
+    const { decryptCredential, isCredentialDecryptError } =
+      await import("./credentials-crypto.server");
     const { verifyProviderKey } = await import("./ai-provider-verify.server");
     let apiKey: string;
     try {
@@ -259,10 +258,7 @@ export const testProviderKey = createServerFn({ method: "POST" })
       };
       await context.supabase
         .from("brand_connections")
-        .upsert(
-          { brand_id: data.brandId, providers: prevProviders },
-          { onConflict: "brand_id" },
-        );
+        .upsert({ brand_id: data.brandId, providers: prevProviders }, { onConflict: "brand_id" });
       return { status: "invalid" as const, message: unreadable, models: 0 };
     }
     let check: Awaited<ReturnType<typeof verifyProviderKey>>;
@@ -276,7 +272,6 @@ export const testProviderKey = createServerFn({ method: "POST" })
         : `Não foi possível testar a chave agora: ${raw}`;
       return { status: "invalid" as const, message: friendly, models: 0 };
     }
-
 
     const { data: existing } = await context.supabase
       .from("brand_connections")

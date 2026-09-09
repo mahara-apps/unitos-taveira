@@ -153,7 +153,8 @@ export async function suggestSchedulesForUndated(
     if (upErr) throw new Error(upErr.message);
     updated += 1;
 
-    const topicId = typeof row.monthly_plan_topic_id === "string" ? row.monthly_plan_topic_id : null;
+    const topicId =
+      typeof row.monthly_plan_topic_id === "string" ? row.monthly_plan_topic_id : null;
     if (topicId) {
       // Espelha a data na pauta de origem; falha aqui não invalida a proposta.
       await sb

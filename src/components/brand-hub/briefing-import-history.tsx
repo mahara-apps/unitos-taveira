@@ -69,13 +69,19 @@ function statusBadge(status: ImportRunStatus) {
     );
   if (status === "queued" || status === "running" || status === "applying")
     return (
-      <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+      <Badge
+        variant="outline"
+        className="border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+      >
         <Loader2 className="mr-1 h-3 w-3 animate-spin" /> {label}
       </Badge>
     );
   if (status === "proposed")
     return (
-      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+      <Badge
+        variant="outline"
+        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+      >
         <Clock className="mr-1 h-3 w-3" /> {label}
       </Badge>
     );
@@ -153,89 +159,87 @@ export function BriefingImportHistory({
       {expanded ? (
         <CardContent className="space-y-3 border-t border-border/60 px-4 py-4">
           <div className="flex flex-wrap gap-2">
-
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por arquivo, usuário ou resumo"
-            className="h-8 max-w-xs text-xs"
-          />
-          <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-            <SelectTrigger className="h-8 w-[180px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              {(Object.keys(RUN_STATUS_LABELS) as ImportRunStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>
-                  {RUN_STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {runsQ.isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-16 w-full rounded-lg" />
-            <Skeleton className="h-16 w-full rounded-lg" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por arquivo, usuário ou resumo"
+              className="h-8 max-w-xs text-xs"
+            />
+            <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+              <SelectTrigger className="h-8 w-[180px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {(Object.keys(RUN_STATUS_LABELS) as ImportRunStatus[]).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {RUN_STATUS_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : rows.length === 0 ? (
-          <p className="rounded-lg border border-border/60 bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
-            Nenhuma importação por IA registrada para este cliente.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {rows.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenRun(r)}
-                  className={cn(
-                    "w-full rounded-lg border border-border/60 px-3 py-3 text-left transition hover:border-primary/40 hover:bg-muted/30",
-                  )}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="truncate text-sm font-medium">
-                      {r.document_name ?? "Material sem nome"}
-                    </span>
-                    {statusBadge(r.status)}
-                    <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                      {SOURCE_KIND_LABELS[r.source_kind]}
-                    </Badge>
-                    {r.applied_version_id ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-500/40 text-[11px] text-emerald-600 dark:text-emerald-400"
-                      >
-                        Aplicado ao briefing
+
+          {runsQ.isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="rounded-lg border border-border/60 bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
+              Nenhuma importação por IA registrada para este cliente.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {rows.map((r) => (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenRun(r)}
+                    className={cn(
+                      "w-full rounded-lg border border-border/60 px-3 py-3 text-left transition hover:border-primary/40 hover:bg-muted/30",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="truncate text-sm font-medium">
+                        {r.document_name ?? "Material sem nome"}
+                      </span>
+                      {statusBadge(r.status)}
+                      <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                        {SOURCE_KIND_LABELS[r.source_kind]}
                       </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {fmtDate(r.created_at)}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <User className="h-3 w-3" /> {r.author_name ?? "—"}
-                    </span>
-                    <span>
-                      {r.counts.created + r.counts.updated} alteraç
-                      {r.counts.created + r.counts.updated === 1 ? "ão" : "ões"} proposta
-                      {r.counts.created + r.counts.updated === 1 ? "" : "s"}
-                    </span>
-                    {r.model ? <span>{r.model}</span> : null}
-                    {r.provider ? <span>{r.provider}</span> : null}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                      {r.applied_version_id ? (
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/40 text-[11px] text-emerald-600 dark:text-emerald-400"
+                        >
+                          Aplicado ao briefing
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> {fmtDate(r.created_at)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <User className="h-3 w-3" /> {r.author_name ?? "—"}
+                      </span>
+                      <span>
+                        {r.counts.created + r.counts.updated} alteraç
+                        {r.counts.created + r.counts.updated === 1 ? "ão" : "ões"} proposta
+                        {r.counts.created + r.counts.updated === 1 ? "" : "s"}
+                      </span>
+                      {r.model ? <span>{r.model}</span> : null}
+                      {r.provider ? <span>{r.provider}</span> : null}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       ) : null}
-
 
       <ImportRunDetail
         brandId={brandId}

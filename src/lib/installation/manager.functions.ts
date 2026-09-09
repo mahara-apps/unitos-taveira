@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertSuperAdmin, resolveIsSuperAdmin } from "@/lib/super-admin";
+import { assertConfirmLabel, type CriticalActionKey } from "@/lib/critical-actions";
 import type { RpcClient } from "@/lib/access-guard";
 
 import {
@@ -179,6 +180,48 @@ async function guard(context: { supabase: unknown; userId: string }) {
   await assertSuperAdmin(context.supabase as unknown as RpcClient, context.userId);
 }
 
+/**
+ * Ação CRÍTICA de instalação: além do guard de autoridade, exige que o Super
+ * Admin tenha digitado o NOME EXATO da instalação (validação real no servidor,
+ * a UI não é suficiente) e registra a ação no histórico auditável.
+ */
+async function assertCriticalInstallationConfirm(
+  context: { supabase: unknown; userId: string },
+  installationId: string,
+  confirmLabel: string | null | undefined,
+  action: CriticalActionKey,
+  impact: Record<string, unknown> = {},
+): Promise<{ id: string; name: string }> {
+  const supabase = context.supabase as never as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          c: string,
+          v: string,
+        ) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> };
+      };
+    };
+  };
+  const { data, error } = await supabase
+    .from("installations")
+    .select("id,name")
+    .eq("id", installationId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { id: string; name: string } | null;
+  if (!row) throw new Error("Instalação não encontrada.");
+  assertConfirmLabel(confirmLabel, row.name);
+  const { logCriticalAction } = await import("@/lib/critical-audit.server");
+  await logCriticalAction(context.supabase as never, {
+    action,
+    actorId: context.userId,
+    targetId: row.id,
+    targetLabel: row.name,
+    impact,
+  });
+  return row;
+}
+
 /** Disponibilidade do módulo — usado pela UI para esconder a área. */
 export const getInstallationManagerAccessFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -329,9 +372,17 @@ export const getInstallationFn = createServerFn({ method: "POST" })
 
 export const deleteInstallationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.delete",
+    );
     const { error } = await context.supabase.from("installations").delete().eq("id", data.id);
     if (error) throw error;
     return { ok: true as const };
@@ -342,6 +393,7 @@ const StartInput = z.object({
   kind: z.enum(["provision", "validate", "update"]),
   /** Confirmação explícita exigida para atualizar uma instalação. */
   confirm: z.boolean().optional(),
+  confirmLabel: z.string().min(1),
 });
 
 /**
@@ -354,6 +406,17 @@ export const startInstallationOperationFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => StartInput.parse(input))
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      data.kind === "update"
+        ? "installation.update"
+        : data.kind === "validate"
+          ? "installation.validate"
+          : "installation.provision",
+      { kind: data.kind, mode: "manual" },
+    );
 
     const { data: current, error: readError } = await context.supabase
       .from("installations")
@@ -477,6 +540,7 @@ const CompleteInput = z.object({
   warnings: z.boolean().optional(),
   version: z.string().max(40).nullable().optional(),
   summary: z.string().max(500).optional(),
+  confirmLabel: z.string().min(1),
 });
 
 /** Registro manual do resultado (fallback quando o script não reporta). */
@@ -493,6 +557,13 @@ export const completeInstallationOperationFn = createServerFn({ method: "POST" }
       .maybeSingle();
     if (error) throw error;
     if (!op) throw new Error("Operação não encontrada.");
+    await assertCriticalInstallationConfirm(
+      context,
+      op.installation_id as string,
+      data.confirmLabel,
+      "installation.complete_operation",
+      { operationId: data.operationId, ok: data.ok, version: data.version ?? null },
+    );
 
     const { finalizeOperation } = await import("./runner.server");
     await finalizeOperation(context.supabase as never, op as never, {
@@ -515,7 +586,9 @@ export const completeInstallationOperationFn = createServerFn({ method: "POST" }
 /** Cancela a operação viva, preservando o resultado parcial já reportado. */
 export const cancelInstallationOperationFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ operationId: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ operationId: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
     const { data: op, error } = await context.supabase
@@ -525,6 +598,13 @@ export const cancelInstallationOperationFn = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!op) throw new Error("Operação não encontrada.");
+    await assertCriticalInstallationConfirm(
+      context,
+      op.installation_id as string,
+      data.confirmLabel,
+      "installation.cancel_operation",
+      { operationId: data.operationId, kind: op.kind ?? null },
+    );
 
     const { finalizeOperation } = await import("./runner.server");
     await finalizeOperation(context.supabase as never, op as never, {
@@ -775,9 +855,17 @@ async function openAutomatedProvision(
  */
 export const runAutomatedProvisionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.provision",
+    );
     return openAutomatedProvision(context, data.id);
   });
 
@@ -789,9 +877,17 @@ export const runAutomatedProvisionFn = createServerFn({ method: "POST" })
  */
 export const runAutomatedValidateFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.validate",
+    );
 
     const { resolveAutomationCapability, resolveAutomationTarget } =
       await import("./automation-contract");
@@ -979,10 +1075,23 @@ export const resumeAutomatedProvisionFn = createServerFn({ method: "POST" })
 export const restartAutomatedProvisionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ id: z.string().uuid(), force: z.boolean().optional() }).parse(input),
+    z
+      .object({
+        id: z.string().uuid(),
+        force: z.boolean().optional(),
+        confirmLabel: z.string().min(1),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.reprovision",
+      { force: data.force === true },
+    );
 
     const { data: live, error } = await context.supabase
       .from("installation_operations")
@@ -1096,11 +1205,19 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
           .regex(/^[0-9a-f]{7,40}$/i)
           .optional()
           .nullable(),
+        confirmLabel: z.string().min(1),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.update",
+      { commitSha: data.commitSha ?? null, targetVersion: MASTER_RELEASE_VERSION },
+    );
 
     const supabase = context.supabase as never as {
       from: (table: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1253,9 +1370,17 @@ export const runAutomatedUpdateFn = createServerFn({ method: "POST" })
  */
 export const syncInstallationVersionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.sync_version",
+    );
 
     const supabase = context.supabase as never as {
       from: (table: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1394,10 +1519,23 @@ export const getInstallationSecretsFn = createServerFn({ method: "POST" })
 export const rotateInstallationSecretFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ id: z.string().uuid(), name: z.string().min(3).max(120) }).parse(input),
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().min(3).max(120),
+        confirmLabel: z.string().min(1),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.rotate_secret",
+      { secret: data.name },
+    );
     const { GENERATED_SECRET_VARS } = await import("./automation-contract");
     if (!(GENERATED_SECRET_VARS as readonly string[]).includes(data.name)) {
       throw new Error("Segredo desconhecido.");
@@ -1425,9 +1563,17 @@ export const rotateInstallationSecretFn = createServerFn({ method: "POST" })
 /** Remove as credenciais próprias: a instalação volta a usar as do MASTER. */
 export const clearInstallationCredentialsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), confirmLabel: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     await guard(context);
+    await assertCriticalInstallationConfirm(
+      context,
+      data.id,
+      data.confirmLabel,
+      "installation.clear_credentials",
+    );
     const { clearInstallationCredentials, getInstallationCredentialsStatus } =
       await import("./credentials.server");
     await clearInstallationCredentials(context.supabase as never, data.id);

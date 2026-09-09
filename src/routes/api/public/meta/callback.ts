@@ -103,7 +103,6 @@ export const Route = createFileRoute("/api/public/meta/callback")({
               throw sessErr;
             }
 
-
             return htmlResult({
               ok: true,
               message:

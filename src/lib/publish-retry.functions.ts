@@ -45,7 +45,6 @@ export type PublicationDestinationState = {
   canCancelQueue: boolean;
 };
 
-
 /** Conta atualmente vinculada ao cliente (única fonte de destinos atuais). */
 export type AvailableTarget = {
   connectionId: string;
@@ -253,11 +252,12 @@ export const listPostPublicationStateFn = createServerFn({ method: "POST" })
           !!connectionId,
         historical,
         needsRebind: !published && !inFlight && historical,
-        nextAttemptAt: awaitingRetry ? ((inFlight?.next_attempt_at as string | null) ?? null) : null,
+        nextAttemptAt: awaitingRetry
+          ? ((inFlight?.next_attempt_at as string | null) ?? null)
+          : null,
         canCancelQueue:
           !published && !!inFlight && !inFlight.publish_locked_at && !historical && !!connectionId,
       };
-
     });
 
     const anyPublished = destinations.some((d) => d.status === "published");
@@ -526,9 +526,7 @@ export const retryFailedPlacementFn = createServerFn({ method: "POST" })
       imageUrl?: string;
       videoUrl?: string;
     } | null;
-    const plMediaArr = Array.isArray(pl.media)
-      ? (pl.media as Array<{ storagePath?: string }>)
-      : [];
+    const plMediaArr = Array.isArray(pl.media) ? (pl.media as Array<{ storagePath?: string }>) : [];
     // Carrossel: a peça é UMA publicação com N mídias; preservamos a lista.
     let storagePaths: string[] =
       prevMedia?.storagePaths && prevMedia.storagePaths.length
@@ -623,11 +621,7 @@ export const retryFailedPlacementFn = createServerFn({ method: "POST" })
       hashtags: dbPlacement === "story" ? [] : hashtags,
       mentions: [],
       media: {
-        ...(dbPlacement === "carousel"
-          ? { storagePaths }
-          : storagePath
-            ? { storagePath }
-            : {}),
+        ...(dbPlacement === "carousel" ? { storagePaths } : storagePath ? { storagePath } : {}),
         ...(link && dbPlacement !== "story" ? { link } : {}),
       },
       post_id: data.postId,

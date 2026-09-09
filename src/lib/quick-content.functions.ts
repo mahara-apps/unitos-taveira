@@ -86,12 +86,7 @@ export const quickPostFn = createServerFn({ method: "POST" })
     }
 
     const { ensureDefaultPipeline } = await import("@/lib/monthly-plan-kanban.server");
-    const pipelineId = await ensureDefaultPipeline(
-      sb,
-      data.brandId,
-      data.clientId,
-      context.userId,
-    );
+    const pipelineId = await ensureDefaultPipeline(sb, data.brandId, data.clientId, context.userId);
 
     const { data: stages } = await sb
       .from("content_pipeline_stages")
@@ -108,7 +103,8 @@ export const quickPostFn = createServerFn({ method: "POST" })
       .eq("stage_id", stage.id)
       .order("position", { ascending: false })
       .limit(1);
-    const position = (((maxPost ?? [])[0] as { position: number } | undefined)?.position ?? -1) + 1024;
+    const position =
+      (((maxPost ?? [])[0] as { position: number } | undefined)?.position ?? -1) + 1024;
 
     const title = data.title?.trim() || titleFromIdea(data.idea);
 
@@ -196,7 +192,10 @@ export const planCopyProgressFn = createServerFn({ method: "POST" })
       .from("posts")
       .select("id, copy, ai_phase")
       .in("monthly_plan_topic_id", topicIds);
-    const list = (posts ?? []) as unknown as Array<{ copy: string | null; ai_phase: string | null }>;
+    const list = (posts ?? []) as unknown as Array<{
+      copy: string | null;
+      ai_phase: string | null;
+    }>;
     const written = list.filter((p) => (p.copy ?? "").trim().length > 0).length;
     const failed = list.filter(
       (p) => !(p.copy ?? "").trim() && String(p.ai_phase ?? "").startsWith("copy_failed"),

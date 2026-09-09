@@ -33,14 +33,7 @@ export const IMPORT_RUN_STATUSES = [
 ] as const;
 export type ImportRunStatus = (typeof IMPORT_RUN_STATUSES)[number];
 
-export const IMPORT_STEPS = [
-  "ingest",
-  "extract",
-  "interpret",
-  "diff",
-  "propose",
-  "apply",
-] as const;
+export const IMPORT_STEPS = ["ingest", "extract", "interpret", "diff", "propose", "apply"] as const;
 export type ImportStep = (typeof IMPORT_STEPS)[number];
 
 export type ImportStepStatus = "pending" | "running" | "done" | "failed" | "skipped";
@@ -48,12 +41,7 @@ export type ImportChangeAction = "create" | "update" | "keep" | "discard";
 export type ImportChangeDecision = "pending" | "accepted" | "rejected";
 
 /** Estados em que a run ainda está "viva" (bloqueiam nova run com o mesmo fingerprint). */
-export const ACTIVE_RUN_STATUSES: ImportRunStatus[] = [
-  "queued",
-  "running",
-  "proposed",
-  "applying",
-];
+export const ACTIVE_RUN_STATUSES: ImportRunStatus[] = ["queued", "running", "proposed", "applying"];
 
 /** Estados terminais recuperáveis por retry explícito (retomando checkpoints). */
 export const RETRYABLE_RUN_STATUSES: ImportRunStatus[] = [
@@ -160,8 +148,6 @@ export function stepFromError(error: unknown): ImportStep | null {
   return null;
 }
 
-
-
 export type ImportRunRow = {
   id: string;
   brand_id: string;
@@ -195,7 +181,6 @@ export type ImportRunRow = {
   max_attempts?: number | null;
   resume_step?: ImportStep | null;
 };
-
 
 export type ImportCounts = {
   created: number;
@@ -235,7 +220,6 @@ export type ImportChangeRow = {
   decided_by: string | null;
   decided_at: string | null;
 };
-
 
 type Db = SupabaseClient;
 
@@ -309,19 +293,14 @@ export type StartRunResult = { run: ImportRunRow; reused: boolean };
  * O índice único parcial no banco é a garantia real de concorrência: dois
  * cliques simultâneos → o segundo INSERT falha e devolve a run existente.
  */
-export async function startImportRun(
-  supabase: Db,
-  args: StartRunArgs,
-): Promise<StartRunResult> {
+export async function startImportRun(supabase: Db, args: StartRunArgs): Promise<StartRunResult> {
   if (!args.force) {
     const existing = await findActiveRun(supabase, args);
     if (existing) return { run: existing, reused: true };
   }
 
   // Reanálise explícita: fingerprint sufixado libera o índice único parcial.
-  const fingerprint = args.force
-    ? `${args.inputFingerprint}:${Date.now()}`
-    : args.inputFingerprint;
+  const fingerprint = args.force ? `${args.inputFingerprint}:${Date.now()}` : args.inputFingerprint;
   const key = `${args.brandId}:${args.clientId}:${args.sourceKind}:${fingerprint}`;
   const { data, error } = await table(supabase, "briefing_import_runs")
     .insert({
@@ -468,12 +447,9 @@ export async function setRunStep(
     outputRef?: string | null;
     contentHash?: string | null;
   },
-
 ): Promise<void> {
   const now = new Date().toISOString();
-  await table(supabase, "briefing_import_runs")
-    .update({ current_step: step })
-    .eq("id", run.id);
+  await table(supabase, "briefing_import_runs").update({ current_step: step }).eq("id", run.id);
 
   const { data: existing } = await table(supabase, "briefing_import_steps")
     .select("id, attempt, started_at")
@@ -554,9 +530,7 @@ export function classifyChange(current: unknown, proposed: unknown): ImportChang
   return "update";
 }
 
-export function computeCounts(
-  changes: Array<{ action: ImportChangeAction }>,
-): ImportCounts {
+export function computeCounts(changes: Array<{ action: ImportChangeAction }>): ImportCounts {
   const counts: ImportCounts = { created: 0, updated: 0, kept: 0, discarded: 0 };
   for (const c of changes) {
     if (c.action === "create") counts.created += 1;
@@ -653,9 +627,8 @@ export async function listImportSteps(
     .eq("client_id", args.clientId)
     .order("created_at", { ascending: true });
   if (error) throw error as Error;
-  return ((data as ImportStepRow[] | null) ?? []);
+  return (data as ImportStepRow[] | null) ?? [];
 }
-
 
 export async function listImportChanges(
   supabase: Db,
@@ -788,7 +761,6 @@ export async function applyImportRun(
     throw new Error("import_run_apply_in_progress");
   }
 
-
   await setRunStep(supabase, run, "apply", "running");
 
   try {
@@ -915,7 +887,6 @@ export async function retryImportRun(
   if (error) throw error as Error;
   return { ...run, status: "queued", attempt: (run.attempt ?? 0) + 1 };
 }
-
 
 /* ------------------------------------------------------------------ *
  * Brain (best-effort, nunca bloqueante)

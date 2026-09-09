@@ -97,16 +97,31 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
     question: "O que você mais precisa nos próximos 30 dias?",
     help: "Escolha só o principal. O resto entra como apoio.",
     options: [
-      { value: "sales_online", label: "Vender pelo site", icon: "💳", hint: "Pedidos fechados online" },
+      {
+        value: "sales_online",
+        label: "Vender pelo site",
+        icon: "💳",
+        hint: "Pedidos fechados online",
+      },
       {
         value: "leads",
         label: "Receber contatos",
         icon: "📞",
         hint: "WhatsApp, formulário, ligações",
       },
-      { value: "store_visits", label: "Levar gente até a loja", icon: "🚶", hint: "Movimento no ponto físico" },
+      {
+        value: "store_visits",
+        label: "Levar gente até a loja",
+        icon: "🚶",
+        hint: "Movimento no ponto físico",
+      },
       { value: "bookings", label: "Encher a agenda", icon: "🗓️", hint: "Horários marcados" },
-      { value: "awareness", label: "Ser mais conhecido", icon: "👀", hint: "Mais gente sabendo que existe" },
+      {
+        value: "awareness",
+        label: "Ser mais conhecido",
+        icon: "👀",
+        hint: "Mais gente sabendo que existe",
+      },
       {
         value: "retention",
         label: "Trazer de volta quem já viu",
@@ -140,7 +155,8 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
     kind: "text",
     question: "Quem precisa ver esse anúncio?",
     help: "Descreva a pessoa: idade aproximada, o que ela busca, qual problema ela tem.",
-    placeholder: "Ex.: mulheres de 25 a 45 anos que compram roupa online e valoram peças exclusivas",
+    placeholder:
+      "Ex.: mulheres de 25 a 45 anos que compram roupa online e valoram peças exclusivas",
   },
   {
     id: "coverage",
@@ -150,7 +166,12 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
       { value: "nationwide", label: "Todo o Brasil", icon: "🇧🇷" },
       { value: "state", label: "Um estado ou região", icon: "🗺️" },
       { value: "city", label: "Uma cidade", icon: "📍" },
-      { value: "radius", label: "Só perto do endereço", icon: "🧭", hint: "Bairro, raio de alguns km" },
+      {
+        value: "radius",
+        label: "Só perto do endereço",
+        icon: "🧭",
+        hint: "Bairro, raio de alguns km",
+      },
     ],
   },
   {
@@ -185,11 +206,21 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
       { value: "website", label: "Site que vende", icon: "🌐" },
       { value: "landing", label: "Página de campanha", icon: "📄" },
       { value: "whatsapp", label: "WhatsApp de atendimento", icon: "💬" },
-      { value: "catalog", label: "Catálogo de produtos", icon: "📦", hint: "Feed com preço e estoque" },
+      {
+        value: "catalog",
+        label: "Catálogo de produtos",
+        icon: "📦",
+        hint: "Feed com preço e estoque",
+      },
       { value: "photos", label: "Fotos boas do produto", icon: "📷" },
       { value: "videos", label: "Vídeos curtos", icon: "🎬" },
       { value: "reviews", label: "Avaliações de clientes", icon: "⭐" },
-      { value: "tracking", label: "Medição já instalada", icon: "📊", hint: "Pixel/tag de conversão" },
+      {
+        value: "tracking",
+        label: "Medição já instalada",
+        icon: "📊",
+        hint: "Pixel/tag de conversão",
+      },
       { value: "none", label: "Quase nada ainda", icon: "🚧" },
     ],
   },
@@ -209,7 +240,8 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
     kind: "text",
     question: "O que já foi testado e como foi?",
     help: "Onde anunciou, quanto gastou e o que aconteceu — mesmo que seja pouca informação.",
-    placeholder: "Ex.: impulsionou posts no Instagram por 3 meses, teve muitos cliques e nenhuma venda",
+    placeholder:
+      "Ex.: impulsionou posts no Instagram por 3 meses, teve muitos cliques e nenhuma venda",
     optional: true,
     showIf: (a) => has(a, "history", "tried_failed") || has(a, "history", "working"),
   },

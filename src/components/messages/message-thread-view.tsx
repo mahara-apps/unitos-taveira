@@ -15,7 +15,12 @@ import { MentionText } from "@/components/ui/mention-text";
 import type { MentionPerson } from "@/components/ui/mention-textarea";
 import { MessageComposer } from "@/components/messages/message-composer";
 import { supabase } from "@/integrations/supabase/client";
-import { listMessages, markThreadRead, removeMessage, sendMessage } from "@/lib/messaging.functions";
+import {
+  listMessages,
+  markThreadRead,
+  removeMessage,
+  sendMessage,
+} from "@/lib/messaging.functions";
 import {
   VISIBILITY_LABEL,
   dmTitle,

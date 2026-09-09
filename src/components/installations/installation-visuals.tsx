@@ -228,13 +228,7 @@ export function DataCell({
   );
 }
 
-export function DataGrid({
-  columns = 3,
-  children,
-}: {
-  columns?: 2 | 3 | 4;
-  children: ReactNode;
-}) {
+export function DataGrid({ columns = 3, children }: { columns?: 2 | 3 | 4; children: ReactNode }) {
   return (
     <div
       className={cn(
@@ -248,7 +242,6 @@ export function DataGrid({
     </div>
   );
 }
-
 
 /* ------------------------------------------------------- LISTA COM MARCAÇÕES */
 

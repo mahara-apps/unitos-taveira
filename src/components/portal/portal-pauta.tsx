@@ -51,7 +51,6 @@ const DECISION_ERRORS: Record<string, string> = {
 };
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
-
   { id: "awaiting", label: "Aguardando você" },
   { id: "approved", label: "Aprovadas" },
   { id: "changes", label: "Ajustes" },
@@ -214,7 +213,9 @@ function PautaDetail({ planId, onBack }: { planId: string; onBack: () => void })
   const canAct = usePortalCanInteract("pauta");
   const decide = useMutation({
     mutationFn: (payload: Parameters<typeof api.decidePlan>[0]) =>
-      canAct ? api.decidePlan(payload) : Promise.reject(new Error("Este acesso é somente de acompanhamento.")),
+      canAct
+        ? api.decidePlan(payload)
+        : Promise.reject(new Error("Este acesso é somente de acompanhamento.")),
     onSuccess: (res) => {
       toast.success(
         res.changes > 0
@@ -230,7 +231,6 @@ function PautaDetail({ planId, onBack }: { planId: string; onBack: () => void })
     },
     onError: (e: Error) =>
       toast.error(DECISION_ERRORS[e.message] ?? "Não foi possível registrar sua decisão."),
-
   });
 
   const setDecision = (topicId: string, decision: Decision, comment = "") =>

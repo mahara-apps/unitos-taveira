@@ -17,15 +17,9 @@ import {
 } from "@/lib/ai-failures.server";
 import { loadCanonicalBriefing } from "@/lib/briefing-source.server";
 import { filterRowsByPrefs } from "@/lib/notification-prefs";
-import {
-  asText,
-  asList,
-  normalizeCohorts,
-  describePayloadKeys,
-} from "@/lib/ai-payload-coerce";
+import { asText, asList, normalizeCohorts, describePayloadKeys } from "@/lib/ai-payload-coerce";
 import { withPtBr, assertPtBrPayload } from "@/lib/ai-language";
 import { isLeaseValid, leaseExpiryIso, newLeaseOwner, type LeaseJob } from "@/lib/ai-job-lease";
-
 
 // Two-phase pipeline — Phase 1 (Strategy).
 // Executa briefing → voz → personas → cohorts → SWOT, mas UMA etapa por
@@ -466,7 +460,6 @@ async function runJson(opts: {
     }
   }
 
-
   throw new StepFailure(lastKind, lastRetryable, unwrapAiError(lastErr).text.slice(0, 800));
 }
 
@@ -487,7 +480,6 @@ const P = Object.fromEntries(
   Object.entries(P_RAW).map(([k, v]) => [k, withPtBr(v)]),
 ) as typeof P_RAW;
 
-
 // ---------------- Normalizers ----------------
 // Coerce PT-BR aliases into the canonical shape before persisting so the
 // strategy panel always finds what it expects.
@@ -502,7 +494,6 @@ const asNum = (v: unknown): number | null =>
     : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))
       ? Number(v)
       : null;
-
 
 function normalizeBriefingPayload(raw: unknown): z.infer<typeof BriefingSchema> {
   const r = (raw ?? {}) as AnyRec;
@@ -588,7 +579,6 @@ function normalizePersonasPayload(raw: unknown): z.infer<typeof PersonasSchema> 
 function normalizeCohortsPayload(raw: unknown): z.infer<typeof CohortsSchema> {
   return normalizeCohorts(raw);
 }
-
 
 function normalizeSwotPayload(raw: unknown): z.infer<typeof SwotSchema> {
   const r = (raw ?? {}) as AnyRec;

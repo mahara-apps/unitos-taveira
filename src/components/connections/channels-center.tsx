@@ -356,8 +356,7 @@ export function ChannelsCenter({
     void qc
       .fetchQuery({
         queryKey: ["meta-discovered-accounts", brandId, "refresh", fullDiscovery],
-        queryFn: () =>
-          discoverFn({ data: { brandId: brandId!, refresh: true, fullDiscovery } }),
+        queryFn: () => discoverFn({ data: { brandId: brandId!, refresh: true, fullDiscovery } }),
         retry: false,
       })
       .then((r) => {

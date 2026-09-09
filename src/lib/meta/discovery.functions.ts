@@ -5,7 +5,6 @@ import { runMetaDiscovery, toDiscoveredAccounts, type DiscoveredAccount } from "
 import { readPagesPayload } from "./portfolio-shared";
 import { readSessionBusinesses } from "./authorization-state";
 
-
 /**
  * Descoberta Meta para a Central de Canais.
  *
@@ -34,7 +33,6 @@ export type DiscoveredAccountsResult = {
   error: string | null;
 };
 
-
 const ListInput = z.object({
   brandId: z.string().uuid(),
   refresh: z.boolean().optional(),
@@ -60,7 +58,6 @@ export const listDiscoveredMetaAccountsFn = createServerFn({ method: "POST" })
       warnings: [],
       error: null,
     };
-
 
     const { data: sessions, error } = await context.supabase
       .from("meta_oauth_sessions")
@@ -92,14 +89,18 @@ export const listDiscoveredMetaAccountsFn = createServerFn({ method: "POST" })
     const needsScan =
       data.refresh === true || payload.pages.length + payload.standaloneInstagram.length === 0;
     if (needsScan) {
-      const outcome = await runMetaDiscovery(context.supabase, {
-        id: session.id as string,
-        brand_id: session.brand_id as string,
-        meta_user_id: session.meta_user_id as string,
-        user_token_ciphertext: session.user_token_ciphertext as string,
-        pages: session.pages,
-        portfolio_loaded_at: (session.portfolio_loaded_at as string | null) ?? null,
-      }, { fullDiscovery: data.fullDiscovery === true });
+      const outcome = await runMetaDiscovery(
+        context.supabase,
+        {
+          id: session.id as string,
+          brand_id: session.brand_id as string,
+          meta_user_id: session.meta_user_id as string,
+          user_token_ciphertext: session.user_token_ciphertext as string,
+          pages: session.pages,
+          portfolio_loaded_at: (session.portfolio_loaded_at as string | null) ?? null,
+        },
+        { fullDiscovery: data.fullDiscovery === true },
+      );
       payload = outcome.payload;
       discoveredAt = outcome.loadedAt;
       discoveryError = outcome.error;
@@ -139,7 +140,6 @@ export const listDiscoveredMetaAccountsFn = createServerFn({ method: "POST" })
       warnings: payload.warnings,
       error: discoveryError,
     };
-
   });
 
 const ReconcileInput = z.object({

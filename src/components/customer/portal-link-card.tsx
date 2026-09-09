@@ -169,10 +169,7 @@ export function PortalLinkCard({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
-        <PortalAccessSection
-          clientId={clientId}
-          {...(clientName ? { clientName } : {})}
-        />
+        <PortalAccessSection clientId={clientId} {...(clientName ? { clientName } : {})} />
 
         <div className="border-t border-border/60 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Link de acompanhamento (sem senha, somente leitura)

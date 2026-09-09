@@ -18,8 +18,6 @@ import { describeQueueInsertError } from "@/lib/social/queue-conflict";
 /** Extensões tratadas como vídeo ao resolver mídia de destino. */
 const IS_VIDEO_PATH = /\.(mp4|mov|m4v|webm|3gp)$/i;
 
-
-
 /**
  * Server functions do wizard de agendamento (/calendar).
  * Reaproveita `posts` + `post_placements` + `social_connections`.
@@ -717,7 +715,6 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
         .in("status", ["scheduled", "failed", "publishing"])
         .is("publish_locked_at", null);
 
-
       // Formatos ainda não agendáveis viram avisos (mesmo padrão da branch publish).
       const enqueueResults: Array<{
         channel: string;
@@ -864,7 +861,8 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
             channel: d.channel,
             format: d.format,
             ok: false,
-            error: "Formato ainda não publicável (Feed IG/FB, Carrossel IG/FB, Stories IG ou Reels IG)",
+            error:
+              "Formato ainda não publicável (Feed IG/FB, Carrossel IG/FB, Stories IG ou Reels IG)",
           });
           continue;
         }
@@ -976,7 +974,6 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
             .in("status", ["scheduled", "failed", "publishing"])
             .is("publish_locked_at", null);
 
-
           // Stories multi-frame: publica cada mídia como um Story separado.
           // Carrossel: 1 chamada com todas as mídias (na ordem da peça).
           // Feed/Reels: 1 chamada, primeira mídia.
@@ -989,8 +986,7 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
 
           // Assina TODAS as mídias do carrossel (a peça inteira é um post só).
           const signPath = async (p: string) => {
-            if (!p.startsWith(`${data.brandId}/`))
-              throw new Error("Mídia fora do escopo da marca");
+            if (!p.startsWith(`${data.brandId}/`)) throw new Error("Mídia fora do escopo da marca");
             const { data: signed, error: sErr } = await supabase.storage
               .from("brand-media")
               .createSignedUrl(p, 3600);
@@ -1004,7 +1000,6 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
               carouselItems.push(IS_VIDEO_PATH.test(p) ? { videoUrl: url } : { imageUrl: url });
             }
           }
-
 
           const caption = isStory
             ? undefined
@@ -1086,8 +1081,8 @@ export const saveScheduledPostFn = createServerFn({ method: "POST" })
               })
               .select("id")
               .single();
-            if (spErr) throw new Error(describeQueueInsertError(spErr.message, d.channel, d.format));
-
+            if (spErr)
+              throw new Error(describeQueueInsertError(spErr.message, d.channel, d.format));
 
             try {
               const publishOptions = normalizePlacementOptions(

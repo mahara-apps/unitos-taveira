@@ -24,7 +24,6 @@ function useHasSession(): boolean {
   return hasSession;
 }
 
-
 export function useBrandFeatures() {
   const { brandId } = useActiveContextOptional();
   const hasSession = useHasSession();
@@ -60,5 +59,4 @@ export function useIsSuperAdmin() {
     retry: false,
     staleTime: 5 * 60_000,
   });
-
 }

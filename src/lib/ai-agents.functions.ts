@@ -3,12 +3,7 @@ import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getBrandAiModel } from "./ai-provider.server";
-import {
-  BACKOFF_MS,
-  FAILURE_MESSAGE_PT,
-  classifyAiError,
-  sleep,
-} from "./ai-failures.server";
+import { BACKOFF_MS, FAILURE_MESSAGE_PT, classifyAiError, sleep } from "./ai-failures.server";
 import type { Json } from "@/integrations/supabase/types";
 import { loadCanonicalBriefing, projectCanonicalBriefingRow } from "@/lib/briefing-source.server";
 
@@ -34,7 +29,10 @@ function salvageJson(raw: string): unknown | null {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  for (const candidate of [cleaned, cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1)]) {
+  for (const candidate of [
+    cleaned,
+    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
+  ]) {
     if (!candidate) continue;
     try {
       return JSON.parse(candidate);
@@ -44,7 +42,6 @@ function salvageJson(raw: string): unknown | null {
   }
   return null;
 }
-
 
 /**
  * Unitos — 8 agentes de IA.
@@ -446,7 +443,6 @@ async function runAgent<T extends z.ZodTypeAny>(opts: {
   }
 
   throw new Error(FAILURE_MESSAGE_PT.unknown.body, { cause: lastError });
-
 }
 
 // ---------- Schemas ----------

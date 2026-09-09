@@ -57,7 +57,6 @@ export async function internalApproveSchedule(
   return { updated, skipped: args.postIds.length - updated, waived: !needsClient };
 }
 
-
 /** Edição do slot proposto: volta ao início do fluxo de aprovação. */
 export async function updateProposedSlot(
   sb: SupabaseClient,

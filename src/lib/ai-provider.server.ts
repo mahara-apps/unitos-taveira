@@ -16,18 +16,9 @@ import {
 
 import { IMAGE_PROVIDERS, supportsKind } from "./ai-capabilities";
 import { classifyAiError, unwrapAiError } from "./ai-failures.server";
-import {
-  isRecoverableFailure,
-  logAiFailure,
-  logAiRetry,
-  redactAiDetail,
-} from "./ai-observability";
+import { isRecoverableFailure, logAiFailure, logAiRetry, redactAiDetail } from "./ai-observability";
 import { recordAiUsage, type AiUsageContext } from "./ai-usage.server";
-import {
-  createAiRequestBudget,
-  takeAiRequest,
-  type AiRequestBudget,
-} from "./ai/request-budget";
+import { createAiRequestBudget, takeAiRequest, type AiRequestBudget } from "./ai/request-budget";
 import {
   EMBED_DIMS,
   EMBED_MAX_ATTEMPTS,
@@ -78,8 +69,7 @@ export type BrandAiCandidate = {
 export function describeProviderAttempts(attempts: ProviderAttempt[]): string {
   return attempts
     .map(
-      (a) =>
-        `${a.provider}/${a.model}#${a.attempt}:${a.result}${a.detail ? ` (${a.detail})` : ""}`,
+      (a) => `${a.provider}/${a.model}#${a.attempt}:${a.result}${a.detail ? ` (${a.detail})` : ""}`,
     )
     .join(" → ");
 }
@@ -460,7 +450,6 @@ function withModelInstrumentation(
           detail,
         };
 
-
         // 1) Modelo descontinuado/indisponível no MESMO provedor: promove o
         //    próximo da cadeia do papel (comportamento já existente).
         if (isModelUnavailableError(msg)) {
@@ -776,7 +765,6 @@ export async function embedTextWithBrandKey(
     return null;
   }
 
-
   const candidates: BrandProviderKey[] = [primary];
   for (const other of EMBED_PROVIDERS) {
     if (other === primary.provider) continue;
@@ -912,13 +900,12 @@ async function geminiImage(
   const inline = isImagen
     ? (() => {
         const p = json.predictions?.[0];
-        return p?.bytesBase64Encoded
-          ? { data: p.bytesBase64Encoded, mimeType: p.mimeType }
-          : null;
+        return p?.bytesBase64Encoded ? { data: p.bytesBase64Encoded, mimeType: p.mimeType } : null;
       })()
-    : (json.candidates?.[0]?.content?.parts ?? [])
+    : ((json.candidates?.[0]?.content?.parts ?? [])
         .map((p) => p.inlineData)
-        .find((d): d is { data: string; mimeType?: string } => typeof d?.data === "string") ?? null;
+        .find((d): d is { data: string; mimeType?: string } => typeof d?.data === "string") ??
+      null);
   if (!inline?.data) throw new Error("ai_image_empty: modelo não retornou imagem");
   return { provider: "gemini", base64: inline.data, contentType: inline.mimeType ?? "image/png" };
 }
@@ -1002,7 +989,6 @@ export async function generateBrandImage(
   }
   throw lastError ?? new Error("ai_image_failed: nenhum modelo de imagem respondeu.");
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Admin variants — for background jobs with no user session           */

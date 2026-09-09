@@ -231,7 +231,6 @@ export async function decidePlanAsClient(
     throw new Error("decision_items_failed");
   }
 
-
   const decisions = [...perItem.values()];
   const approvedIds = [...perItem.entries()]
     .filter(([, v]) => v.decision === "approved")
@@ -267,7 +266,6 @@ export async function decidePlanAsClient(
     });
     throw new Error("decision_failed");
   }
-
 
   // Itens aprovados pelo cliente vão automaticamente para o Kanban.
   let cardsCreated = 0;
@@ -317,5 +315,4 @@ export async function decidePlanAsClient(
   }
 
   return { ok: true, status, ...counts, cardsCreated };
-
 }

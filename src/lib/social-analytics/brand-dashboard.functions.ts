@@ -84,7 +84,6 @@ export type BestSlotCell = {
 };
 
 export type BestSlot = {
-
   weekday: number; // 0=Sun … 6=Sat
   hour: number; // 0-23
   score: number;
@@ -558,7 +557,8 @@ export const getBrandSocialTopPayloadFn = createServerFn({ method: "POST" })
       .slice(0, 5);
     const bestDays = Array.from(weekdayAgg.values()).sort((a, b) => b.score - a.score);
     const bestSlotsMatrix = Array.from(matrixAgg.values()).sort(
-      (a, b) => a.weekday - b.weekday || DAY_BUCKETS.indexOf(a.bucket) - DAY_BUCKETS.indexOf(b.bucket),
+      (a, b) =>
+        a.weekday - b.weekday || DAY_BUCKETS.indexOf(a.bucket) - DAY_BUCKETS.indexOf(b.bucket),
     );
 
     let insights: BrainSocialInsight[] = [];

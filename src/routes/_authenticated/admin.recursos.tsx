@@ -9,6 +9,7 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import { listBrandFeaturesForAdmin, setBrandFeature } from "@/lib/feature-flags.functions";
 import { clearAccessCaches } from "@/lib/access-cache";
 import { Badge } from "@/components/ui/badge";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,7 +78,11 @@ function AdminFeaturesPage() {
       </div>
 
       <PageKpiGrid>
-        <PageKpi label="Recursos ativos" value={`${active}`} description={`de ${features.length}`} />
+        <PageKpi
+          label="Recursos ativos"
+          value={`${active}`}
+          description={`de ${features.length}`}
+        />
         <PageKpi label="Categorias" value={`${categories.length}`} />
         <PageKpi
           label="Obrigatórios"
@@ -157,11 +162,7 @@ function AdminFeaturesPage() {
         </div>
       )}
 
-      <DisableDialog
-        brandId={brandId!}
-        feature={pendingOff}
-        onClose={() => setPendingOff(null)}
-      />
+      <DisableDialog brandId={brandId!} feature={pendingOff} onClose={() => setPendingOff(null)} />
     </div>
   );
 }
@@ -170,8 +171,15 @@ function useToggleFeature(brandId: string) {
   const qc = useQueryClient();
   const setFn = useServerFn(setBrandFeature);
   return useMutation({
-    mutationFn: (vars: { featureKey: string; enabled: boolean }) =>
-      setFn({ data: { brandId, featureKey: vars.featureKey, enabled: vars.enabled } }),
+    mutationFn: (vars: { featureKey: string; enabled: boolean; confirmLabel: string }) =>
+      setFn({
+        data: {
+          brandId,
+          featureKey: vars.featureKey,
+          enabled: vars.enabled,
+          confirmLabel: vars.confirmLabel,
+        },
+      }),
     onSuccess: async (_d, vars) => {
       toast.success(vars.enabled ? "Recurso ativado" : "Recurso desativado");
       clearAccessCaches();
@@ -195,6 +203,7 @@ function FeatureRow({
 }) {
   const toggle = useToggleFeature(brandId);
   const locked = feature.is_core;
+  const [enableOpen, setEnableOpen] = React.useState(false);
 
   return (
     <Card className={cn("border-border/60", !feature.enabled && "bg-muted/20")}>
@@ -216,7 +225,7 @@ function FeatureRow({
             onCheckedChange={(next) => {
               if (locked) return;
               if (!next) return onRequestDisable();
-              toggle.mutate({ featureKey: feature.key, enabled: true });
+              setEnableOpen(true);
             }}
           />
           <Badge
@@ -229,6 +238,22 @@ function FeatureRow({
       </CardHeader>
       <CardContent className="pt-0">
         <code className="font-mono text-[11px] text-muted-foreground">feature: {feature.key}</code>
+        <CriticalConfirmDialog
+          open={enableOpen}
+          onOpenChange={setEnableOpen}
+          title={`Ativar ${feature.name}`}
+          actionLabel="Ativar recurso"
+          pending={toggle.isPending}
+          impact="O módulo passa a aparecer no menu e fica acessível a todos os usuários deste ambiente."
+          fieldLabel="Para confirmar, digite o nome exato do recurso"
+          confirmText={feature.name}
+          onConfirm={() => {
+            toggle.mutate(
+              { featureKey: feature.key, enabled: true, confirmLabel: feature.name },
+              { onSuccess: () => setEnableOpen(false) },
+            );
+          }}
+        />
       </CardContent>
     </Card>
   );
@@ -245,29 +270,22 @@ function DisableDialog({
 }) {
   const toggle = useToggleFeature(brandId);
   return (
-    <AlertDialog open={!!feature} onOpenChange={(open) => (open ? null : onClose())}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Desativar {feature?.name}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            O módulo deixa de aparecer no menu e o acesso direto pela URL será bloqueado para os
-            usuários deste ambiente. Nenhum dado é apagado — você pode reativar depois. Super Admins
-            continuam com acesso para testes.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              if (!feature) return;
-              toggle.mutate({ featureKey: feature.key, enabled: false });
-              onClose();
-            }}
-          >
-            Desativar
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <CriticalConfirmDialog
+      open={!!feature}
+      onOpenChange={(open) => (open ? null : onClose())}
+      title={`Desativar ${feature?.name ?? "recurso"}`}
+      actionLabel="Desativar recurso"
+      pending={toggle.isPending}
+      impact="O módulo deixa de aparecer no menu e o acesso direto pela URL será bloqueado para os usuários deste ambiente. Nenhum dado é apagado — você pode reativar depois. Super Admins continuam com acesso para testes."
+      fieldLabel="Para confirmar, digite o nome exato do recurso"
+      confirmText={feature?.name ?? ""}
+      onConfirm={() => {
+        if (!feature) return;
+        toggle.mutate(
+          { featureKey: feature.key, enabled: false, confirmLabel: feature.name },
+          { onSuccess: () => onClose() },
+        );
+      }}
+    />
   );
 }

@@ -125,9 +125,7 @@ function PortalCapabilities({ children }: { children: ReactNode }) {
 }
 
 export function usePortalCaps(): PortalCaps {
-  return (
-    useContext(CapsContext) ?? { permissions: DEFAULT_PORTAL_PERMISSIONS, readOnly: false }
-  );
+  return useContext(CapsContext) ?? { permissions: DEFAULT_PORTAL_PERMISSIONS, readOnly: false };
 }
 
 export function usePortalMode(): PortalMode {

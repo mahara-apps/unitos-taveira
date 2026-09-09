@@ -75,8 +75,7 @@ export function ProductionOverages({ brandId, clientId }: { brandId: string; cli
   });
   const setPolicy = useServerFn(setClientOveragePolicyFn);
   const policyM = useMutation({
-    mutationFn: (policy: "block" | "warn") =>
-      setPolicy({ data: { brandId, clientId, policy } }),
+    mutationFn: (policy: "block" | "warn") => setPolicy({ data: { brandId, clientId, policy } }),
     onSuccess: (_r, policy) => {
       toast.success(
         policy === "warn"

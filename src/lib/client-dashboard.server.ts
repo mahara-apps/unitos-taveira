@@ -19,7 +19,6 @@ type DB = SupabaseClient<any, "public", any>;
 
 const DAY = 86_400_000;
 
-
 const CHANNEL_LABEL: Record<string, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
@@ -59,9 +58,7 @@ export async function buildClientDashboard(
       // segundo fetch serial só para ler as etapas do pipeline padrão.
       supabase
         .from("content_pipelines")
-        .select(
-          "id,is_default,position,created_at,content_pipeline_stages(id,key,label,position)",
-        )
+        .select("id,is_default,position,created_at,content_pipeline_stages(id,key,label,position)")
         .eq("brand_id", brandId)
         .eq("client_id", clientId)
         .order("is_default", { ascending: false })
@@ -77,7 +74,9 @@ export async function buildClientDashboard(
         .is("deleted_at", null),
       supabase
         .from("social_posts")
-        .select("id,post_id,provider,connection_id,placement,status,last_error,scheduled_at,published_at")
+        .select(
+          "id,post_id,provider,connection_id,placement,status,last_error,scheduled_at,published_at",
+        )
         .eq("brand_id", brandId)
         .eq("client_id", clientId),
       supabase
@@ -101,12 +100,14 @@ export async function buildClientDashboard(
   const defaultPipeline = (pipelinesRes.data ?? [])[0] ?? null;
 
   // ── Etapas reais do pipeline (já vieram no select aninhado) ─
-  const stageRows = ((defaultPipeline?.content_pipeline_stages ?? []) as Array<{
-    id: string;
-    key: string;
-    label: string;
-    position: number;
-  }>)
+  const stageRows = (
+    (defaultPipeline?.content_pipeline_stages ?? []) as Array<{
+      id: string;
+      key: string;
+      label: string;
+      position: number;
+    }>
+  )
     .slice()
     .sort((a, b) => a.position - b.position);
   const stageById = new Map(stageRows.map((s) => [s.id, s]));
@@ -218,7 +219,12 @@ export async function buildClientDashboard(
     string,
     { channel: string; label: string; handle: string | null; count: number }
   >();
-  const bumpChannel = (key: string, channel: string, label: string, handle: string | null = null) => {
+  const bumpChannel = (
+    key: string,
+    channel: string,
+    label: string,
+    handle: string | null = null,
+  ) => {
     const prev = channelMap.get(key);
     if (prev) prev.count += 1;
     else channelMap.set(key, { channel, label, handle, count: 1 });

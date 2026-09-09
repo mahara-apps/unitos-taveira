@@ -68,15 +68,17 @@ function map(row: Row | null): InstallationSettings {
 }
 
 /** Lê o singleton. Nunca lança: falha de leitura devolve configuração vazia. */
-export async function getInstallationSettings(
-  opts?: { fresh?: boolean },
-): Promise<InstallationSettings> {
+export async function getInstallationSettings(opts?: {
+  fresh?: boolean;
+}): Promise<InstallationSettings> {
   if (!opts?.fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const res = await supabaseAdmin
       .from("installation")
-      .select("app_url, logo_url, logo_dark_url, icon_url, login_logo_url, email_from, email_from_name")
+      .select(
+        "app_url, logo_url, logo_dark_url, icon_url, login_logo_url, email_from, email_from_name",
+      )
       .limit(1)
       .maybeSingle();
     const value = map(((res as { data: unknown }).data as Row | null) ?? null);
@@ -92,10 +94,18 @@ export async function getInstallationSettings(
  * (a policy do banco também exige, mas aqui usamos service_role).
  */
 export async function updateInstallationSettings(
-  patch: Partial<Record<
-    "app_url" | "logo_url" | "logo_dark_url" | "icon_url" | "login_logo_url" | "email_from" | "email_from_name",
-    string | null
-  >>,
+  patch: Partial<
+    Record<
+      | "app_url"
+      | "logo_url"
+      | "logo_dark_url"
+      | "icon_url"
+      | "login_logo_url"
+      | "email_from"
+      | "email_from_name",
+      string | null
+    >
+  >,
 ): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin

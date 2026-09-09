@@ -25,7 +25,9 @@ export async function loadBestTimesContext(
   supabase: SupabaseClient,
   args: { brandId: string; clientId: string; now?: Date },
 ): Promise<BestTimesContext> {
-  const since = new Date((args.now ?? new Date()).getTime() - LOOKBACK_DAYS * 86_400_000).toISOString();
+  const since = new Date(
+    (args.now ?? new Date()).getTime() - LOOKBACK_DAYS * 86_400_000,
+  ).toISOString();
   const stamps: string[] = [];
 
   try {

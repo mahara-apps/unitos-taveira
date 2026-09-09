@@ -46,14 +46,10 @@ import { requestPlanOverageFn } from "@/lib/plan-overage.functions";
 import { VolumetryCards, type PlanVolumetry } from "@/components/monthly-plan/volumetry-cards";
 import { ContextSourcesRow } from "@/components/monthly-plan/context-sources-row";
 import { PautaBoard } from "@/components/monthly-plan/pauta-board";
-import {
-  LinkPautaProjectDialog,
-  NewPautaDialog,
-} from "@/components/monthly-plan/new-pauta-dialog";
+import { LinkPautaProjectDialog, NewPautaDialog } from "@/components/monthly-plan/new-pauta-dialog";
 import { QuickPautaDialog } from "@/components/monthly-plan/quick-pauta-dialog";
 import { QuickPostDialog } from "@/components/monthly-plan/quick-post-dialog";
 import { PLAN_CHANNELS, PLAN_CHANNEL_LABEL as CHANNEL_LABEL } from "@/lib/monthly-plan-fields";
-
 
 import {
   CONTENT_FORMATS,
@@ -186,7 +182,6 @@ export function MonthlyPlanView({
   const [quickPautaOpen, setQuickPautaOpen] = useState(false);
   const [quickPostOpen, setQuickPostOpen] = useState(false);
 
-
   const requestOverage = useServerFn(requestPlanOverageFn);
   const overageM = useMutation({
     mutationFn: (input: { items: OverageItem[]; justification: string }) =>
@@ -299,11 +294,7 @@ export function MonthlyPlanView({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              className="h-10 gap-2"
-              onClick={() => setQuickPostOpen(true)}
-            >
+            <Button variant="outline" className="h-10 gap-2" onClick={() => setQuickPostOpen(true)}>
               <Wand2 className="h-4 w-4" />
               Peça expressa
             </Button>
@@ -374,7 +365,6 @@ export function MonthlyPlanView({
           requestingOverage={overageM.isPending}
           onRequestOverage={(items, justification) => overageM.mutate({ items, justification })}
         />
-
       </PlanShell>
     );
   }
@@ -670,8 +660,6 @@ function ApprovalView({
     onError: (e) => toast.error(describePlanDeleteError(e)),
   });
 
-
-
   if (q.isLoading || !q.data) {
     return (
       <PlanShell embedded={embedded} className="space-y-4">
@@ -868,8 +856,6 @@ function ApprovalView({
               <Trash2 className="h-4 w-4" /> Excluir definitivamente
             </Button>
           )}
-
-
 
           {clientLink ? (
             <Button

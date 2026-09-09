@@ -4,13 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { getMyAccessFn } from "@/lib/access.functions";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { getCachedUser } from "@/lib/auth-cache";
-import {
-  canAccessClientAdmin,
-  canManageIntegrations,
-  type AccessRole,
-} from "@/lib/permissions";
+import { canAccessClientAdmin, canManageIntegrations, type AccessRole } from "@/lib/permissions";
 import type { AuthorityRole } from "@/lib/access-guard";
-
 
 type Result = {
   /** Nível legado usado pela UI atual (admin = admin|manager|super_admin). */
@@ -50,7 +45,6 @@ export function useAccessRole(): Result {
     retry: false,
   });
 
-
   return useMemo<Result>(() => {
     const a = q.data;
     const authorityRole = a?.role ?? null;
@@ -74,4 +68,3 @@ export function useAccessRole(): Result {
     };
   }, [q.data, q.isLoading]);
 }
-

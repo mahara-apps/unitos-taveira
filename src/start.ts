@@ -70,7 +70,6 @@ async function refreshWithBackoff(): Promise<{ access_token: string } | null> {
   return null;
 }
 
-
 // Client middleware that attaches the Supabase bearer token to every server
 // function RPC. Unlike the generated `attachSupabaseAuth`, this one proactively
 // refreshes an expired/near-expiry session so long-lived tabs don't start
@@ -135,8 +134,6 @@ const attachSupabaseAuth = createMiddleware({ type: "function" }).client(async (
     throw err;
   }
 });
-
-
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {

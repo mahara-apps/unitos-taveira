@@ -58,7 +58,8 @@ export const DEFAULT_PRESETS: DateRangePreset[] = [
   {
     key: "last-month",
     label: "Mês passado",
-    build: (t) => closed(startOfMonthInTz(addMonthsInTz(t, -1)), endOfMonthInTz(addMonthsInTz(t, -1))),
+    build: (t) =>
+      closed(startOfMonthInTz(addMonthsInTz(t, -1)), endOfMonthInTz(addMonthsInTz(t, -1))),
   },
   {
     key: "ytd",

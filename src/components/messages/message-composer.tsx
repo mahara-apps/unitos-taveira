@@ -78,8 +78,7 @@ export function MessageComposer({
             >
               <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
               <span className="truncate">
-                {LINK_SOURCE_LABEL[l.source as keyof typeof LINK_SOURCE_LABEL] ?? "Link"} ·{" "}
-                {l.url}
+                {LINK_SOURCE_LABEL[l.source as keyof typeof LINK_SOURCE_LABEL] ?? "Link"} · {l.url}
               </span>
               <button
                 type="button"

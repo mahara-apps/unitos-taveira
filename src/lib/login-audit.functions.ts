@@ -46,8 +46,7 @@ function readRequestMeta(): RequestMeta {
     getRequestHeader("x-real-ip") ??
     getRequestHeader("x-forwarded-for") ??
     null;
-  const city =
-    getRequestHeader("x-vercel-ip-city") ?? getRequestHeader("cf-ipcity") ?? null;
+  const city = getRequestHeader("x-vercel-ip-city") ?? getRequestHeader("cf-ipcity") ?? null;
   const country =
     getRequestHeader("x-vercel-ip-country") ?? getRequestHeader("cf-ipcountry") ?? null;
   return {
@@ -68,9 +67,7 @@ function readRequestMeta(): RequestMeta {
 export const recordSignInFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({ provider: z.string().max(40).optional() })
-      .parse(input ?? {}),
+    z.object({ provider: z.string().max(40).optional() }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const { supabase, userId } = context;
@@ -245,9 +242,8 @@ export const listLoginActivityFn = createServerFn({ method: "POST" })
     const allIds = [...new Set([...teamIds, ...portalRows.map((p) => p.user_id)])];
 
     const profiles = allIds.length
-      ? ((
-          await supabase.from("user_profiles").select("id, full_name, email").in("id", allIds)
-        ).data ?? [])
+      ? ((await supabase.from("user_profiles").select("id, full_name, email").in("id", allIds))
+          .data ?? [])
       : [];
     const profileById = new Map(
       (profiles as { id: string; full_name: string | null; email: string | null }[]).map((p) => [
@@ -299,7 +295,9 @@ export const listLoginActivityFn = createServerFn({ method: "POST" })
             (p.email ?? "").toLowerCase().includes(data.search!.toLowerCase()),
         )
       : people;
-    const scopedPeople = data.kind ? visiblePeople.filter((p) => p.kind === data.kind) : visiblePeople;
+    const scopedPeople = data.kind
+      ? visiblePeople.filter((p) => p.kind === data.kind)
+      : visiblePeople;
 
     return {
       events: filtered,

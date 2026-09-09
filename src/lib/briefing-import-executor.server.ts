@@ -64,7 +64,6 @@ async function withStepDeadline<T>(
   }
 }
 
-
 /**
  * Executor único da importação de briefing (documento OU texto).
  *
@@ -157,7 +156,6 @@ export async function executeImportRun(
   // falhava com `empty_input_text` sem nunca ler o arquivo.
   if (run.document_id) {
     const { data: doc, error: docErr } = await table(db, "client_documents")
-
       .select("storage_path, mime_type, name")
       .eq("id", run.document_id)
       .eq("brand_id", run.brand_id)
@@ -177,9 +175,8 @@ export async function executeImportRun(
     }
     const bytes = new Uint8Array(await dl.data.arrayBuffer());
     const mediaType = (doc as { mime_type: string | null }).mime_type ?? "application/octet-stream";
-    const { prepareDocumentContent, assertInlinePayload } = await import(
-      "@/lib/document-extract.server"
-    );
+    const { prepareDocumentContent, assertInlinePayload } =
+      await import("@/lib/document-extract.server");
     // Extração tem deadline próprio (60s): PDF/planilha corrompidos não podem
     // manter a lease presa até o reaper.
     const prepared = await withStepDeadline("extract", STEP_TIMEOUT_MS.extract, async () => {
@@ -269,21 +266,18 @@ ${BRIEFING_OUTPUT_INSTRUCTIONS}`,
     }
 
     const { generateBriefingAnalysis } = await import("@/lib/briefing-ai-executor.server");
-    const generated = await withStepDeadline(
-      "interpret",
-      STEP_TIMEOUT_MS.interpret,
-      (signal) =>
-        generateBriefingAnalysis({
-          brandId: run.brand_id,
-          usage: {
-            agent: run.source_kind === "document" ? "document.analyze" : "briefing.import.text",
-            clientId: run.client_id,
-            userId: run.created_by ?? null,
-          },
-          system,
-          messages: [{ role: "user", content }],
-          abortSignal: signal,
-        }),
+    const generated = await withStepDeadline("interpret", STEP_TIMEOUT_MS.interpret, (signal) =>
+      generateBriefingAnalysis({
+        brandId: run.brand_id,
+        usage: {
+          agent: run.source_kind === "document" ? "document.analyze" : "briefing.import.text",
+          clientId: run.client_id,
+          userId: run.created_by ?? null,
+        },
+        system,
+        messages: [{ role: "user", content }],
+        abortSignal: signal,
+      }),
     );
 
     analysis = generated.analysis;
@@ -355,7 +349,6 @@ ${BRIEFING_OUTPUT_INSTRUCTIONS}`,
       output: { material_type: analyzed.material_type },
     });
   });
-
 
   return { status: "proposed", provider, model, reusedInterpret };
 }

@@ -264,7 +264,6 @@ async function markDocumentApplied(supabase: unknown, documentId: string): Promi
     .eq("id", documentId);
 }
 
-
 /**
  * Get the current briefing snapshot for before/after comparison in the UI.
  * Lê a fonte canônica (clients.brand_hub), com fallback de compatibilidade.

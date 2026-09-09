@@ -77,7 +77,11 @@ export const CONTENT_STAGE: Record<ContentStage, ContentStageToken> = {
  * estágios do ciclo. Sem peça vinculada, o item ainda está em briefing.
  */
 export function contentStageOf(
-  post: { stage?: string | null; review_status?: string | null; published_at?: string | null } | null,
+  post: {
+    stage?: string | null;
+    review_status?: string | null;
+    published_at?: string | null;
+  } | null,
 ): ContentStage {
   if (!post) return "briefing";
   if (post.published_at || post.stage === "published") return "published";

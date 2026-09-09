@@ -21,7 +21,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExpandedModal } from "@/components/ui/expanded-modal";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -95,7 +101,6 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(bin);
 }
 
-
 export function BriefingImportDialog({
   brandId,
   clientId,
@@ -122,7 +127,6 @@ export function BriefingImportDialog({
 
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement | null>(null);
-
 
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [pasted, setPasted] = useState("");
@@ -342,7 +346,11 @@ export function BriefingImportDialog({
 
       let runId: string;
       if (current.text) {
-        const again = await startTextRun({ token, ...current.text, ...(resumed ? {} : { force: true }) });
+        const again = await startTextRun({
+          token,
+          ...current.text,
+          ...(resumed ? {} : { force: true }),
+        });
         runId = again.runId;
       } else {
         const res = await fetch("/api/jobs/analyze-document", {
@@ -369,7 +377,6 @@ export function BriefingImportDialog({
       setStarting(false);
     }
   };
-
 
   const advance = () => {
     if (index + 1 < queue.length) {
@@ -405,10 +412,11 @@ export function BriefingImportDialog({
       );
       qc.invalidateQueries({ queryKey: ["brand-hub", brandId, clientId] });
       qc.invalidateQueries({ queryKey: ["briefing-import-runs", brandId, clientId] });
-      qc.invalidateQueries({ queryKey: ["briefing-import-run", brandId, clientId, current?.runId] });
+      qc.invalidateQueries({
+        queryKey: ["briefing-import-run", brandId, clientId, current?.runId],
+      });
       onApplied?.(res.appliedFields);
       advance();
-
     },
     onError: (e) => toast.error(importErrorMessage(e)),
   });
@@ -436,7 +444,6 @@ export function BriefingImportDialog({
               Cancelar
             </Button>
             <Button size="sm" onClick={start} disabled={!canStart || starting}>
-
               {starting ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -516,7 +523,6 @@ export function BriefingImportDialog({
   const body = (
     <>
       <div className="space-y-4">
-
         <StepIndicator step={step} />
 
         {step === "upload" ? (
@@ -662,7 +668,9 @@ export function BriefingImportDialog({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="document">{SOURCE_KIND_LABELS.document}</SelectItem>
+                              <SelectItem value="document">
+                                {SOURCE_KIND_LABELS.document}
+                              </SelectItem>
                               <SelectItem value="transcript">
                                 {SOURCE_KIND_LABELS.transcript}
                               </SelectItem>
@@ -692,7 +700,6 @@ export function BriefingImportDialog({
             ) : null}
           </div>
         ) : null}
-
 
         {step === "analyzing" ? (
           <div className="space-y-4">
@@ -748,9 +755,7 @@ export function BriefingImportDialog({
           <div className="space-y-4">
             <div className="rounded-lg border border-border/60 px-3 py-2 text-xs">
               <div className="font-medium">{current?.fileName}</div>
-              {run?.summary ? (
-                <p className="mt-1 text-muted-foreground">{run.summary}</p>
-              ) : null}
+              {run?.summary ? <p className="mt-1 text-muted-foreground">{run.summary}</p> : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="outline" className="text-[11px]">
                   {summary.novos} novos
@@ -779,14 +784,16 @@ export function BriefingImportDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {changes.filter((c) => isReviewable(c.action)).map((c) => (
-                  <ChangeCard
-                    key={c.id}
-                    change={c}
-                    checked={selected.has(c.field)}
-                    onToggle={() => toggle(c.field)}
-                  />
-                ))}
+                {changes
+                  .filter((c) => isReviewable(c.action))
+                  .map((c) => (
+                    <ChangeCard
+                      key={c.id}
+                      change={c}
+                      checked={selected.has(c.field)}
+                      onToggle={() => toggle(c.field)}
+                    />
+                  ))}
                 {changes.some((c) => !isReviewable(c.action)) ? (
                   <details className="rounded-lg border border-border/60 px-3 py-2">
                     <summary className="cursor-pointer text-xs text-muted-foreground">
@@ -829,7 +836,6 @@ export function BriefingImportDialog({
     );
   }
 
-
   return (
     <ExpandedModal
       open={open}
@@ -837,7 +843,6 @@ export function BriefingImportDialog({
       size="composer"
       className="sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
       bodyClassName="flex-1 overflow-y-auto px-6 py-4"
-
       title="Importar Briefing via IA"
       description="Cole texto e/ou anexe arquivos. A IA lê o material, cruza com o briefing atual e propõe alterações campo a campo para sua revisão."
       headerExtra={
@@ -853,7 +858,6 @@ export function BriefingImportDialog({
     </ExpandedModal>
   );
 }
-
 
 /** 3. Contexto da análise — o que a IA vai fazer, antes de executar. */
 function ContextExplainer() {
@@ -884,7 +888,8 @@ function ContextExplainer() {
       <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-xs leading-relaxed text-muted-foreground">
           Confrontaremos o material enviado com o{" "}
-          <span className="font-medium text-foreground">briefing e o contexto atuais</span> da marca.
+          <span className="font-medium text-foreground">briefing e o contexto atuais</span> da
+          marca.
         </p>
         <ul className="flex flex-wrap items-center gap-1.5">
           {items.map((it) => (
@@ -911,7 +916,6 @@ function ContextExplainer() {
 }
 
 function StepIndicator({ step }: { step: ReturnType<typeof uiStepFromRun> }) {
-
   const items: Array<{ key: string; label: string; active: boolean; done: boolean }> = [
     {
       key: "upload",
@@ -982,7 +986,6 @@ function StepIndicator({ step }: { step: ReturnType<typeof uiStepFromRun> }) {
   );
 }
 
-
 export function ChangeStateBadge({ change }: { change: ImportChangeRow }) {
   const state = changeState(change);
   const styles: Record<string, string> = {
@@ -1014,7 +1017,9 @@ function ChangeCard({
   const proposedText = displayValue(change.proposed_value);
   const confidence = confidenceLabel(change.confidence);
   const evidence =
-    typeof change.evidence?.["excerpt"] === "string" ? (change.evidence["excerpt"] as string) : null;
+    typeof change.evidence?.["excerpt"] === "string"
+      ? (change.evidence["excerpt"] as string)
+      : null;
   const originSource =
     typeof change.evidence?.["source"] === "string" ? (change.evidence["source"] as string) : null;
   const originLabel =
@@ -1025,8 +1030,9 @@ function ChangeCard({
         : null;
   const origin = [
     originSource
-      ? ({ document: "Documento", transcript: "Transcrição", paste: "Texto colado" }[originSource] ??
-        originSource)
+      ? ({ document: "Documento", transcript: "Transcrição", paste: "Texto colado" }[
+          originSource
+        ] ?? originSource)
       : null,
     originLabel,
   ]

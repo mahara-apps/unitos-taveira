@@ -264,7 +264,6 @@ export function CreateMediaPlanDialog({
                 )}
               </Field>
 
-
               <Field label="Título">
                 <Input
                   value={title}

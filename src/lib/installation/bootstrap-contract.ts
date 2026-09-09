@@ -116,9 +116,13 @@ export function validatePublicAppUrl(raw: string | null | undefined): Validation
 export function validateCronSecret(raw: string | null | undefined): ValidationResult {
   const value = (raw ?? "").trim();
   if (value.length < MIN_CRON_SECRET_LENGTH) {
-    return { ok: false, reason: `CRON_SECRET precisa ter ao menos ${MIN_CRON_SECRET_LENGTH} caracteres` };
+    return {
+      ok: false,
+      reason: `CRON_SECRET precisa ter ao menos ${MIN_CRON_SECRET_LENGTH} caracteres`,
+    };
   }
-  if (containsMasterReference(value)) return { ok: false, reason: "CRON_SECRET reaproveitado do MASTER" };
+  if (containsMasterReference(value))
+    return { ok: false, reason: "CRON_SECRET reaproveitado do MASTER" };
   return { ok: true, value };
 }
 

@@ -8,6 +8,7 @@ import { Check, Copy, Loader2 } from "lucide-react";
 import { getMetaAppSettingsFn, saveMetaAppSettingsFn } from "@/lib/meta/app-config.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
@@ -113,6 +114,8 @@ function AdminMetaAppPage() {
     setSecret("");
   }, [q.data]);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const save = useMutation({
     mutationFn: () =>
       saveFn({
@@ -121,9 +124,11 @@ function AdminMetaAppPage() {
           appId: appId.trim() || null,
           businessConfigId: configId.trim() || null,
           ...(secret.trim() ? { appSecret: secret.trim() } : {}),
+          confirmLabel: "App Meta",
         },
       }),
     onSuccess: () => {
+      setConfirmOpen(false);
       toast.success("Configuração do App Meta atualizada.");
       setSecret("");
       void qc.invalidateQueries({ queryKey: ["admin-meta-app"] });
@@ -259,11 +264,12 @@ function AdminMetaAppPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(officialReadOnly ? META_URLS.filter((u) => u.path.endsWith("/callback")) : META_URLS).map(
-            (u) => (
-              <UrlRow key={u.path} label={u.label} url={`${origin}${u.path}`} hint={u.hint} />
-            ),
-          )}
+          {(officialReadOnly
+            ? META_URLS.filter((u) => u.path.endsWith("/callback"))
+            : META_URLS
+          ).map((u) => (
+            <UrlRow key={u.path} label={u.label} url={`${origin}${u.path}`} hint={u.hint} />
+          ))}
           <UrlRow label="Domínio do app" url={origin} hint="App Domains / URL do site" />
         </CardContent>
       </Card>
@@ -303,10 +309,24 @@ function AdminMetaAppPage() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={() => save.mutate()} disabled={save.isPending || q.isLoading}>
+        <Button onClick={() => setConfirmOpen(true)} disabled={save.isPending || q.isLoading}>
           {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar configuração
         </Button>
+        <CriticalConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Atualizar App Meta"
+          actionLabel="Salvar configuração"
+          pending={save.isPending}
+          impact="Alterar o App Meta afeta todas as conexões de Instagram, Facebook e WhatsApp deste ambiente. Conexões existentes podem precisar ser refeitas."
+          details={[
+            { label: "Modo do app", value: appType === "unitos" ? "App Unitos" : "App do cliente" },
+          ]}
+          fieldLabel="Para confirmar, digite: App Meta"
+          confirmText="App Meta"
+          onConfirm={() => save.mutate()}
+        />
       </div>
     </div>
   );

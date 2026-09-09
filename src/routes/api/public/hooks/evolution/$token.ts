@@ -9,11 +9,8 @@ export const Route = createFileRoute("/api/public/hooks/evolution/$token")({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        const {
-          normalizeEvolutionEvent,
-          safeEventPayload,
-          safeTokenEquals,
-        } = await import("@/lib/evolution/webhook.server");
+        const { normalizeEvolutionEvent, safeEventPayload, safeTokenEquals } =
+          await import("@/lib/evolution/webhook.server");
 
         const urlToken = String(params.token ?? "");
         if (urlToken.length < 32 || urlToken.length > 128) {

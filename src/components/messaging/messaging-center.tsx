@@ -126,7 +126,6 @@ export function MessagingCenter({
   );
 }
 
-
 function SectionTitle({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="space-y-0.5">
@@ -289,7 +288,6 @@ function ProviderCard({
           </div>
         ) : null}
       </dl>
-
 
       <div className="flex items-center gap-2">
         <Button

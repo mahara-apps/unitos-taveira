@@ -198,8 +198,8 @@ export function ClientInbox({
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-border/60 bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-          Nada por aqui. Quando o cliente comentar, aprovar, pedir ajuste ou abrir um pedido, aparece
-          nesta lista.
+          Nada por aqui. Quando o cliente comentar, aprovar, pedir ajuste ou abrir um pedido,
+          aparece nesta lista.
         </div>
       ) : (
         <ul className="space-y-3">

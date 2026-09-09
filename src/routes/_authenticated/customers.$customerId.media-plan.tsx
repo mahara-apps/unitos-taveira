@@ -375,24 +375,24 @@ function MediaPlanPage() {
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="space-y-4">
-        <PlanStrategyPanel plan={planQ.data.plan} items={planQ.data.items} />
-        <PlanEditor
-          plan={planQ.data.plan}
-          items={planQ.data.items}
-          searchStage={search.stage}
-          searchChannel={search.channel}
-          onSearch={(patch) =>
-            navigate({
-              to: ".",
-              search: (p: MediaPlanSearch) => ({ ...p, ...patch }),
-              replace: true,
-            })
-          }
-          onUpdatePlan={(patch) => updateMut.mutate({ patch })}
-          onDeletePlan={() => {
-            if (confirm("Excluir este plano? Esta ação é irreversível.")) deletePlanMut.mutate();
-          }}
-        />
+          <PlanStrategyPanel plan={planQ.data.plan} items={planQ.data.items} />
+          <PlanEditor
+            plan={planQ.data.plan}
+            items={planQ.data.items}
+            searchStage={search.stage}
+            searchChannel={search.channel}
+            onSearch={(patch) =>
+              navigate({
+                to: ".",
+                search: (p: MediaPlanSearch) => ({ ...p, ...patch }),
+                replace: true,
+              })
+            }
+            onUpdatePlan={(patch) => updateMut.mutate({ patch })}
+            onDeletePlan={() => {
+              if (confirm("Excluir este plano? Esta ação é irreversível.")) deletePlanMut.mutate();
+            }}
+          />
         </div>
       )}
 

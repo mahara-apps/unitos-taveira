@@ -14,6 +14,7 @@ import {
 
 import { DashboardPanelSurface } from "@/components/ui/dashboard-primitives";
 import { Button } from "@/components/ui/button";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
@@ -235,9 +236,12 @@ export function AiUsagePanel({ brandId }: { brandId: string | null }) {
     onError: (e: Error) => toast.error(e.message ?? "Falha ao salvar limite"),
   });
 
+  const [limitToDelete, setLimitToDelete] = useState<string | null>(null);
+
   const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteLimit({ data: { id } }),
+    mutationFn: (id: string) => deleteLimit({ data: { id, confirmLabel: "limite de IA" } }),
     onSuccess: () => {
+      setLimitToDelete(null);
       toast.success("Limite removido");
       qc.invalidateQueries({ queryKey: ["ai-usage-overview", brandId] });
     },
@@ -324,7 +328,7 @@ export function AiUsagePanel({ brandId }: { brandId: string | null }) {
                     limitId: c.limit_id,
                   })
                 }
-                onDelete={c.limit_id ? () => deleteMut.mutate(c.limit_id!) : undefined}
+                onDelete={c.limit_id ? () => setLimitToDelete(c.limit_id!) : undefined}
               />
               {expanded &&
                 users.map((u) => (
@@ -352,7 +356,7 @@ export function AiUsagePanel({ brandId }: { brandId: string | null }) {
                         limitId: u.limit_id,
                       })
                     }
-                    onDelete={u.limit_id ? () => deleteMut.mutate(u.limit_id!) : undefined}
+                    onDelete={u.limit_id ? () => setLimitToDelete(u.limit_id!) : undefined}
                   />
                 ))}
             </div>
@@ -400,7 +404,7 @@ export function AiUsagePanel({ brandId }: { brandId: string | null }) {
                       limitId: u.limit_id,
                     })
                   }
-                  onDelete={u.limit_id ? () => deleteMut.mutate(u.limit_id!) : undefined}
+                  onDelete={u.limit_id ? () => setLimitToDelete(u.limit_id!) : undefined}
                 />
               ))}
           </>
@@ -430,6 +434,20 @@ export function AiUsagePanel({ brandId }: { brandId: string | null }) {
           saving={upsertMut.isPending}
         />
       ) : null}
+
+      <CriticalConfirmDialog
+        open={!!limitToDelete}
+        onOpenChange={(open) => (open ? null : setLimitToDelete(null))}
+        title="Remover limite de IA"
+        actionLabel="Remover limite"
+        pending={deleteMut.isPending}
+        impact="O escopo volta a herdar o limite superior. Se não houver limite acima, o consumo de IA passa a ficar sem teto."
+        fieldLabel="Para confirmar, digite: limite de IA"
+        confirmText="limite de IA"
+        onConfirm={() => {
+          if (limitToDelete) deleteMut.mutate(limitToDelete);
+        }}
+      />
     </div>
   );
 }

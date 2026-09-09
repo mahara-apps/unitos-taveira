@@ -92,8 +92,7 @@ export function WhatsappRecipientsPanel({
 
   const { data: recipients = [], isLoading } = useQuery({
     queryKey: key,
-    queryFn: () =>
-      listFn({ data: { brandId: brandId!, clientId: lockedClientId ?? null } }),
+    queryFn: () => listFn({ data: { brandId: brandId!, clientId: lockedClientId ?? null } }),
     enabled: !!brandId,
   });
 
@@ -172,7 +171,8 @@ export function WhatsappRecipientsPanel({
       toast.success("Destinatário removido.");
       qc.invalidateQueries({ queryKey: key });
     },
-    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Falha ao remover."),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "Falha ao remover."),
   });
 
   const canSubmit = useMemo(() => {
@@ -181,7 +181,17 @@ export function WhatsappRecipientsPanel({
     if (needsDestination && destination.trim().length < 5) return false;
     if (needsUser && !userId) return false;
     return true;
-  }, [brandId, canManage, name, needsClient, clientId, needsDestination, destination, needsUser, userId]);
+  }, [
+    brandId,
+    canManage,
+    name,
+    needsClient,
+    clientId,
+    needsDestination,
+    destination,
+    needsUser,
+    userId,
+  ]);
 
   if (!brandId) return null;
 
@@ -302,68 +312,69 @@ export function WhatsappRecipientsPanel({
             </TableHeader>
             <TableBody>
               {[...recipients]
-                .sort((a, b) =>
-                  (a.clientName ?? "\uffff").localeCompare(b.clientName ?? "\uffff") ||
-                  a.name.localeCompare(b.name),
+                .sort(
+                  (a, b) =>
+                    (a.clientName ?? "\uffff").localeCompare(b.clientName ?? "\uffff") ||
+                    a.name.localeCompare(b.name),
                 )
                 .map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-xs">
-                    <span className="font-medium">{r.userName ?? r.name}</span>
-                    {r.roleLabel ? (
-                      <span className="text-muted-foreground"> · {r.roleLabel}</span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="text-xs">{WHATSAPP_RECIPIENT_LABELS[r.type]}</TableCell>
-                  <TableCell className="text-xs">{r.clientName ?? "—"}</TableCell>
-                  <TableCell className="text-xs">
-                    {r.destination ?? <span className="text-muted-foreground">dinâmico</span>}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={r.isActive ? "default" : "outline"} className="text-[10px]">
-                      {r.isActive ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </TableCell>
-                  {canManage ? (
-                    <TableCell className="text-right">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title="Editar"
-                        onClick={() => {
-                          setEditing(r);
-                          setEditName(r.name);
-                          setEditRole(r.roleLabel ?? "");
-                          setEditDestination(r.destination ?? "");
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title={r.isActive ? "Desativar" : "Ativar"}
-                        onClick={() =>
-                          toggle.mutate({ recipientId: r.id, isActive: !r.isActive })
-                        }
-                      >
-                        <Power className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive"
-                        title="Remover"
-                        onClick={() => remove.mutate(r.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                  <TableRow key={r.id}>
+                    <TableCell className="text-xs">
+                      <span className="font-medium">{r.userName ?? r.name}</span>
+                      {r.roleLabel ? (
+                        <span className="text-muted-foreground"> · {r.roleLabel}</span>
+                      ) : null}
                     </TableCell>
-                  ) : null}
-                </TableRow>
-              ))}
+                    <TableCell className="text-xs">{WHATSAPP_RECIPIENT_LABELS[r.type]}</TableCell>
+                    <TableCell className="text-xs">{r.clientName ?? "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {r.destination ?? <span className="text-muted-foreground">dinâmico</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={r.isActive ? "default" : "outline"} className="text-[10px]">
+                        {r.isActive ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
+                    {canManage ? (
+                      <TableCell className="text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title="Editar"
+                          onClick={() => {
+                            setEditing(r);
+                            setEditName(r.name);
+                            setEditRole(r.roleLabel ?? "");
+                            setEditDestination(r.destination ?? "");
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title={r.isActive ? "Desativar" : "Ativar"}
+                          onClick={() =>
+                            toggle.mutate({ recipientId: r.id, isActive: !r.isActive })
+                          }
+                        >
+                          <Power className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive"
+                          title="Remover"
+                          onClick={() => remove.mutate(r.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         )}
@@ -410,9 +421,7 @@ export function WhatsappRecipientsPanel({
                 disabled={editName.trim().length < 2 || saveEdit.isPending}
                 onClick={() => saveEdit.mutate()}
               >
-                {saveEdit.isPending ? (
-                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                ) : null}
+                {saveEdit.isPending ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
                 Salvar
               </Button>
             </DialogFooter>

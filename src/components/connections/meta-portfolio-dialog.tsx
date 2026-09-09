@@ -23,7 +23,6 @@ import {
   RefreshCw,
   Search,
   X,
-
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -278,7 +277,6 @@ export function MetaAssetsPanel({
     channel ?? "all",
     clientId ?? "workspace",
   ] as const;
-
 
   async function reauthorize(channel: "instagram" | "facebook" | "threads") {
     const popup = window.open("", "meta-oauth", metaPopupFeatures());
@@ -1364,7 +1362,6 @@ export function MetaPortfolioDialog({
     </>
   );
 }
-
 
 function PortfolioActionState({
   title,

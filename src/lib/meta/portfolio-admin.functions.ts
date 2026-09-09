@@ -80,9 +80,8 @@ export const getMetaPortfolioStatusFn = createServerFn({ method: "POST" })
 
 /** Diagnóstico do modo de login Meta (Business Login × escopos legados). */
 export const getMetaOAuthModeFn = createServerFn({ method: "GET" }).handler(async () => {
-  const { metaOAuthModeDiagnostics, validateBusinessConfig } = await import(
-    "@/lib/meta/provider.server"
-  );
+  const { metaOAuthModeDiagnostics, validateBusinessConfig } =
+    await import("@/lib/meta/provider.server");
   const { resolveMetaAppCredentials } = await import("./app-config.server");
   // Modo/credenciais do App Meta EM USO nesta instalação (oficial ou do cliente).
   let creds: { appId: string; appSecret: string; businessConfigId: string | null } | null = null;
@@ -113,43 +112,45 @@ export const getMetaOAuthModeFn = createServerFn({ method: "GET" }).handler(asyn
 export const disconnectMetaPortfolioFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => DisconnectInput.parse(input))
-  .handler(async ({ data, context }): Promise<{ ok: boolean; removed: number; message: string }> => {
-    const { hasIntegrationAuthority } = await import("@/lib/access-guard");
-    if (!(await hasIntegrationAuthority(context.supabase, context.userId, data.brandId))) {
+  .handler(
+    async ({ data, context }): Promise<{ ok: boolean; removed: number; message: string }> => {
+      const { hasIntegrationAuthority } = await import("@/lib/access-guard");
+      if (!(await hasIntegrationAuthority(context.supabase, context.userId, data.brandId))) {
+        return {
+          ok: false,
+          removed: 0,
+          message: "Apenas Owner, Admin ou Super Admin podem desconectar um portfólio Meta.",
+        };
+      }
+
+      // A autorização é revogada mesmo sem canais vinculados (senão as contas
+      // descobertas continuariam "disponíveis"), mas somente quando ela não serve
+      // outro portfólio. Histórico preservado (linhas marcadas, nunca apagadas).
+      const { revokeMetaPortfolio } = await import("@/lib/meta/authorization.server");
+      const { removed, sessionsRevoked, sessionsKept } = await revokeMetaPortfolio(
+        context.supabase,
+        {
+          brandId: data.brandId,
+          businessId: data.businessId ?? null,
+          ownerExternalId: data.ownerExternalId ?? null,
+        },
+      );
+
+      const authNote = sessionsRevoked
+        ? "Autorização Meta revogada."
+        : sessionsKept
+          ? "Autorização mantida para os demais portfólios."
+          : "Nenhuma autorização ativa restava.";
+
       return {
-        ok: false,
-        removed: 0,
-        message: "Apenas Owner, Admin ou Super Admin podem desconectar um portfólio Meta.",
+        ok: true,
+        removed,
+        message: removed
+          ? `${removed} canal(is) desconectado(s). ${authNote}`
+          : `Portfólio desconectado. ${authNote}`,
       };
-    }
-
-    // A autorização é revogada mesmo sem canais vinculados (senão as contas
-    // descobertas continuariam "disponíveis"), mas somente quando ela não serve
-    // outro portfólio. Histórico preservado (linhas marcadas, nunca apagadas).
-    const { revokeMetaPortfolio } = await import("@/lib/meta/authorization.server");
-    const { removed, sessionsRevoked, sessionsKept } = await revokeMetaPortfolio(
-      context.supabase,
-      {
-        brandId: data.brandId,
-        businessId: data.businessId ?? null,
-        ownerExternalId: data.ownerExternalId ?? null,
-      },
-    );
-
-    const authNote = sessionsRevoked
-      ? "Autorização Meta revogada."
-      : sessionsKept
-        ? "Autorização mantida para os demais portfólios."
-        : "Nenhuma autorização ativa restava.";
-
-    return {
-      ok: true,
-      removed,
-      message: removed
-        ? `${removed} canal(is) desconectado(s). ${authNote}`
-        : `Portfólio desconectado. ${authNote}`,
-    };
-  });
+    },
+  );
 
 /** Revoga a autorização de UM administrador Meta, sem afetar os demais. */
 export const revokeMetaAuthorizationFn = createServerFn({ method: "POST" })
@@ -175,4 +176,3 @@ export const revokeMetaAuthorizationFn = createServerFn({ method: "POST" })
         : "Nenhuma autorização ativa encontrada para este usuário Meta.",
     };
   });
-

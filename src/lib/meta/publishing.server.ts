@@ -12,7 +12,6 @@ import { isMediaNotReady } from "./rate-limit";
 import { decryptCredential } from "@/lib/credentials-crypto.server";
 import type { PlacementOptions } from "@/lib/placement-options";
 
-
 export type SupportedPlacement =
   | "instagram_feed"
   | "facebook_feed"
@@ -53,7 +52,6 @@ export type PublishInput = {
   options?: PlacementOptions;
 };
 
-
 export type PublishResult = {
   externalPostId: string;
   externalPermalink: string | null;
@@ -61,7 +59,6 @@ export type PublishResult = {
   /** Opções que não puderam ser aplicadas — nunca derrubam a publicação. */
   warnings?: string[];
 };
-
 
 export type MetaConnectionRow = {
   id: string;
@@ -120,7 +117,6 @@ export class MetaPublishingService {
       ...(await this.applyPostPublishOptions(connection, pageToken, input, result)),
     ];
     return warnings.length ? { ...result, warnings } : result;
-
   }
 
   private dispatchPlacement(
@@ -219,8 +215,6 @@ export class MetaPublishingService {
     return warnings;
   }
 
-
-
   // ------------------------------------------------------------ Instagram ---
   private async publishInstagramFeed(
     connection: MetaConnectionRow,
@@ -247,11 +241,9 @@ export class MetaPublishingService {
       },
     });
 
-
     // Step 2: aguardar processamento (imagens grandes também levam tempo) e publicar
     await this.waitForContainerReady(container.id, pageToken);
     const publish = await this.publishContainer(igId, container.id, pageToken);
-
 
     // Step 3: fetch permalink (best-effort)
     let permalink: string | null = null;
@@ -271,7 +263,6 @@ export class MetaPublishingService {
       providerResponse: { container_id: container.id, media_id: publish.id },
       ...(igOpts.warnings.length ? { warnings: igOpts.warnings } : {}),
     };
-
   }
 
   // ------------------------------------------------------------- Facebook ---
@@ -359,7 +350,6 @@ export class MetaPublishingService {
         media_type: "STORIES",
       },
     };
-
   }
 
   // -------------------------------------------------------------- IG Reels ---
@@ -419,7 +409,6 @@ export class MetaPublishingService {
       },
       ...(igOpts.warnings.length ? { warnings: igOpts.warnings } : {}),
     };
-
   }
 
   // ---------------------------------------------------------- IG Carousel ---
@@ -500,7 +489,6 @@ export class MetaPublishingService {
       },
       ...(parentOpts.warnings.length ? { warnings: parentOpts.warnings } : {}),
     };
-
   }
 
   // ---------------------------------------------------------- FB Carousel ---
@@ -550,8 +538,6 @@ export class MetaPublishingService {
       providerResponse: { post_id: res.id, attached_media: photoIds },
     };
   }
-
-
 
   /**
    * Aguarda o processamento da mídia pela Meta (Stories, Reels e Feed).
@@ -625,7 +611,6 @@ export class MetaPublishingService {
   }
 }
 
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -657,7 +642,6 @@ export function assertCarouselItems(items?: CarouselItem[]): CarouselItem[] {
   }
   return valid;
 }
-
 
 /** Serialises Graph errors into a message safe to store in `last_error`. */
 export function formatPublishError(err: unknown): string {

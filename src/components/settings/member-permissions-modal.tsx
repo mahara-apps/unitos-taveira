@@ -16,10 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ModulePermissionsEditor } from "@/components/settings/module-permissions-editor";
-import {
-  listAccessProfiles,
-  saveMemberModulePermissions,
-} from "@/lib/access-profiles.functions";
+import { listAccessProfiles, saveMemberModulePermissions } from "@/lib/access-profiles.functions";
 import {
   diffFromProfile,
   emptyModulePermissions,
@@ -131,11 +128,15 @@ export function MemberPermissionsModal({
       <div className="space-y-4 px-6 py-5">
         {isAdminRole ? (
           <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-            Este usuário é <strong className="text-foreground">administrador do workspace</strong>{" "}
-            e por isso tem acesso total a todos os módulos. Para usar permissões por módulo, altere
-            o papel para <strong className="text-foreground">Usuário</strong> na tela de equipe.
+            Este usuário é <strong className="text-foreground">administrador do workspace</strong> e
+            por isso tem acesso total a todos os módulos. Para usar permissões por módulo, altere o
+            papel para <strong className="text-foreground">Usuário</strong> na tela de equipe.
             <div className="mt-3">
-              <ModulePermissionsEditor value={fullModulePermissions()} onChange={() => {}} disabled />
+              <ModulePermissionsEditor
+                value={fullModulePermissions()}
+                onChange={() => {}}
+                disabled
+              />
             </div>
           </div>
         ) : (

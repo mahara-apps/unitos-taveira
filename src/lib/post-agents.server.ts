@@ -163,7 +163,6 @@ function coerceSingleField(text: string, key: string): unknown | null {
   return { [key]: cleaned };
 }
 
-
 /**
  * Chamada estruturada agnóstica de provedor: pede JSON no prompt e valida o
  * texto com o schema. Não usa structured output nativo — o provedor
@@ -250,8 +249,6 @@ async function runStructured<T extends z.ZodTypeAny>(opts: {
       } else {
         lastErr = err;
       }
-
-
 
       const { retryable, kind } = classifyAiError(lastErr);
       const message = lastErr instanceof Error ? lastErr.message : String(lastErr);

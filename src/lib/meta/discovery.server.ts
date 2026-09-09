@@ -13,7 +13,6 @@ import {
   type DiscoveryModeReason,
 } from "./refresh-policy";
 
-
 /**
  * Descoberta Meta compartilhada (server-only).
  *
@@ -41,7 +40,6 @@ export type DiscoveredAccount = {
   businessId: string | null;
   businessName: string | null;
 };
-
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -191,7 +189,6 @@ export async function runMetaDiscovery(
       mode: decision.mode,
       modeReason: decision.reason,
     };
-
   } catch (err) {
     const detail =
       err instanceof MetaGraphError
@@ -251,14 +248,12 @@ async function revokeUndiscoveredConnections(
 /** Converte o portfólio bruto em contas apresentáveis (identidade = ID Meta). */
 export function toDiscoveredAccounts(payload: CachedPagesPayload): DiscoveredAccount[] {
   const auth = payload.publishAuthorization ?? null;
-  const businessNameById = new Map(
-    (payload.businesses ?? []).map((b) => [b.id, b.name] as const),
-  );
+  const businessNameById = new Map((payload.businesses ?? []).map((b) => [b.id, b.name] as const));
   const out: DiscoveredAccount[] = [];
   for (const p of payload.pages) {
     const businessId = p.businessId ?? null;
     const businessName =
-      p.businessName ?? (businessId ? businessNameById.get(businessId) ?? null : null);
+      p.businessName ?? (businessId ? (businessNameById.get(businessId) ?? null) : null);
     out.push({
       channel: "facebook",
       externalId: p.pageId,
@@ -307,5 +302,4 @@ export function toDiscoveredAccounts(payload: CachedPagesPayload): DiscoveredAcc
     });
   }
   return out;
-
 }

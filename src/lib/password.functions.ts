@@ -39,29 +39,29 @@ export const setMyFullName = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }) => {
-    const { data: updated, error } = await context.supabase
-      .from("user_profiles")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ full_name: data.fullName } as any)
-      .eq("id", context.userId)
-      .select("id, full_name")
-      .maybeSingle();
-    if (error) {
+    try {
+      // O login pode existir sem `user_profiles` quando uma instalação antiga
+      // engoliu a falha do trigger. Repara somente o próprio usuário autenticado.
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { ensureUserProfile } = await import("@/lib/user-profile.server");
+      const { data: authUser } = await context.supabase.auth.getUser();
+      const updated = await ensureUserProfile(supabaseAdmin, {
+        userId: context.userId,
+        email: authUser.user?.email ?? null,
+        fullName: data.fullName,
+      });
+      return {
+        ok: true as const,
+        id: updated.id,
+        fullName: updated.full_name,
+      };
+    } catch (error) {
       console.error("[first-access] failed to save profile name", {
         userId: context.userId,
-        code: error.code,
+        error: error instanceof Error ? error.message : "unknown",
       });
       throw new Error("Não foi possível salvar seu nome. Tente novamente.");
     }
-    if (!updated) {
-      console.error("[first-access] profile row not found", { userId: context.userId });
-      throw new Error("Seu perfil não foi encontrado. Entre novamente e tente de novo.");
-    }
-    return {
-      ok: true as const,
-      id: updated.id as string,
-      fullName: updated.full_name as string,
-    };
   });
 
 export const clearMyPasswordFlag = createServerFn({ method: "POST" })

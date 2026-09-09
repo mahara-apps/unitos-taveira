@@ -59,7 +59,7 @@ export const listClientInboxFn = createServerFn({ method: "POST" })
     const limit = data.limit ?? 120;
     const wants = (t: ClientInboxType) => !data.type || data.type === t;
 
-    const scoped = <T,>(q: T): T => {
+    const scoped = <T>(q: T): T => {
       const query = q as any;
       return (data.clientId ? query.eq("client_id", data.clientId) : query) as T;
     };
@@ -122,7 +122,7 @@ export const listClientInboxFn = createServerFn({ method: "POST" })
     }
     const nameOf = (id: string) => names.get(id) ?? null;
 
-    const rows = <T,>(res: unknown): T[] => (((res as { data?: unknown }).data ?? []) as T[]);
+    const rows = <T>(res: unknown): T[] => ((res as { data?: unknown }).data ?? []) as T[];
     const items: ClientInboxItem[] = [];
 
     for (const r of rows<Record<string, any>>(requestsRes)) {
@@ -226,9 +226,7 @@ export const listClientInboxFn = createServerFn({ method: "POST" })
     }
 
     const filtered = data.awaitingOnly ? items.filter((i) => i.awaiting) : items;
-    return filtered
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      .slice(0, limit);
+    return filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, limit);
   });
 
 async function teamName(supabase: unknown, userId: string): Promise<string | null> {

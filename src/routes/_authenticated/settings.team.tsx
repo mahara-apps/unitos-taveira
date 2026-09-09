@@ -13,6 +13,7 @@ import {
 } from "@/lib/team-admin.functions";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { Button } from "@/components/ui/button";
+import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -206,12 +207,7 @@ function TeamSettingsPage() {
           ) : (
             <ul>
               {members.map((m) => (
-                <MemberRow
-                  key={m.userId}
-                  brandId={brandId}
-                  member={m}
-                  authorityRole={myRole}
-                />
+                <MemberRow key={m.userId} brandId={brandId} member={m} authorityRole={myRole} />
               ))}
             </ul>
           )}
@@ -221,7 +217,6 @@ function TeamSettingsPage() {
       <HourlyCostsCard brandId={brandId} />
 
       <Card>
-
         <CardHeader>
           <CardTitle className="text-base">Convites pendentes</CardTitle>
           <CardDescription>Convites ainda não aceitos ou expirados.</CardDescription>
@@ -316,7 +311,9 @@ function MemberRow({
         </Avatar>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{displayName({ full_name: member.fullName, email: member.email })}</span>
+            <span className="truncate text-sm font-medium">
+              {displayName({ full_name: member.fullName, email: member.email })}
+            </span>
             {member.isSuperAdmin && (
               <Badge variant="secondary" className="text-[10px]">
                 Super admin
@@ -387,10 +384,10 @@ function MemberRow({
             <AlertDialogHeader>
               <AlertDialogTitle>Remover membro da marca?</AlertDialogTitle>
               <AlertDialogDescription>
-                <strong>{displayName({ full_name: member.fullName, email: member.email })}</strong> perde o acesso a esta marca e a
-                todos os clientes dela, incluindo os vínculos por cliente. A conta de login continua
-                existindo, mas sem acesso aqui. Para suspender temporariamente, use “Desativar
-                acesso”.
+                <strong>{displayName({ full_name: member.fullName, email: member.email })}</strong>{" "}
+                perde o acesso a esta marca e a todos os clientes dela, incluindo os vínculos por
+                cliente. A conta de login continua existindo, mas sem acesso aqui. Para suspender
+                temporariamente, use “Desativar acesso”.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -432,9 +429,12 @@ function InviteRow({
   const revoke = useServerFn(revokeBrandInvite);
   const link =
     typeof window !== "undefined" ? `${window.location.origin}/invite/${invite.token}` : "";
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const revokeMut = useMutation({
-    mutationFn: () => revoke({ data: { brandId, inviteId: invite.id } }),
+    mutationFn: () =>
+      revoke({ data: { brandId, inviteId: invite.id, confirmLabel: invite.email } }),
     onSuccess: () => {
+      setRevokeOpen(false);
       toast.success("Convite revogado");
       qc.invalidateQueries({ queryKey: ["brand-team", brandId] });
     },
@@ -477,12 +477,27 @@ function InviteRow({
         <Button
           size="icon"
           variant="ghost"
-          onClick={() => revokeMut.mutate()}
+          onClick={() => setRevokeOpen(true)}
           disabled={revokeMut.isPending || isRevoked}
           title="Revogar convite"
         >
           <X className="h-4 w-4" />
         </Button>
+        <CriticalConfirmDialog
+          open={revokeOpen}
+          onOpenChange={setRevokeOpen}
+          title="Revogar convite"
+          actionLabel="Revogar convite"
+          pending={revokeMut.isPending}
+          impact="O link de convite deixa de funcionar imediatamente e a pessoa não poderá mais criar o acesso com ele."
+          details={[
+            { label: "Convidado", value: invite.email },
+            { label: "Papel", value: invite.role },
+          ]}
+          fieldLabel="Para confirmar, digite o e-mail exato do convidado"
+          confirmText={invite.email}
+          onConfirm={() => revokeMut.mutate()}
+        />
       </div>
     </li>
   );

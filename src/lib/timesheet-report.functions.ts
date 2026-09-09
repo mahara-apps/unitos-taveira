@@ -167,9 +167,7 @@ export const getTimesheetReportFn = createServerFn({ method: "GET" })
     const previous = prevEntries.reduce(
       (acc, e) => ({
         seconds: acc.seconds + e.seconds,
-        costCents:
-          acc.costCents +
-          Math.round((e.seconds / 3600) * (e.hourly_cost_cents ?? 0)),
+        costCents: acc.costCents + Math.round((e.seconds / 3600) * (e.hourly_cost_cents ?? 0)),
       }),
       { seconds: 0, costCents: 0 },
     );

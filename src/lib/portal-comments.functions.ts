@@ -89,7 +89,9 @@ export const listPortalPostCommentsFn = createServerFn({ method: "POST" })
               path: typeof a["path"] === "string" ? (a["path"] as string) : "",
               mime: typeof a["mime"] === "string" ? (a["mime"] as string) : null,
               url:
-                typeof a["path"] === "string" ? await signPortalDocument(a["path"] as string) : null,
+                typeof a["path"] === "string"
+                  ? await signPortalDocument(a["path"] as string)
+                  : null,
             })),
         );
         return {
@@ -151,7 +153,8 @@ export const addPortalPostCommentFn = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
-    const attachments: Array<{ name: string; path: string; mime: string | null; size: number }> = [];
+    const attachments: Array<{ name: string; path: string; mime: string | null; size: number }> =
+      [];
     if (data.attachments?.length) {
       const { scopedAdmin } = await import("@/lib/portal-scope.server");
       const admin = await scopedAdmin();
@@ -159,12 +162,10 @@ export const addPortalPostCommentFn = createServerFn({ method: "POST" })
         const bytes = decodeBase64(file.dataBase64);
         if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new Error("attachment_too_large");
         const path = `${scope.brandId}/${scope.clientId}/comentarios/${data.postId}/${Date.now()}-${safeName(file.name)}`;
-        const { error: upErr } = await admin.storage
-          .from("brand-documents")
-          .upload(path, bytes, {
-            contentType: file.mime ?? "application/octet-stream",
-            upsert: false,
-          });
+        const { error: upErr } = await admin.storage.from("brand-documents").upload(path, bytes, {
+          contentType: file.mime ?? "application/octet-stream",
+          upsert: false,
+        });
         if (upErr) throw new Error(upErr.message);
         attachments.push({
           name: file.name,

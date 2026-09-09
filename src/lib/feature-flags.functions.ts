@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertSuperAdmin, resolveIsSuperAdmin } from "@/lib/super-admin";
+import { assertConfirmLabel } from "@/lib/critical-actions";
 import type { RpcClient } from "@/lib/access-guard";
 
 /**
@@ -106,7 +107,6 @@ async function readBrandFeatures(supabase: FeatureReaderClient, brandId: string)
   });
 }
 
-
 export const listBrandFeatures = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => BrandIdInput.parse(i))
@@ -130,6 +130,7 @@ const SetFeatureInput = z.object({
   featureKey: z.string().min(1).max(64),
   enabled: z.boolean(),
   notes: z.string().max(500).optional().nullable(),
+  confirmLabel: z.string().min(1),
 });
 
 export const setBrandFeature = createServerFn({ method: "POST" })
@@ -148,6 +149,18 @@ export const setBrandFeature = createServerFn({ method: "POST" })
     if (cat.is_core && !data.enabled) {
       throw new Error("Recurso obrigatório do sistema — não pode ser desativado");
     }
+
+    // Ação crítica: exige o nome do recurso digitado por extenso.
+    assertConfirmLabel(data.confirmLabel, cat.name as string);
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(context.supabase as never, {
+      action: "feature.toggle",
+      actorId: context.userId,
+      targetId: data.featureKey,
+      targetLabel: cat.name as string,
+      brandId: data.brandId,
+      impact: { enabled: data.enabled },
+    });
 
     const { data: prev } = await context.supabase
       .from("brand_features")

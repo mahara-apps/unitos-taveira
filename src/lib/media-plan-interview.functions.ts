@@ -6,10 +6,7 @@ import type { GeneratedCampaign, GeneratedPlan } from "./media-plan/plan-schema"
 
 const uuid = z.string().uuid();
 
-const InterviewSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.array(z.string())]).optional(),
-);
+const InterviewSchema = z.record(z.string(), z.union([z.string(), z.array(z.string())]).optional());
 
 const FunnelSchema = z
   .object({ topo: z.number(), meio: z.number(), fundo: z.number() })

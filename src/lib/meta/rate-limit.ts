@@ -53,7 +53,6 @@ export function isMetaRateLimit(err: unknown): boolean {
   );
 }
 
-
 /** Espera progressiva por número de adiamentos já feitos (minutos). */
 const BACKOFF_MINUTES = [2, 5, 15, 30, 60, 60, 120, 120];
 
@@ -76,5 +75,4 @@ export function rateLimitMessage(retryAt: Date, detail?: string, err?: unknown):
     : "Limite temporário da Meta";
   const base = `${cause} — nova tentativa automática às ${hhmm}.`;
   return detail ? `${base} Detalhe: ${detail}` : base;
-
 }

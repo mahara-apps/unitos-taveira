@@ -78,9 +78,7 @@ export function applyArchiveRead(
 ): NotificationsFeed {
   const now = opts.now ?? new Date().toISOString();
   return {
-    items: feed.items.map((n) =>
-      n.read_at && !n.archived_at ? { ...n, archived_at: now } : n,
-    ),
+    items: feed.items.map((n) => (n.read_at && !n.archived_at ? { ...n, archived_at: now } : n)),
     unreadTotal: feed.unreadTotal,
   };
 }

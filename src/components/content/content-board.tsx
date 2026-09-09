@@ -186,9 +186,7 @@ export function ContentBoard({
           if (sort.by === "created") return new Date(p.created_at).getTime();
           // Ordena pela data EFETIVA (publicação/agendamento/proposta da pauta).
           const ts = scheduleDisplay(p).timestamp;
-          return (
-            ts ?? (sort.dir === "asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY)
-          );
+          return ts ?? (sort.dir === "asc" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
         };
         list.sort((a, b) => {
           const diff = pick(a) - pick(b);

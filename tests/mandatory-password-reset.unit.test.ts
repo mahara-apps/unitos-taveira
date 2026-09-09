@@ -6,8 +6,8 @@ const dialog = readFileSync("src/components/auth/mandatory-password-reset.tsx", 
 
 describe("primeiro acesso", () => {
   it("só confirma o nome quando o servidor retorna a linha atualizada", () => {
-    expect(server).toContain('.select("id, full_name")');
-    expect(server).toContain("if (!updated)");
+    expect(server).toContain("ensureUserProfile");
+    expect(server).toContain("userId: context.userId");
     expect(server).toContain("fullName: updated.full_name");
   });
 
@@ -18,6 +18,7 @@ describe("primeiro acesso", () => {
   });
 
   it("mantém erro acionável e trata sessão expirada", () => {
+    expect(dialog).toContain('rawMessage.startsWith("Unauthorized")');
     expect(dialog).toContain("Sua sessão expirou. Entre novamente para continuar.");
     expect(dialog).toContain('role="alert"');
   });

@@ -161,7 +161,6 @@ export function ScheduleWizard({
   /** Navega para outro item da fila (o pai troca o seed). */
   onQueueNavigate?: (index: number) => void;
 }) {
-
   const qc = useQueryClient();
   const listConnections = useServerFn(listClientSocialConnectionsFn);
   const listMedia = useServerFn(listBrandMediaFn);
@@ -208,7 +207,6 @@ export function ScheduleWizard({
 
   const uploadRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
-
 
   useEffect(() => {
     // Só reseta na transição fechado → aberto para garantir tela limpa
@@ -266,8 +264,6 @@ export function ScheduleWizard({
     if (!hydrating) dirtyRef.current = false;
   }, [hydrating, seed?.postId, open]);
 
-
-
   const connectionsQ = useQuery({
     enabled: open,
     queryKey: ["wizard-connections", brandId, clientId],
@@ -313,10 +309,7 @@ export function ScheduleWizard({
           Object.fromEntries(
             (st.destinations ?? [])
               .filter((d) => d.options && Object.keys(d.options).length > 0)
-              .map((d) => [
-                `${d.connectionId}::${d.format}`,
-                d.options as PlacementOptions,
-              ]),
+              .map((d) => [`${d.connectionId}::${d.format}`, d.options as PlacementOptions]),
           ),
         );
         setSelectedMedia(
@@ -706,7 +699,6 @@ export function ScheduleWizard({
     if (canNext) onQueueNavigate?.((queueIndex ?? 0) + 1);
     else onOpenChange(false);
   }
-
 
   const primaryConn =
     (previewPair ? connByChannel.get(previewPair.channel) : null) ?? connectionsQ.data?.[0];
@@ -1160,8 +1152,7 @@ export function ScheduleWizard({
                           onChange={(next) =>
                             setDestOptions((prev) => {
                               const draft = { ...prev };
-                              if (!next || Object.keys(next).length === 0)
-                                delete draft[destKey(p)];
+                              if (!next || Object.keys(next).length === 0) delete draft[destKey(p)];
                               else draft[destKey(p)] = next;
                               return draft;
                             })
@@ -1600,7 +1591,6 @@ export function ScheduleWizard({
                   kind: m.kind,
                 }))}
                 mediaCount={selectedMedia.length}
-
                 location={locationName}
               />
             </div>
@@ -1693,7 +1683,6 @@ export function ScheduleWizard({
         </AlertDialogContent>
       </AlertDialog>
     </>
-
   );
 }
 

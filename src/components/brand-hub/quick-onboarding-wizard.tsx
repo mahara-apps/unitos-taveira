@@ -127,7 +127,6 @@ export function QuickOnboardingWizard({
     if (!open) setAiOpen(false);
   }, [open, clientId]);
 
-
   const save = useMutation({
     mutationFn: async (patch: Partial<BrandHubData>) => {
       await saveHub({ data: { brandId, clientId, patch } });
@@ -237,7 +236,9 @@ export function QuickOnboardingWizard({
                     setState(fromHub(fresh.data.brand_hub ?? {}, fresh.data.tone_of_voice));
                   }
                   setAiOpen(false);
-                  toast.success("Campos do onboarding atualizados — revise e siga para a próxima etapa.");
+                  toast.success(
+                    "Campos do onboarding atualizados — revise e siga para a próxima etapa.",
+                  );
                 }}
               />
             </div>
@@ -297,7 +298,6 @@ export function QuickOnboardingWizard({
                 Pular esta etapa
               </button>
             )}
-
 
             {!aiOpen && step === 1 && (
               <Button

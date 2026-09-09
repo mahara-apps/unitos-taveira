@@ -24,13 +24,7 @@ import {
 } from "@/lib/module-permissions";
 
 /** Gestão dos perfis de acesso do workspace (presets + perfis personalizados). */
-export function AccessProfilesManager({
-  brandId,
-  canEdit,
-}: {
-  brandId: string;
-  canEdit: boolean;
-}) {
+export function AccessProfilesManager({ brandId, canEdit }: { brandId: string; canEdit: boolean }) {
   const qc = useQueryClient();
   const load = useServerFn(listAccessProfiles);
   const save = useServerFn(saveAccessProfile);

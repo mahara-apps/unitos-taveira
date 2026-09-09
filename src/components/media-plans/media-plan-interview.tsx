@@ -43,7 +43,6 @@ export function MediaPlanInterview({ onSubmit, onCancel, submitting, submitLabel
   // Entrevista em andamento não pode ser perdida por um recarregamento.
   useUnsavedGuard(Object.keys(answers).length > 0 && !submitting);
 
-
   const questions = useMemo(() => visibleQuestions(answers), [answers]);
   const index = Math.min(step, questions.length - 1);
   const current = questions[index] as InterviewQuestion | undefined;
@@ -115,9 +114,7 @@ export function MediaPlanInterview({ onSubmit, onCancel, submitting, submitLabel
                 Pergunta {index + 1} de {questions.length}
               </div>
               <h3 className="mt-1 text-xl font-semibold tracking-tight">{current.question}</h3>
-              {current.help && (
-                <p className="mt-1 text-sm text-muted-foreground">{current.help}</p>
-              )}
+              {current.help && <p className="mt-1 text-sm text-muted-foreground">{current.help}</p>}
             </div>
 
             {current.kind === "single" || current.kind === "multi" ? (

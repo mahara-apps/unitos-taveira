@@ -198,7 +198,6 @@ export const listSystemLogs = createServerFn({ method: "POST" })
     const brandFilter = memberBrandIds.includes(data.brandId) ? [data.brandId] : [];
     if (brandFilter.length === 0) return [];
 
-
     const promises: Promise<SystemLogEntry[]>[] = [];
 
     if (sources.includes("ai_job")) {
