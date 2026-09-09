@@ -1,0 +1,1 @@
+ALTER TABLE public.brand_briefing_versions ADD COLUMN IF NOT EXISTS label text;

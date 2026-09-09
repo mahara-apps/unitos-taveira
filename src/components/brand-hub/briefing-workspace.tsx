@@ -31,6 +31,8 @@ import { cn } from "@/lib/utils";
 import { BriefingImportDialog } from "@/components/brand-hub/briefing-import-dialog";
 
 import { BriefingImportHistory } from "@/components/brand-hub/briefing-import-history";
+import { BriefingVersionHistory } from "@/components/brand-hub/briefing-version-history";
+
 import { DocumentsTab } from "@/components/brand-hub/documents-tab";
 import {
   AlertDialog,
@@ -1748,6 +1750,7 @@ function StackedBrainLayout(props: StackedProps) {
             <div className="space-y-4">
               <DocumentsTab brandId={brandId} clientId={clientId} onImportAi={onImportAi} />
               <BriefingImportHistory brandId={brandId} clientId={clientId} />
+              <BriefingVersionHistory brandId={brandId} clientId={clientId} />
             </div>
           </BrainSection>
 

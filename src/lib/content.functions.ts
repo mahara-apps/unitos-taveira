@@ -173,6 +173,8 @@ export type BoardPost = {
   }> | null;
   design_brief?: string | null;
   ai_phase?: string | null;
+  /** Motivo curto (pt-BR) da última falha de legenda. */
+  ai_phase_error?: string | null;
   approved_at?: string | null;
   approved_by?: string | null;
   rework_notes?: string | null;
@@ -578,7 +580,7 @@ export const loadBoardFn = createServerFn({ method: "POST" })
       context.supabase
         .from("posts")
         .select(
-          "id,title,copy,channels,scheduled_at,published_at,assignee_id,cover_url,stage_id,pipeline_id,position,created_at,updated_at,brand_id,client_id,review_status,ai_phase,rework_notes,priority,format,tags,visible_in_portal,project_id,remind_at,assignees,reference_media,stage_entered_at,target_connection_ids,monthly_plan_topic_id,proposed_at,schedule_status,schedule_approved_at,schedule_client_comment",
+          "id,title,copy,channels,scheduled_at,published_at,assignee_id,cover_url,stage_id,pipeline_id,position,created_at,updated_at,brand_id,client_id,review_status,ai_phase,ai_phase_error,rework_notes,priority,format,tags,visible_in_portal,project_id,remind_at,assignees,reference_media,stage_entered_at,target_connection_ids,monthly_plan_topic_id,proposed_at,schedule_status,schedule_approved_at,schedule_client_comment",
         )
         .eq("brand_id", data.brandId)
         .eq("client_id", data.clientId)
@@ -1678,7 +1680,7 @@ export const getPostDetailFn = createServerFn({ method: "POST" })
         context.supabase
           .from("posts")
           .select(
-            "id,title,copy,channels,scheduled_at,published_at,remind_at,assignee_id,cover_url,stage_id,pipeline_id,position,created_at,updated_at,brand_id,client_id,review_status,reference_media,design_brief,ai_phase,approved_at,approved_by,rework_notes,priority,format,tags,visible_in_portal,internal_briefing,client_briefing,script,references,target_connection_ids,project_id,monthly_plan_topic_id,proposed_at,schedule_status,schedule_approved_at,schedule_client_comment,projects:project_id(id,name,color)",
+            "id,title,copy,channels,scheduled_at,published_at,remind_at,assignee_id,cover_url,stage_id,pipeline_id,position,created_at,updated_at,brand_id,client_id,review_status,reference_media,design_brief,ai_phase,ai_phase_error,approved_at,approved_by,rework_notes,priority,format,tags,visible_in_portal,internal_briefing,client_briefing,script,references,target_connection_ids,project_id,monthly_plan_topic_id,proposed_at,schedule_status,schedule_approved_at,schedule_client_comment,projects:project_id(id,name,color)",
           )
           .eq("id", data.postId)
           .single(),

@@ -74,7 +74,14 @@ export function GeneratePlanWizard({
   brandId: string;
   clientId: string;
   volumetry: PlanVolumetry | undefined;
-  briefings: Array<{ id: string; label: string }>;
+  briefings: Array<{
+    id: string;
+    label: string;
+    completion?: number | null;
+    createdAt?: string;
+    current?: boolean;
+  }>;
+
   pending: boolean;
   loadingMessage: string;
   generationError?: string | null;
@@ -90,6 +97,9 @@ export function GeneratePlanWizard({
   const [step, setStep] = useState(0);
   const [theme, setTheme] = useState("");
   const [briefingId, setBriefingId] = useState("__none");
+  const [showBriefingPicker, setShowBriefingPicker] = useState(false);
+  const currentBriefing = briefings[0] ?? null;
+
   const [org, setOrg] = useState<OrganizationDraft>(requiredOrganization);
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   /** Fonte de verdade da seleção: canal → formato → quantidade. */
@@ -239,22 +249,50 @@ export function GeneratePlanWizard({
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Briefing específico (opcional)
-                  </label>
-                  <Select value={briefingId} onValueChange={setBriefingId}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Nenhum briefing" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Nenhum</SelectItem>
-                      {briefings.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
+                    <p className="text-xs font-medium">
+                      {currentBriefing
+                        ? `Briefing atual do cliente${
+                            currentBriefing.completion == null
+                              ? ""
+                              : ` — ${currentBriefing.completion}% completo`
+                          }`
+                        : "Briefing atual do cliente"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {currentBriefing?.createdAt
+                        ? `Atualizado em ${new Date(currentBriefing.createdAt).toLocaleString("pt-BR")}`
+                        : "A IA usa o briefing do cliente automaticamente."}
+                    </p>
+                  </div>
+                  {briefings.length > 1 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowBriefingPicker((v) => !v)}
+                        className="text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        {showBriefingPicker
+                          ? "Usar o briefing atual"
+                          : "Usar uma versão anterior do briefing"}
+                      </button>
+                      {showBriefingPicker ? (
+                        <Select value={briefingId} onValueChange={setBriefingId}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Briefing atual" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Briefing atual (recomendado)</SelectItem>
+                            {briefings.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
 
                 <div className="h-px bg-border/60" />

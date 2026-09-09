@@ -145,5 +145,18 @@ export const getPortalSessionPermissionsFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ clientId: z.string().uuid() }).parse(input ?? {}))
   .handler(async ({ context, data }) => {
     const { readPortalPermissions } = await import("@/lib/portal-permissions.server");
-    return readPortalPermissions(context.supabase, data.clientId);
+    const perms = await readPortalPermissions(context.supabase, data.clientId);
+    // Recurso "Mensagens" desligado no workspace => a aba não existe para o cliente.
+    const { data: client } = await context.supabase
+      .from("clients")
+      .select("brand_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    const { isFeatureEnabledForBrand } = await import("@/lib/feature-gate.server");
+    const messagesOn = await isFeatureEnabledForBrand(
+      context.supabase,
+      client?.brand_id ?? null,
+      "messages",
+    );
+    return messagesOn ? perms : { ...perms, messages: "none" as const };
   });

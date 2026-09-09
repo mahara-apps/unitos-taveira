@@ -50,6 +50,18 @@ export const Route = createFileRoute("/api/public/hooks/resume-post-content")({
           limit: parsed.data.limit ?? 3,
           userId: null,
         });
+
+        // Rede de segurança: existe só enquanto houver fila. Ao esvaziar, desliga.
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const admin = supabaseAdmin as unknown as import("@supabase/supabase-js").SupabaseClient;
+          await admin.rpc(
+            result.queueEmpty ? "post_copy_queue_drain_off" : "post_copy_queue_drain_on",
+          );
+        } catch (err) {
+          console.warn("[resume-post-content] falha ao ajustar a retomada agendada", err);
+        }
+
         return Response.json(result);
       },
     },

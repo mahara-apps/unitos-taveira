@@ -12,9 +12,11 @@ import { NewThreadDialog } from "@/components/messages/new-thread-dialog";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { usePageHeader } from "@/hooks/use-page-header";
 import { useSessionUser } from "@/hooks/use-session-user";
+import { ensureFeatureEnabled } from "@/lib/feature-flags.gate";
 import { listThreads } from "@/lib/messaging.functions";
 
 export const Route = createFileRoute("/_authenticated/messages")({
+  beforeLoad: () => ensureFeatureEnabled("messages"),
   head: () => ({
     meta: [
       { title: "Mensagens — Unitos" },

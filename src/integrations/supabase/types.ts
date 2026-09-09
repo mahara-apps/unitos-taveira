@@ -2105,6 +2105,7 @@ export type Database = {
           completion: number
           created_at: string
           id: string
+          label: string | null
           origin: string
           snapshot: Json
           status: string
@@ -2117,6 +2118,7 @@ export type Database = {
           completion?: number
           created_at?: string
           id?: string
+          label?: string | null
           origin?: string
           snapshot?: Json
           status?: string
@@ -2129,6 +2131,7 @@ export type Database = {
           completion?: number
           created_at?: string
           id?: string
+          label?: string | null
           origin?: string
           snapshot?: Json
           status?: string
@@ -6349,6 +6352,30 @@ export type Database = {
           },
         ]
       }
+      post_copy_queue_state: {
+        Row: {
+          created_at: string
+          drain_scheduled: boolean
+          id: boolean
+          last_notified_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          drain_scheduled?: boolean
+          id?: boolean
+          last_notified_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          drain_scheduled?: boolean
+          id?: boolean
+          last_notified_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       post_placements: {
         Row: {
           brand_id: string
@@ -6443,6 +6470,7 @@ export type Database = {
         Row: {
           ai_phase: string
           ai_phase_at: string | null
+          ai_phase_error: string | null
           approved_at: string | null
           approved_by: string | null
           assignee_id: string | null
@@ -6496,6 +6524,7 @@ export type Database = {
         Insert: {
           ai_phase?: string
           ai_phase_at?: string | null
+          ai_phase_error?: string | null
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
@@ -6549,6 +6578,7 @@ export type Database = {
         Update: {
           ai_phase?: string
           ai_phase_at?: string | null
+          ai_phase_error?: string | null
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
@@ -8509,6 +8539,8 @@ export type Database = {
         Args: { _client_id?: string; _token?: string }
         Returns: Json
       }
+      post_copy_queue_drain_off: { Args: never; Returns: boolean }
+      post_copy_queue_drain_on: { Args: never; Returns: boolean }
       process_brain_learning_queue: { Args: { _limit?: number }; Returns: Json }
       public_surface_rate_hit: {
         Args: {

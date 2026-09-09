@@ -36,7 +36,7 @@ export function JobDetailModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[90vh] max-h-[90vh] w-[min(1200px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+      <DialogContent className="flex h-[90vh] max-h-[90vh] w-[min(1320px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
         {/* Barra de ações */}
@@ -74,7 +74,7 @@ export function JobDetailModal({
         </div>
 
         {/* Corpo em duas colunas */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 border-t border-border/60 lg:grid-cols-[minmax(0,1fr)_min(600px,45vw)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 border-t border-border/60 lg:grid-cols-[minmax(0,1fr)_min(480px,36vw)]">
           <div className="min-h-0 min-w-0 overflow-y-auto lg:border-r lg:border-border/60">
             {main}
           </div>

@@ -75,6 +75,7 @@ import {
   sleep,
   SPACING_MS,
   BACKOFF_MS,
+  FAILURE_MESSAGE_PT,
   type FailureKind,
 } from "@/lib/ai-failures.server";
 
@@ -347,6 +348,19 @@ export const AI_PHASE = {
 export const RESUMABLE_AI_PHASES = ["idea", "copy_failed", "copy_failed_retryable"] as const;
 
 /**
+ * Patch de falha da legenda: fase + timestamp + motivo curto em pt-BR
+ * (`ai_phase_error`), que é o texto exibido nas telas. Nunca grava texto
+ * técnico cru nem nome de provedor.
+ */
+function failPhasePatch(kind: FailureKind, retryable: boolean) {
+  return {
+    ai_phase: retryable ? AI_PHASE.retryable : AI_PHASE.permanent,
+    ai_phase_at: new Date().toISOString(),
+    ai_phase_error: FAILURE_MESSAGE_PT[kind]?.title ?? FAILURE_MESSAGE_PT.unknown.title,
+  };
+}
+
+/**
  * Gera o conteúdo de uma peça. Idempotente: se a legenda já existe e
  * `force` é falso, não reexecuta nem duplica nada.
  */
@@ -377,7 +391,11 @@ export async function generatePostContent(
   const staleBefore = new Date(Date.now() - STALE_LOCK_MS).toISOString();
   const { data: claimed } = await admin
     .from("posts")
-    .update({ ai_phase: AI_PHASE.running, ai_phase_at: new Date().toISOString() } as never)
+    .update({
+      ai_phase: AI_PHASE.running,
+      ai_phase_at: new Date().toISOString(),
+      ai_phase_error: null,
+    } as never)
     .eq("id", post.id)
     .or(`ai_phase.neq.${AI_PHASE.running},ai_phase_at.lt.${staleBefore},ai_phase_at.is.null`)
     .select("id");
@@ -528,7 +546,7 @@ export async function generatePostContent(
     });
     await admin
       .from("posts")
-      .update({ ai_phase: retryable ? AI_PHASE.retryable : AI_PHASE.permanent } as never)
+      .update(failPhasePatch(kind, retryable) as never)
       .eq("id", post.id);
     return { status: "failed", agent: "agent_prompts", error: msg, kind, retryable };
   }
@@ -611,10 +629,7 @@ export async function generatePostContent(
       const { kind, retryable } = classifyAiError(err);
       await admin
         .from("posts")
-        .update({
-          ai_phase: retryable ? AI_PHASE.retryable : AI_PHASE.permanent,
-          ai_phase_at: new Date().toISOString(),
-        } as never)
+        .update(failPhasePatch(kind, retryable) as never)
         .eq("id", post.id);
       return { status: "failed", agent: "roteirista_social", error: msg, kind, retryable };
     }
@@ -681,7 +696,7 @@ export async function generatePostContent(
     });
     await admin
       .from("posts")
-      .update({ ai_phase: AI_PHASE.permanent, ai_phase_at: new Date().toISOString() } as never)
+      .update(failPhasePatch("config", false) as never)
       .eq("id", post.id);
     return {
       status: "failed",
@@ -747,16 +762,14 @@ export async function generatePostContent(
     }
     await admin
       .from("posts")
-      .update({
-        ai_phase: retryable ? AI_PHASE.retryable : AI_PHASE.permanent,
-        ai_phase_at: new Date().toISOString(),
-      } as never)
+      .update(failPhasePatch(kind, retryable) as never)
       .eq("id", post.id);
     return { status: "failed", agent: "copywriter_senior", error: msg, kind, retryable };
   }
 
   patch.ai_phase = AI_PHASE.ready;
   patch.ai_phase_at = new Date().toISOString();
+  patch.ai_phase_error = null;
   const { error: updErr } = await admin
     .from("posts")
     .update(patch as never)
@@ -869,6 +882,8 @@ export async function resumePendingPostContent(args: {
   retryable: number;
   permanent: number;
   stopped: boolean;
+  /** true quando não sobrou nenhuma peça pendente em todo o banco. */
+  queueEmpty: boolean;
 }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const admin = supabaseAdmin as unknown as import("@supabase/supabase-js").SupabaseClient;
@@ -878,7 +893,10 @@ export async function resumePendingPostContent(args: {
   const staleBefore = new Date(Date.now() - STALE_LOCK_MS).toISOString();
   let stale = admin
     .from("posts")
-    .update({ ai_phase: AI_PHASE.retryable } as never)
+    .update({
+      ai_phase: AI_PHASE.retryable,
+      ai_phase_error: "Geração interrompida — retomando automaticamente",
+    } as never)
     .eq("ai_phase", AI_PHASE.running)
     .is("deleted_at", null)
     .or("copy.is.null,copy.eq.")
@@ -906,5 +924,14 @@ export async function resumePendingPostContent(args: {
   const ids = ((data ?? []) as { id: string }[]).map((p) => p.id);
 
   const res = await generatePostsContentSequential(ids, { userId: args.userId ?? null });
-  return { candidates: ids.length, ...res };
+
+  // Sobrou trabalho em qualquer lugar? Decide se a rede de segurança continua ligada.
+  const { count: remaining } = await admin
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .in("ai_phase", RESUMABLE_AI_PHASES as unknown as string[])
+    .is("deleted_at", null)
+    .or("copy.is.null,copy.eq.");
+
+  return { candidates: ids.length, ...res, queueEmpty: (remaining ?? 0) === 0 };
 }

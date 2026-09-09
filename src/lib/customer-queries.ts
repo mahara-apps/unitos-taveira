@@ -25,6 +25,8 @@ export const customerCoreQuery = ({ brandId, clientId }: Scope) =>
     queryKey: ["customer-core", brandId, clientId] as const,
     queryFn: () => loadCustomerCoreFn({ data: { brandId, clientId } }),
     staleTime: 30_000,
+    // ATENÇÃO: `useSuspenseQuery` IGNORA `enabled`. A validação de escopo
+    // acontece no componente-pai (isUuid) antes de montar a árvore que suspende.
     enabled: isValidScope({ brandId, clientId }),
   });
 

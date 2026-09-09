@@ -194,6 +194,10 @@ export const createJobTaskFn = createServerFn({ method: "POST" })
         projectId: z.string().uuid(),
         jobId: z.string().uuid().nullable().optional(),
         title: z.string().trim().min(1).max(200),
+        // Prazo opcional informado na criação rápida. Antes ficava de fora do
+        // validador e o Zod descartava a chave em silêncio: a tarefa nascia
+        // sem data e a lista não tinha o que exibir.
+        due_at: z.string().min(1).nullable().optional(),
         assigneeId: z.string().uuid().nullable().optional(),
         estimatedMinutes: z.number().int().min(0).nullable().optional(),
       })
@@ -214,6 +218,7 @@ export const createJobTaskFn = createServerFn({ method: "POST" })
         project_id: data.projectId,
         job_id: data.jobId ?? null,
         title: data.title,
+        due_at: data.due_at ?? null,
         status: "todo",
         priority: "medium",
         assignee_id: data.assigneeId ?? context.userId,

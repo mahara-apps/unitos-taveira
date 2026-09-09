@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { displayName, initialsOf as identityInitials } from "@/lib/identity";
+import { cn } from "@/lib/utils";
 
 export type TeamOption = {
   user_id: string;
@@ -38,6 +39,7 @@ export function AssigneePicker({
   disabled,
   placeholder = "Sem responsável",
   className = "h-8 w-[190px]",
+  compact = false,
 }: {
   value: string | null;
   options: TeamOption[];
@@ -45,7 +47,58 @@ export function AssigneePicker({
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  /** Só o avatar no gatilho (listas densas). O nome vem no tooltip nativo. */
+  compact?: boolean;
 }) {
+  const current = value ? options.find((o) => o.user_id === value) : undefined;
+  const currentLabel = current ? optionName(current) : placeholder;
+  if (compact) {
+    return (
+      <Select
+        value={value ?? NONE}
+        disabled={disabled}
+        onValueChange={(v) => onChange(v === NONE ? null : v)}
+      >
+        <SelectTrigger
+          className={cn(
+            "h-8 w-8 shrink-0 justify-center rounded-full border-none p-0 shadow-none focus:ring-1 [&>svg]:hidden",
+            className,
+          )}
+          aria-label={`Responsável: ${currentLabel}`}
+          title={currentLabel}
+        >
+          {current ? (
+            <Avatar className="h-6 w-6">
+              {current.avatar_url ? <AvatarImage src={current.avatar_url} alt="" /> : null}
+              <AvatarFallback className="text-[9px]">
+                {identityInitials({ full_name: current.full_name, email: current.email ?? null })}
+              </AvatarFallback>
+            </Avatar>
+          ) : (
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-[10px] text-muted-foreground">
+              —
+            </span>
+          )}
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>{placeholder}</SelectItem>
+          {options.map((o) => (
+            <SelectItem key={o.user_id} value={o.user_id}>
+              <span className="flex items-center gap-2">
+                <Avatar className="h-5 w-5">
+                  {o.avatar_url ? <AvatarImage src={o.avatar_url} alt="" /> : null}
+                  <AvatarFallback className="text-[9px]">
+                    {identityInitials({ full_name: o.full_name, email: o.email ?? null })}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate">{optionName(o)}</span>
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
   return (
     <Select
       value={value ?? NONE}

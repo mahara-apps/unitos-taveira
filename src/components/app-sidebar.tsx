@@ -77,7 +77,7 @@ const messagesItem: NavItem = {
   title: "Mensagens",
   url: "/messages",
   icon: MessagesSquare,
-  featureKey: "chat",
+  featureKey: "messages",
   badge: "messages-unread",
 };
 

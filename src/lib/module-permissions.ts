@@ -57,6 +57,7 @@ export const MODULE_KEYS = [
   "ai",
   "brain",
   "chat",
+  "messages",
   "portal",
 ] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
@@ -166,11 +167,19 @@ export const MODULES: ModuleDefinition[] = [
   },
   {
     key: "chat",
-    label: "Chat",
+    label: "Chat com IA",
     group: "Inteligência",
-    description: "Conversas internas e com a IA.",
-    urls: ["/chat", "/messages"],
+    description: "Copiloto de IA para consultas internas.",
+    urls: ["/chat"],
   },
+  {
+    key: "messages",
+    label: "Mensagens",
+    group: "Operação",
+    description: "Central de mensagens da equipe e conversas com clientes.",
+    urls: ["/messages"],
+  },
+
   {
     key: "connections",
     label: "Conexões e canais",

@@ -153,17 +153,50 @@ export const listBriefingsForPlanFn = createServerFn({ method: "POST" })
     // FASE 2: as versões do briefing vivem em brand_briefing_versions.
     const { data: rows, error } = await context.supabase
       .from("brand_briefing_versions")
-      .select("id, created_at, completion, origin")
+      .select("id, created_at, completion, origin, label")
       .eq("brand_id", data.brandId)
       .eq("client_id", data.clientId)
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) throw error;
-    return (rows ?? []).map((r) => {
+    return (rows ?? []).map((r, idx) => {
       const when = new Date(r.created_at as string).toLocaleString("pt-BR");
       const pct = r.completion == null ? "" : ` — ${r.completion}%`;
-      return { id: r.id as string, label: `Versão ${when}${pct}` };
+      const named = typeof r.label === "string" && r.label.trim() ? r.label.trim() : null;
+      return {
+        id: r.id as string,
+        label: named ? `${named} · ${when}${pct}` : `Versão ${when}${pct}`,
+        name: named,
+        completion: (r.completion as number | null) ?? null,
+        createdAt: r.created_at as string,
+        current: idx === 0,
+      };
     });
+  });
+
+/** Renomeia uma versão do briefing no histórico (escopo do cliente). */
+export const renameBriefingVersionFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z
+      .object({
+        brandId: z.string().uuid(),
+        clientId: z.string().uuid(),
+        versionId: z.string().uuid(),
+        name: z.string().trim().max(80).nullable(),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const name = data.name && data.name.length ? data.name : null;
+    const { error } = await context.supabase
+      .from("brand_briefing_versions")
+      .update({ label: name } as never)
+      .eq("id", data.versionId)
+      .eq("brand_id", data.brandId)
+      .eq("client_id", data.clientId);
+    if (error) throw error;
+    return { ok: true, name };
   });
 
 /* ---------- AI generation ---------- */

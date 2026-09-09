@@ -73,6 +73,7 @@ export const SIDEBAR_ALLOWED_URLS: Record<AccessRole, ReadonlySet<string>> = {
     "/monthly-plan",
     "/brain",
     "/chat",
+    "/messages",
     "/settings/team",
     "/notifications",
     "/settings",
@@ -89,6 +90,7 @@ export const SIDEBAR_ALLOWED_URLS: Record<AccessRole, ReadonlySet<string>> = {
     "/media-plans",
     "/brain",
     "/chat",
+    "/messages",
     "/notifications",
   ]),
 };

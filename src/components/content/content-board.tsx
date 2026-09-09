@@ -31,6 +31,7 @@ import { Paperclip, ImageIcon, CalendarDays, UserCircle2, Sparkles } from "lucid
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { copyStatusOf } from "@/lib/post-copy-status";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -724,6 +725,7 @@ function PostCard({
     for (const pl of post.placements ?? []) push(normalizeContentFormat(pl.format));
     return out.slice(0, 3);
   })();
+  const copyStatus = copyStatusOf(post);
   const snippet = (post.copy ?? "")
     .replace(/^###\s+\w+\s*$/gm, "")
     .replace(/\s+/g, " ")
@@ -758,6 +760,7 @@ function PostCard({
         post.sla_status === "at_risk" ||
         priority ||
         missingDestination ||
+        copyStatus.kind !== "ready" ||
         formatKeys.length > 0 ||
         channelDefs.length > 0 ? (
           <div className="mb-1 flex flex-wrap items-center gap-1">
@@ -783,6 +786,18 @@ function PostCard({
                 title={`${Math.round((post.sla_progress ?? 0) * 100)}% do SLA consumido`}
               >
                 <AlarmClock className="h-2.5 w-2.5" /> Próximo de vencer
+              </span>
+            ) : null}
+            {copyStatus.kind !== "ready" ? (
+              <span
+                className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-[8px] font-semibold uppercase tracking-wider ${
+                  copyStatus.kind === "failed"
+                    ? "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                }`}
+                title={copyStatus.hint}
+              >
+                <Sparkles className="h-2.5 w-2.5" /> {copyStatus.label}
               </span>
             ) : null}
             {channelDefs.map((c) => {

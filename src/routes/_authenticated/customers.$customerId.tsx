@@ -34,6 +34,8 @@ import { AccountManagementTab } from "@/components/customer/account-management-t
 import { BriefingWorkspace } from "@/components/brand-hub/briefing-workspace";
 import { QuickOnboardingWizard } from "@/components/brand-hub/quick-onboarding-wizard";
 import { getBrandHub } from "@/lib/brand-hub.functions";
+import { RouteError } from "@/components/route-error";
+import { AppLoading } from "@/components/app-loading";
 import { computeBriefingCompletion } from "@/lib/briefing-progress";
 import { usePageHeader } from "@/hooks/use-page-header";
 import {
@@ -92,6 +94,10 @@ export const Route = createFileRoute("/_authenticated/customers/$customerId")({
     }
   },
 
+  // Nenhuma falha desta tela pode derrubar o shell: o erro é contido aqui,
+  // com autorrecuperação única e retry manual.
+  errorComponent: RouteError,
+  pendingComponent: () => <AppLoading label="Abrindo o cliente…" />,
   component: CustomerDetail,
 });
 

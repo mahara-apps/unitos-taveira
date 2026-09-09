@@ -50,7 +50,7 @@ export type WorkItemRowProps = {
   /** Texto auxiliar discreto (tempo apontado, canal, etc.). */
   meta?: ReactNode;
   assignee?: ReactNode;
-  dateLabel?: string | null;
+  dateLabel?: ReactNode;
   overdue?: boolean;
   status?: ReactNode;
   actions?: ReactNode;

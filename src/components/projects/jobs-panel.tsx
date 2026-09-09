@@ -47,8 +47,9 @@ import { CommentThread } from "./comment-thread";
 import { ContextTabs } from "./context-tabs";
 import { JobDetailModal } from "./job-detail-modal";
 import { AssigneeAvatar, AssigneePicker, type TeamOption } from "./assignee-picker";
+import { DueDateChip } from "./due-date-chip";
 import { StatusPicker } from "./status-picker";
-import { WorkItemRow, formatRange, formatShortDate, isOverdue } from "./work-item-row";
+import { WorkItemRow, formatShortDate, isOverdue } from "./work-item-row";
 import { DueMenuBlock, VisibilityMenuBlock } from "./work-filter-menu";
 import {
   isItemDone,
@@ -357,17 +358,22 @@ export function JobsPanel({
         }
         assignee={
           <AssigneePicker
+            compact
             value={t.assignee_id}
             options={team}
-            className="h-8 w-[46px] justify-center px-1 [&>svg]:hidden sm:w-[150px] sm:justify-between sm:px-3 sm:[&>svg]:block"
-            placeholder="—"
+            placeholder="Sem responsável"
             onChange={(userId) =>
               patchTaskMut.mutate({ taskId: t.id, patch: { assignee_id: userId } })
             }
           />
         }
-        dateLabel={formatRange(t.start_date, t.due_at)}
-        overdue={isOverdue(t.due_at, done)}
+        dateLabel={
+          <DueDateChip
+            value={t.due_at}
+            overdue={isOverdue(t.due_at, done)}
+            onChange={(iso) => patchTaskMut.mutate({ taskId: t.id, patch: { due_at: iso } })}
+          />
+        }
         status={
           t.priority && t.priority !== "medium" ? (
             <Badge variant="outline" className="h-5 text-[10px]">

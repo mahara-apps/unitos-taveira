@@ -193,7 +193,59 @@ WITH checks AS (
                          WHERE schemaname = 'public' AND tablename = 'critical_action_events') >= 1
               THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
-  SELECT 48, 'identidade: nenhuma conta sem perfil',
+  SELECT 48, 'Legendas: motivo de falha e retomada por evento (sem polling)',
+         CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'posts'
+                              AND column_name = 'ai_phase_error')
+              THEN 'coluna presente' ELSE 'coluna ausente' END
+         || ' / disparo=' ||
+         CASE WHEN EXISTS (SELECT 1 FROM pg_trigger
+                            WHERE tgname = 'trg_post_copy_queue_notify' AND NOT tgisinternal)
+              THEN 'trigger ativo' ELSE 'trigger ausente' END
+         || ' / retomada=' ||
+         CASE WHEN to_regprocedure('public.post_copy_queue_drain_on()') IS NOT NULL
+                   AND to_regprocedure('public.post_copy_queue_drain_off()') IS NOT NULL
+              THEN 'sob demanda' ELSE 'ausente' END,
+         CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'posts'
+                              AND column_name = 'ai_phase_error')
+                   AND EXISTS (SELECT 1 FROM pg_trigger
+                                WHERE tgname = 'trg_post_copy_queue_notify' AND NOT tgisinternal)
+                   AND to_regprocedure('public.post_copy_queue_drain_on()') IS NOT NULL
+                   AND to_regprocedure('public.post_copy_queue_drain_off()') IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'post-content-resume')
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 49, 'Mensagens: recurso disponível e ligado por padrão',
+         CASE WHEN EXISTS (SELECT 1 FROM public.feature_catalog
+                            WHERE key = 'messages' AND default_enabled)
+              THEN 'recurso presente' ELSE 'recurso ausente' END
+         || ' / perfis=' ||
+         CASE WHEN (public.access_profiles_system_defaults() -> 6 -> 'permissions') ? 'messages'
+              THEN 'ok' ELSE 'sem nível' END,
+         CASE WHEN EXISTS (SELECT 1 FROM public.feature_catalog
+                            WHERE key = 'messages' AND default_enabled)
+                   AND (public.access_profiles_system_defaults() -> 6 -> 'permissions') ? 'messages'
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+  SELECT 50, 'Briefing: versões do histórico podem ser nomeadas',
+         CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public'
+                              AND table_name = 'brand_briefing_versions'
+                              AND column_name = 'label')
+              THEN 'coluna presente' ELSE 'coluna ausente' END,
+         CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public'
+                              AND table_name = 'brand_briefing_versions'
+                              AND column_name = 'label')
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+
+
+
+
+
+  SELECT 51, 'identidade: nenhuma conta sem perfil',
          (SELECT count(*)::text
             FROM auth.users u
             LEFT JOIN public.user_profiles p ON p.id = u.id
@@ -279,7 +331,7 @@ WITH checks AS (
                'briefing_import_runs','briefing_import_steps','client_portal_access',
                'client_request_events','client_requests','installation',
                'installation_meta_app','message_thread_participants','message_threads',
-               'messages','portal_notification_prefs','post_client_comments',
+               'messages','portal_notification_prefs','post_client_comments','post_copy_queue_state',
                'client_ad_accounts','project_participants','user_login_events','work_comments',
                'work_links','work_statuses'
              ]) AS t
@@ -293,7 +345,7 @@ WITH checks AS (
              'briefing_import_runs','briefing_import_steps','client_portal_access',
              'client_request_events','client_requests','installation',
              'installation_meta_app','message_thread_participants','message_threads',
-             'messages','portal_notification_prefs','post_client_comments',
+             'messages','portal_notification_prefs','post_client_comments','post_copy_queue_state',
              'client_ad_accounts','project_participants','user_login_events','work_comments',
              'work_links','work_statuses'
            ]) AS t

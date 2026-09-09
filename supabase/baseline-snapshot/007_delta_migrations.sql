@@ -4162,3 +4162,275 @@ FROM auth.users u
 LEFT JOIN public.user_profiles p ON p.id = u.id
 WHERE p.id IS NULL
 ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- 20260909115900_9e6e667b-5437-4925-b2cc-2249f8073239.sql
+-- ---------------------------------------------------------------------------
+-- lovable-cron-fallback-reviewed: 1440 runs/day; fila de legendas de conteúdo: worker HTTP externo (agente de IA) que precisa concluir a legenda em ~1min após a aprovação da pauta, mesmo padrão do briefing-import-worker já existente
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS ai_phase_error text;
+
+COMMENT ON COLUMN public.posts.ai_phase_error IS
+  'Motivo da última falha de geração de legenda (classificação curta em pt-BR). NULL quando concluída.';
+
+UPDATE public.posts
+   SET ai_phase = 'copy_failed_retryable'
+ WHERE ai_phase = 'copy_running'
+   AND deleted_at IS NULL
+   AND coalesce(copy, '') = ''
+   AND (ai_phase_at IS NULL OR ai_phase_at < now() - interval '10 minutes');
+
+DO $$
+DECLARE
+  v_url text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    RAISE NOTICE 'pg_cron ausente: agendamento post-content-resume nao criado';
+    RETURN;
+  END IF;
+
+  SELECT regexp_replace(command, '.*url := ''([^'']+)/api/public/.*', '\1')
+    INTO v_url
+    FROM cron.job
+   WHERE command LIKE '%/api/public/%'
+   ORDER BY jobname
+   LIMIT 1;
+
+  IF v_url IS NULL OR v_url = '' THEN
+    RAISE NOTICE 'URL da instalacao nao encontrada: post-content-resume nao criado';
+    RETURN;
+  END IF;
+
+  PERFORM cron.unschedule('post-content-resume')
+    WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'post-content-resume');
+
+  PERFORM cron.schedule(
+    'post-content-resume',
+    '* * * * *',
+    format($fmt$select net.http_post(
+        url := %L,
+        headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', public.cron_secret()),
+        body := '{"limit":3}'::jsonb
+      );$fmt$, v_url || '/api/public/hooks/resume-post-content')
+  );
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- 20260909121646_e8de3737-9d61-4fcc-bc7b-a24cf9593553.sql
+-- ---------------------------------------------------------------------------
+INSERT INTO public.feature_catalog (key, name, description, category, icon, default_enabled, is_available, is_core, sort_order)
+VALUES ('messages', 'Mensagens', 'Central de mensagens entre time, clientes e portal.', 'Gestão', 'MessagesSquare', true, true, false, 105)
+ON CONFLICT (key) DO UPDATE
+  SET name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      category = EXCLUDED.category,
+      icon = EXCLUDED.icon,
+      default_enabled = true,
+      is_available = true,
+      sort_order = EXCLUDED.sort_order,
+      updated_at = now();
+
+INSERT INTO public.brand_features (brand_id, feature_key, enabled)
+SELECT b.id, 'messages', true FROM public.brands b
+ON CONFLICT (brand_id, feature_key) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- 20260909123027_58784256-1ee8-4436-b799-f1b9ee10eea5.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.access_profiles_system_defaults()
+ RETURNS jsonb
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT '[
+    {"key":"atendimento","name":"Atendimento","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"view","approvals":"full","media_plans":"view","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","messages":"full","portal":"view"}},
+    {"key":"criativo","name":"Criativo","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"own","content":"full","calendar":"view","approvals":"own","media_plans":"none","connections":"none","reports":"none","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","messages":"full","portal":"none"}},
+    {"key":"trafego","name":"Tráfego","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"own","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","messages":"full","portal":"none"}},
+    {"key":"midia","name":"Mídia","permissions":{"clients":"view","briefing":"view","projects":"view","tasks":"own","planning":"view","content":"view","calendar":"view","approvals":"view","media_plans":"full","connections":"view","reports":"full","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","messages":"full","portal":"none"}},
+    {"key":"producao","name":"Produção","permissions":{"clients":"view","briefing":"view","projects":"own","tasks":"full","planning":"view","content":"own","calendar":"full","approvals":"own","media_plans":"none","connections":"none","reports":"view","users":"none","settings":"none","ai":"own","brain":"view","chat":"full","messages":"full","portal":"none"}},
+    {"key":"financeiro","name":"Financeiro","permissions":{"clients":"view","briefing":"none","projects":"view","tasks":"view","planning":"view","content":"none","calendar":"view","approvals":"none","media_plans":"view","connections":"none","reports":"full","users":"none","settings":"none","ai":"none","brain":"none","chat":"view","messages":"full","portal":"none"}},
+    {"key":"total","name":"Total","permissions":{"clients":"full","briefing":"full","projects":"full","tasks":"full","planning":"full","content":"full","calendar":"full","approvals":"full","media_plans":"full","connections":"full","reports":"full","users":"full","settings":"full","ai":"full","brain":"full","chat":"full","messages":"full","portal":"full"}}
+  ]'::jsonb;
+$function$;
+
+-- Perfis já existentes herdam o nível de Mensagens do Chat (padrão "full" quando ausente).
+UPDATE public.access_profiles
+   SET permissions = permissions || jsonb_build_object('messages', COALESCE(permissions ->> 'chat', 'full'))
+ WHERE NOT (permissions ? 'messages');
+
+-- Overrides individuais também herdam do Chat quando existirem.
+UPDATE public.brand_members
+   SET module_permissions = module_permissions || jsonb_build_object('messages', module_permissions ->> 'chat')
+ WHERE module_permissions ? 'chat' AND NOT (module_permissions ? 'messages');
+
+-- ---------------------------------------------------------------------------
+-- 20260909124631_1afbb214-5574-4d0f-8098-b921291d4b36.sql
+-- ---------------------------------------------------------------------------
+-- lovable-cron-fallback-reviewed: 288 runs/day; wake-on-enqueue trigger is the primary path; this drain job is created only while pending copy rows exist and unschedules itself after drain, so idle days run 0 times
+CREATE TABLE IF NOT EXISTS public.post_copy_queue_state (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id),
+  last_notified_at timestamptz,
+  drain_scheduled boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT ALL ON public.post_copy_queue_state TO service_role;
+GRANT SELECT ON public.post_copy_queue_state TO authenticated;
+
+ALTER TABLE public.post_copy_queue_state ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Super admin vê o estado da fila de legendas" ON public.post_copy_queue_state;
+CREATE POLICY "Super admin vê o estado da fila de legendas"
+  ON public.post_copy_queue_state FOR SELECT TO authenticated
+  USING (public.is_super_admin(auth.uid()));
+
+INSERT INTO public.post_copy_queue_state (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
+
+DROP TRIGGER IF EXISTS trg_post_copy_queue_state_updated_at ON public.post_copy_queue_state;
+CREATE TRIGGER trg_post_copy_queue_state_updated_at
+  BEFORE UPDATE ON public.post_copy_queue_state
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE OR REPLACE FUNCTION public.post_copy_queue_drain_on()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_url text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    RETURN false;
+  END IF;
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'post-content-drain') THEN
+    UPDATE public.post_copy_queue_state SET drain_scheduled = true WHERE id;
+    RETURN true;
+  END IF;
+
+  SELECT rtrim(app_url, '/') INTO v_url FROM public.installation LIMIT 1;
+  IF v_url IS NULL OR public.cron_secret() IS NULL THEN
+    RETURN false;
+  END IF;
+
+  PERFORM cron.schedule(
+    'post-content-drain',
+    '*/5 * * * *',
+    format($fmt$select net.http_post(
+        url := %L,
+        headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', public.cron_secret()),
+        body := '{}'::jsonb
+      );$fmt$, v_url || '/api/public/hooks/resume-post-content')
+  );
+  UPDATE public.post_copy_queue_state SET drain_scheduled = true WHERE id;
+  RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.post_copy_queue_drain_off()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron')
+     AND EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'post-content-drain') THEN
+    PERFORM cron.unschedule('post-content-drain');
+  END IF;
+  UPDATE public.post_copy_queue_state SET drain_scheduled = false WHERE id;
+  RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.post_copy_queue_notify()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_url text;
+  v_fresh boolean;
+BEGIN
+  IF NEW.deleted_at IS NOT NULL THEN RETURN NEW; END IF;
+  IF coalesce(NEW.copy, '') <> '' THEN RETURN NEW; END IF;
+  IF coalesce(NEW.ai_phase, 'idea') NOT IN ('idea', 'copy_failed', 'copy_failed_retryable') THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND coalesce(OLD.ai_phase, 'idea') = coalesce(NEW.ai_phase, 'idea')
+     AND coalesce(OLD.copy, '') = coalesce(NEW.copy, '') THEN
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.post_copy_queue_state
+     SET last_notified_at = now()
+   WHERE id
+     AND (last_notified_at IS NULL OR last_notified_at < now() - interval '20 seconds')
+  RETURNING true INTO v_fresh;
+
+  PERFORM public.post_copy_queue_drain_on();
+
+  IF NOT coalesce(v_fresh, false) THEN RETURN NEW; END IF;
+
+  SELECT rtrim(app_url, '/') INTO v_url FROM public.installation LIMIT 1;
+  IF v_url IS NULL OR public.cron_secret() IS NULL THEN RETURN NEW; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_net') THEN RETURN NEW; END IF;
+
+  PERFORM net.http_post(
+    url := v_url || '/api/public/hooks/resume-post-content',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', public.cron_secret()
+    ),
+    body := '{}'::jsonb
+  );
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_post_copy_queue_notify ON public.posts;
+CREATE TRIGGER trg_post_copy_queue_notify
+  AFTER INSERT OR UPDATE OF ai_phase, copy ON public.posts
+  FOR EACH ROW EXECUTE FUNCTION public.post_copy_queue_notify();
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron')
+     AND EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'post-content-resume') THEN
+    PERFORM cron.unschedule('post-content-resume');
+  END IF;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260909124826_9469c003-0d2a-4c69-b261-b6fcdf2defd8.sql
+-- ---------------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION public.post_copy_queue_drain_on() FROM anon, authenticated, public;
+REVOKE EXECUTE ON FUNCTION public.post_copy_queue_drain_off() FROM anon, authenticated, public;
+REVOKE EXECUTE ON FUNCTION public.post_copy_queue_notify() FROM anon, authenticated, public;
+GRANT EXECUTE ON FUNCTION public.post_copy_queue_drain_on() TO service_role;
+GRANT EXECUTE ON FUNCTION public.post_copy_queue_drain_off() TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260909125050_71db4d5d-4841-4a86-b7fb-4316d201a1d4.sql
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+     WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'posts'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
+  END IF;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260909142218_c1bb2c1a-1a99-45fc-8e9a-99e38a5cca87.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.brand_briefing_versions ADD COLUMN IF NOT EXISTS label text;

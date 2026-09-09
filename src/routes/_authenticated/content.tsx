@@ -67,6 +67,7 @@ import {
   type ViewMode,
 } from "@/components/content/content-toolbar";
 import { ContentList } from "@/components/content/content-list";
+import { CopyQueueBar } from "@/components/content/copy-queue-bar";
 import { BulkStageBar } from "@/components/content/bulk-stage-bar";
 import { ContentTrashDialog } from "@/components/content/content-trash-dialog";
 import { listProjectsFn } from "@/lib/tasks.functions";
@@ -538,6 +539,12 @@ function BoardView({
           // "selecionar todos os visíveis" respeitando os filtros ativos).
           if (next) setView("list");
         }}
+      />
+      <CopyQueueBar
+        brandId={brandId}
+        clientId={clientId}
+        posts={data.posts}
+        invalidateKey={queryKey}
       />
       {selectionMode ? (
         <BulkStageBar
