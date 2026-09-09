@@ -48,4 +48,10 @@ describe("BYOK: cada instalação usa o Supabase Access Token do próprio client
     expect(form).toContain("supabaseManagementToken");
     expect(verify).toContain("requires_own_supabase_token");
   });
+
+  it("valida banco e leitura de chaves antes de guardar um novo token", () => {
+    expect(manager).toContain("assertSupabaseManagementAccess");
+    expect(manager).toContain("const keys = await management.keys()");
+    expect(manager).toContain("incomingSupabaseToken");
+  });
 });

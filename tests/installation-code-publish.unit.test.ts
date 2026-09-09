@@ -26,9 +26,9 @@ describe("repositório da instalação", () => {
   });
 
   it("recusa o MASTER como destino (por domínio e por slug)", () => {
-    expect(resolveInstallationRepo({ gitRepoUrl: "https://unitos-master.lovable.app/x/y" }).ok).toBe(
-      false,
-    );
+    expect(
+      resolveInstallationRepo({ gitRepoUrl: "https://unitos-master.lovable.app/x/y" }).ok,
+    ).toBe(false);
     expect(
       resolveInstallationRepo({
         gitRepoUrl: `https://github.com/${DEFAULT_MASTER_REPO}`,
@@ -77,6 +77,7 @@ describe("createCodeClient", () => {
       if (method !== "GET") posted.push(`${method} ${url}`);
       if (url.includes("/repos/mahara-apps/unitos-master/git/trees")) {
         return Response.json({
+          sha: "master_tree",
           tree: [
             { path: "a.ts", type: "blob", mode: "100644", sha: "s1" },
             { path: "b.ts", type: "blob", mode: "100644", sha: "s2" },
@@ -92,7 +93,8 @@ describe("createCodeClient", () => {
         });
       }
       if (url.includes("/git/ref/heads/main")) return Response.json({ object: { sha: "dest" } });
-      if (url.includes("/git/blobs/")) return Response.json({ content: "eA==", encoding: "base64" });
+      if (url.includes("/git/blobs/"))
+        return Response.json({ content: "eA==", encoding: "base64" });
       if (url.includes("/git/blobs")) return Response.json({ sha: "novo" });
       if (url.includes("/git/trees")) return Response.json({ sha: "tree_new" });
       if (url.includes("/git/commits")) return Response.json({ sha: "commit_new" });
@@ -106,6 +108,41 @@ describe("createCodeClient", () => {
     // Objetos compartilhados: o SHA do MASTER é referenciado direto, sem
     // recriar blob no destino.
     expect(posted.filter((p) => p.includes("/git/blobs")).length).toBe(0);
+  });
+
+  it("reaproveita a árvore raiz do MASTER sem remontar milhares de entradas", async () => {
+    const posted: Array<{ url: string; body?: Record<string, unknown> }> = [];
+    const c = client(async (url: string, init?: RequestInit) => {
+      const body = init?.body
+        ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+        : undefined;
+      if ((init?.method ?? "GET") !== "GET") posted.push({ url, body });
+      if (url.includes("/repos/mahara-apps/unitos-master/git/trees/master_sha")) {
+        return Response.json({
+          sha: "master_tree",
+          tree: [
+            { path: "a.ts", type: "blob", mode: "100644", sha: "s1" },
+            { path: "b.ts", type: "blob", mode: "100644", sha: "s2" },
+          ],
+        });
+      }
+      if (url.includes("/repos/acme/unitos-pitada/git/trees/dest")) {
+        return Response.json({ tree: [{ path: "a.ts", type: "blob", mode: "100644", sha: "s1" }] });
+      }
+      if (url.includes("/repos/acme/unitos-pitada/git/trees/master_tree")) {
+        return Response.json({ sha: "master_tree" });
+      }
+      if (url.includes("/git/ref/heads/main")) return Response.json({ object: { sha: "dest" } });
+      if (url.includes("/git/commits")) return Response.json({ sha: "commit_new" });
+      return Response.json({ ok: true });
+    });
+
+    const res = await c.publishSnapshot("master_sha");
+    expect(res).toMatchObject({ ok: true, commitSha: "commit_new", changed: 1 });
+    expect(posted.some((call) => call.url.endsWith("/git/trees"))).toBe(false);
+    expect(posted.find((call) => call.url.endsWith("/git/commits"))?.body).toMatchObject({
+      tree: "master_tree",
+    });
   });
 
   it("não gera commit quando o repositório já está na versão do MASTER", async () => {
@@ -181,9 +218,9 @@ describe("publicação em repositório sem objetos compartilhados", () => {
     const again = await second.client.publishSnapshot("master_sha", { blobMap: saved });
     expect(again.ok).toBe(true);
     // Nada é recopiado: nenhum POST de blob na segunda rodada.
-    expect(second.posted.filter((p) => p.includes("POST") && p.endsWith("/git/blobs"))).toHaveLength(
-      0,
-    );
+    expect(
+      second.posted.filter((p) => p.includes("POST") && p.endsWith("/git/blobs")),
+    ).toHaveLength(0);
   });
 
   it("devolve `partial` ao esgotar o orçamento de tempo, sem commitar", async () => {
@@ -203,9 +240,8 @@ describe("publicação em repositório sem objetos compartilhados", () => {
   });
 });
 
-describe("objetos do MASTER apenas parcialmente disponíveis", () => {
-  it("recua para cópia de blobs quando a árvore compartilhada é recusada (422)", async () => {
-    const posted: string[] = [];
+describe("resiliência ao montar a árvore", () => {
+  it("tenta novamente quando o GitHub devolve 502 temporário", async () => {
     let treeAttempts = 0;
     const c = createCodeClient({
       token: "gh",
@@ -213,17 +249,17 @@ describe("objetos do MASTER apenas parcialmente disponíveis", () => {
       repo: "unitos-pitada",
       masterRepo: "mahara-apps/unitos-master",
       fetchImpl: (async (url: string, init?: RequestInit) => {
-        const method = init?.method ?? "GET";
-        if (method !== "GET") posted.push(`${method} ${url}`);
         if (url.includes("/repos/mahara-apps/unitos-master/git/trees")) {
           return Response.json({
             tree: [{ path: "a.ts", type: "blob", mode: "100644", sha: "s1" }],
           });
         }
-        if (url.includes("/repos/acme/unitos-pitada/git/trees/")) return Response.json({ tree: [] });
+        if (url.includes("/repos/acme/unitos-pitada/git/trees/"))
+          return Response.json({ tree: [] });
         if (url.includes("/git/ref/heads/main")) return Response.json({ object: { sha: "dest" } });
-        // Probe passa (objeto existe), mas a árvore é recusada.
-        if (url.includes("/repos/acme/unitos-pitada/git/blobs/")) return Response.json({ sha: "s1" });
+        if (url.includes("/repos/acme/unitos-pitada/git/blobs/")) {
+          return new Response("not found", { status: 404 });
+        }
         if (url.includes("/repos/mahara-apps/unitos-master/git/blobs/")) {
           return Response.json({ content: "eA==", encoding: "base64" });
         }
@@ -231,8 +267,8 @@ describe("objetos do MASTER apenas parcialmente disponíveis", () => {
         if (url.endsWith("/git/trees")) {
           treeAttempts += 1;
           if (treeAttempts === 1) {
-            return new Response(JSON.stringify({ message: "tree.sha s1 is not a valid blob" }), {
-              status: 422,
+            return new Response(JSON.stringify({ message: "Bad Gateway" }), {
+              status: 502,
             });
           }
           return Response.json({ sha: "tree_new" });
@@ -245,6 +281,93 @@ describe("objetos do MASTER apenas parcialmente disponíveis", () => {
     expect(res.ok).toBe(true);
     expect(res.commitSha).toBe("commit_new");
     expect(treeAttempts).toBe(2);
-    expect(posted.some((p) => p.includes("POST") && p.endsWith("/git/blobs"))).toBe(true);
+  }, 10_000);
+
+  it("explica instabilidade persistente sem acusar credencial", async () => {
+    const c = client(async (url: string, init?: RequestInit) => {
+      if (url.includes("/repos/mahara-apps/unitos-master/git/trees")) {
+        return Response.json({
+          tree: [{ path: "a.ts", type: "blob", mode: "100644", sha: "s1" }],
+        });
+      }
+      if (url.includes("/repos/acme/unitos-pitada/git/trees/")) return Response.json({ tree: [] });
+      if (url.includes("/git/ref/heads/main")) return Response.json({ object: { sha: "dest" } });
+      if (url.includes("/repos/acme/unitos-pitada/git/blobs/")) {
+        return new Response("not found", { status: 404 });
+      }
+      if (url.includes("/repos/mahara-apps/unitos-master/git/blobs/")) {
+        return Response.json({ content: "eA==", encoding: "base64" });
+      }
+      if (url.endsWith("/git/blobs")) return Response.json({ sha: "copied" });
+      if (url.endsWith("/git/trees") && init?.method === "POST") {
+        return new Response("Bad Gateway", { status: 502 });
+      }
+      return Response.json({ ok: true });
+    });
+
+    const res = await c.publishSnapshot("master_sha");
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("Instabilidade temporária do GitHub");
+    expect(res.error).not.toMatch(/token|credencial|permiss/i);
+  }, 10_000);
+});
+
+describe("cota do GitHub e credencial do MASTER", () => {
+  const withMaster = (fetchImpl: unknown) =>
+    createCodeClient({
+      token: "gh-instalacao",
+      masterToken: "gh-master",
+      owner: "acme",
+      repo: "unitos-pitada",
+      masterRepo: "mahara-apps/unitos-master",
+      fetchImpl: fetchImpl as never,
+    });
+
+  it("lê o código do MASTER com a credencial do MASTER e grava no destino com a da instalação", async () => {
+    const seen: Array<{ url: string; auth: string | null; method: string }> = [];
+    const c = withMaster(async (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers as HeadersInit);
+      seen.push({
+        url,
+        auth: headers.get("authorization"),
+        method: (init?.method ?? "GET").toUpperCase(),
+      });
+      if (url.includes("/repos/acme/unitos-pitada")) return new Response("no", { status: 404 });
+      return Response.json({ full_name: "acme/unitos-pitada" });
+    });
+    await c.ensureRepo();
+    await c.permissions();
+    const masterRead = seen.find((s) => s.method === "GET" && s.url.includes("unitos-master"));
+    const generate = seen.find((s) => s.url.includes("/generate"));
+    expect(masterRead?.auth).toBe("Bearer gh-master");
+    expect(generate?.auth).toBe("Bearer gh-instalacao");
+  });
+
+  it("limite de uso do GitHub é explicado como cota, não como falta de permissão", async () => {
+    const reset = Math.floor(Date.now() / 1000) + 900;
+    const c = withMaster(
+      async () =>
+        new Response(JSON.stringify({ message: "API rate limit exceeded for user ID 1" }), {
+          status: 403,
+          headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(reset) },
+        }),
+    );
+    const checks = await c.permissions();
+    const detail = checks.map((check) => check.detail).join(" | ");
+    expect(detail).toContain("Limite de uso da API do GitHub");
+    expect(detail).not.toContain("HTTP 403 ao");
+  });
+
+  it("checagem de permissões cobre cota, acesso ao destino e leitura do MASTER", async () => {
+    const c = withMaster(async (url: string) => {
+      if (url.endsWith("/rate_limit"))
+        return Response.json({ resources: { core: { remaining: 4800, limit: 5000, reset: 0 } } });
+      if (url.endsWith("/user")) return Response.json({ login: "acme" });
+      return Response.json({ full_name: "x", permissions: { push: true, admin: true } });
+    });
+    const checks = await c.permissions();
+    expect(checks.length).toBeGreaterThanOrEqual(3);
+    expect(checks.every((check) => check.area === "code")).toBe(true);
+    expect(checks.every((check) => check.ok)).toBe(true);
   });
 });

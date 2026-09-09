@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { formatDateTimeBr } from "@/lib/timezone";
 
@@ -56,6 +57,8 @@ const FIELDS: {
   key: keyof Draft;
   label: string;
   hint: string;
+  /** Requisitos concretos da chave: sem eles a etapa correspondente falha. */
+  requirements: string[];
   secret: boolean;
   placeholder: string;
   link?: { href: string; label: string };
@@ -63,7 +66,12 @@ const FIELDS: {
   {
     key: "supabaseManagementToken",
     label: "Token de gestão do banco",
-    hint: "Precisa pertencer à organização do banco desta instalação.",
+    hint: "Cria o banco, aplica o schema e lê as chaves do projeto do cliente.",
+    requirements: [
+      "A conta que gerou o token precisa ser Owner ou Administrator do projeto.",
+      "O token precisa permitir ler as chaves de API do projeto.",
+      "Sem isso, banco, chaves e schema não são aplicados.",
+    ],
     secret: true,
     placeholder: "sbp_...",
     link: {
@@ -75,6 +83,11 @@ const FIELDS: {
     key: "vercelToken",
     label: "Token de deploy",
     hint: "Usado para variáveis, vínculo do repositório e publicação.",
+    requirements: [
+      "Gere na conta dona do projeto de publicação.",
+      "Precisa permitir criar publicações e alterar variáveis do projeto.",
+      "Se o projeto pertence a uma equipe, informe também a equipe abaixo.",
+    ],
     secret: true,
     placeholder: "token de deploy",
     link: { href: "https://vercel.com/account/settings/tokens", label: "Gerar token na Vercel" },
@@ -83,6 +96,7 @@ const FIELDS: {
     key: "vercelTeamId",
     label: "Equipe de deploy (opcional)",
     hint: "Informe quando o projeto pertence a uma equipe.",
+    requirements: ["Projeto em conta pessoal: deixe vazio."],
     secret: false,
     placeholder: "team_...",
   },
@@ -90,6 +104,12 @@ const FIELDS: {
     key: "githubToken",
     label: "Token do repositório",
     hint: "Publica o código do MASTER no repositório desta instalação.",
+    requirements: [
+      "Token de acesso pessoal com acesso ao dono/organização do repositório desta instalação.",
+      "Permissões: Metadados (leitura), Conteúdo (leitura e gravação), Administração (leitura e gravação, para criar o repositório) e Fluxos de trabalho (gravação, se houver automações).",
+      "Não precisa acessar o repositório do MASTER: a leitura do código usa a credencial do MASTER.",
+      "Use um token exclusivo desta instalação — o limite de uso do GitHub é por conta e tokens compartilhados causam a falha “API rate limit exceeded”.",
+    ],
     secret: true,
     placeholder: "ghp_...",
     link: {
@@ -108,6 +128,9 @@ export function InstallationCredentialsCard({ installationId }: { installationId
   const adoptFn = useServerFn(adoptInstallationRepositoryFn);
 
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [checks, setChecks] = useState<
+    Array<{ area: string; label: string; ok: boolean; detail: string }>
+  >([]);
   const [repoDraft, setRepoDraft] = useState("");
 
   const status = useQuery({
@@ -153,10 +176,11 @@ export function InstallationCredentialsCard({ installationId }: { installationId
   const test = useMutation({
     mutationFn: () => testFn({ data: { id: installationId } }),
     onSuccess: (result) => {
-      const ok = result.database.ok && result.deploy.ok && result.code.ok;
-      const detail = `${result.database.detail} · ${result.deploy.detail} · ${result.code.detail}`;
-      if (ok) toast.success(detail);
-      else toast.error(detail);
+      const list = result.checks ?? [];
+      setChecks(list);
+      const failing = list.filter((check) => !check.ok);
+      if (!failing.length) toast.success("Todos os acessos e permissões conferidos.");
+      else toast.error(`${failing.length} permissão(ões) pendente(s) — veja a lista abaixo.`);
     },
     onError: (error: unknown) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível testar."),
@@ -230,16 +254,28 @@ export function InstallationCredentialsCard({ installationId }: { installationId
                       )}
                     </span>
                   </div>
-                  <Input
-                    id={`cred-${field.key}`}
-                    type={field.secret ? "password" : "text"}
-                    autoComplete="off"
-                    placeholder={field.placeholder}
-                    value={draft[field.key]}
-                    onChange={(event) =>
-                      setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))
-                    }
-                  />
+                  {field.secret ? (
+                    <PasswordInput
+                      id={`cred-${field.key}`}
+                      autoComplete="off"
+                      placeholder={field.placeholder}
+                      value={draft[field.key]}
+                      onChange={(event) =>
+                        setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))
+                      }
+                    />
+                  ) : (
+                    <Input
+                      id={`cred-${field.key}`}
+                      type="text"
+                      autoComplete="off"
+                      placeholder={field.placeholder}
+                      value={draft[field.key]}
+                      onChange={(event) =>
+                        setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))
+                      }
+                    />
+                  )}
                   <p className="text-[11px] text-muted-foreground">
                     {field.hint}
                     {field.link && (
@@ -257,6 +293,11 @@ export function InstallationCredentialsCard({ installationId }: { installationId
                       </>
                     )}
                   </p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+                    {field.requirements.map((requirement) => (
+                      <li key={requirement}>{requirement}</li>
+                    ))}
+                  </ul>
                 </div>
               );
             })}
@@ -303,6 +344,27 @@ export function InstallationCredentialsCard({ installationId }: { installationId
             </Button>
           )}
         </div>
+
+        {checks.length > 0 && (
+          <div className="space-y-1.5 rounded-md border p-3">
+            <p className="text-xs font-medium">Resultado do teste de acesso</p>
+            <ul className="space-y-1">
+              {checks.map((check) => (
+                <li key={`${check.area}-${check.label}`} className="flex gap-1.5 text-[11px]">
+                  {check.ok ? (
+                    <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-severity-success" />
+                  ) : (
+                    <MinusCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
+                  )}
+                  <span className="min-w-0">
+                    <span className="font-medium">{check.label}:</span>{" "}
+                    <span className="text-muted-foreground">{check.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-1.5 rounded-md border border-dashed p-3">
           <Label htmlFor="cred-adopt-repo" className="text-xs">

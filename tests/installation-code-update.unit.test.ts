@@ -89,7 +89,7 @@ describe("atualização de código da instalação", () => {
     expect(link?.body).toMatchObject({ repo: "mahara-apps/unitos-master", gitBranch: "main" });
   });
 
-  it("sem repositório ligado cai para rebuild e sinaliza que não traz código novo", async () => {
+  it("sem vínculo salvo resolve o repositório no GitHub e publica o código novo", async () => {
     const { impl } = fakeFetch([
       { match: /v9\/projects\//, body: { name: "unitos-teste" } },
       {
@@ -100,7 +100,7 @@ describe("atualização de código da instalação", () => {
     ]);
     const client = createDeployClient({ token: "t", project: "unitos-teste", fetchImpl: impl });
     const res = await client.deployLatestCode();
-    expect(res).toMatchObject({ ok: true, source: "rebuild" });
+    expect(res).toMatchObject({ ok: true, source: "git" });
   });
 
   it("mantém o build automático ligado e publica o commit autorizado", async () => {

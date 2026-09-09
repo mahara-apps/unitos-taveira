@@ -412,6 +412,47 @@ export type ManagementClient = {
   }>;
 };
 
+function managementApiError(status: number, body: string, operation: "database" | "keys"): string {
+  if (status === 401) {
+    return "Supabase Access Token inválido ou revogado. Gere um novo token na conta correta do Supabase.";
+  }
+  if (status === 403) {
+    const permission =
+      operation === "keys"
+        ? "executar consultas e visualizar as chaves de API"
+        : "executar consultas no banco";
+    return (
+      `O token foi reconhecido, mas sua conta não tem permissão para ${permission} neste projeto. ` +
+      "Confirme se o Project ref pertence à mesma organização da conta que gerou o token e se essa conta é Owner ou Administrator do projeto."
+    );
+  }
+  if (status === 404) {
+    return "Projeto Supabase não encontrado para este token. Confira a URL e o Project ref da instalação.";
+  }
+  if (status === 429) {
+    return "A Management API do Supabase está limitando as chamadas (HTTP 429). Aguarde alguns minutos e tente novamente — a credencial está correta.";
+  }
+  if (status >= 500) {
+    return (
+      `Instabilidade temporária do Supabase (HTTP ${status}). ` +
+      "Isso não é problema da credencial nem do token: tentamos novamente automaticamente e ainda assim não houve resposta. Repita a operação em alguns minutos."
+    );
+  }
+  const detail = body.trim().slice(0, 300);
+  return `HTTP ${status}${detail ? ` ${detail}` : ""}`;
+}
+
+/** Status que valem nova tentativa: instabilidade/limite do lado do Supabase. */
+export function isRetryableManagementStatus(status: number): boolean {
+  return status === 429 || status === 408 || status >= 500;
+}
+
+const RETRY_DELAYS_MS = [1_000, 3_000, 7_000];
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function createManagementClient(input: {
   token: string;
   projectRef: string;
@@ -424,57 +465,80 @@ export function createManagementClient(input: {
     "content-type": "application/json",
   };
 
+  // Instabilidade do Supabase (502/503/504/429) não é falha de credencial:
+  // repetimos algumas vezes antes de declarar o destino inacessível.
+  const attempts = RETRY_DELAYS_MS.length;
+
   return {
     async query(sql) {
-      const controller = new AbortController();
-      // Precisa expirar ANTES do limite do runtime. Um timeout de 60s não
-      // ajudava: o isolate podia morrer primeiro e a operação ficava running.
-      const timer = setTimeout(() => controller.abort(), 15_000);
-      try {
-        const res = await doFetch(`${base}/database/query`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query: sql }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          return { ok: false, rows: [], error: `HTTP ${res.status} ${text.slice(0, 300)}` };
+      let last = { ok: false, rows: [] as unknown[], error: "sem resposta da Management API" };
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const controller = new AbortController();
+        // Precisa expirar ANTES do limite do runtime. Um timeout de 60s não
+        // ajudava: o isolate podia morrer primeiro e a operação ficava running.
+        const timer = setTimeout(() => controller.abort(), 12_000);
+        try {
+          const res = await doFetch(`${base}/database/query`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ query: sql }),
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            last = { ok: false, rows: [], error: managementApiError(res.status, text, "database") };
+            if (!isRetryableManagementStatus(res.status)) return last;
+          } else {
+            const body = (await res.json().catch(() => [])) as unknown;
+            return { ok: true, rows: Array.isArray(body) ? body : [] };
+          }
+        } catch (e) {
+          const aborted = e instanceof Error && e.name === "AbortError";
+          last = {
+            ok: false,
+            rows: [],
+            error: aborted ? "timeout de 12s na Management API" : (e as Error).message,
+          };
+        } finally {
+          clearTimeout(timer);
         }
-        const body = (await res.json().catch(() => [])) as unknown;
-        return { ok: true, rows: Array.isArray(body) ? body : [] };
-      } catch (e) {
-        const aborted = e instanceof Error && e.name === "AbortError";
-        return {
-          ok: false,
-          rows: [],
-          error: aborted ? "timeout de 15s na Management API" : (e as Error).message,
-        };
-      } finally {
-        clearTimeout(timer);
+        if (attempt < attempts - 1) await sleep(RETRY_DELAYS_MS[attempt]);
       }
+      return last;
     },
     async keys() {
-      try {
-        const res = await doFetch(`${base}/api-keys?reveal=true`, { headers });
-        if (!res.ok) {
-          return { ok: false, error: `HTTP ${res.status} ao ler as chaves do Supabase destino` };
-        }
-        const body = (await res.json().catch(() => [])) as Array<{
-          name?: string;
-          type?: string;
-          api_key?: string;
-        }>;
-        const find = (name: string) =>
-          body.find((k) => k.name === name || k.type === name)?.api_key ?? undefined;
-        return {
-          ok: true,
-          publishableKey: find("anon") ?? find("publishable"),
-          serviceRoleKey: find("service_role") ?? find("secret"),
+      let last: { ok: boolean; publishableKey?: string; serviceRoleKey?: string; error?: string } =
+        {
+          ok: false,
+          error: "sem resposta da Management API",
         };
-      } catch (e) {
-        return { ok: false, error: (e as Error).message };
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+          const res = await doFetch(`${base}/api-keys?reveal=true`, { headers });
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            last = { ok: false, error: managementApiError(res.status, text, "keys") };
+            if (!isRetryableManagementStatus(res.status)) return last;
+          } else {
+            const body = (await res.json().catch(() => [])) as Array<{
+              name?: string;
+              type?: string;
+              api_key?: string;
+            }>;
+            const find = (name: string) =>
+              body.find((k) => k.name === name || k.type === name)?.api_key ?? undefined;
+            return {
+              ok: true,
+              publishableKey: find("anon") ?? find("publishable"),
+              serviceRoleKey: find("service_role") ?? find("secret"),
+            };
+          }
+        } catch (e) {
+          last = { ok: false, error: (e as Error).message };
+        }
+        if (attempt < attempts - 1) await sleep(RETRY_DELAYS_MS[attempt]);
       }
+      return last;
     },
   };
 }
@@ -497,7 +561,11 @@ export type DeployClient = {
    * Liga o projeto de deploy ao repositório `owner/repo` DA INSTALAÇÃO,
    * substituindo qualquer vínculo anterior. Idempotente.
    */
-  linkRepository: (repo: string) => Promise<{ ok: boolean; error?: string }>;
+  linkRepository: (
+    repo: string,
+    options?: { force?: boolean },
+  ) => Promise<{ ok: boolean; error?: string }>;
+
   /** Commit atual da branch de producao do repositorio do MASTER. */
   latestCommit: () => Promise<{ ok: boolean; sha?: string; error?: string }>;
 
@@ -524,9 +592,20 @@ export type DeployClient = {
     /** Epoch (s) em que a cota volta, quando a Vercel informa. */
     resetAt?: number;
   }>;
-  deploymentState: (
-    id: string,
-  ) => Promise<{ ok: boolean; state?: string; url?: string; error?: string }>;
+  deploymentState: (id: string) => Promise<{
+    ok: boolean;
+    state?: string;
+    url?: string;
+    error?: string;
+    /**
+     * Motivo textual quando a hospedagem RECUSA a publicação (ex.: política
+     * "apenas deployments por Git em produção"). Estado terminal: esperar mais
+     * nunca vira READY.
+     */
+    reason?: string;
+    /** `true` quando o deployment foi recusado e não vai buildar nunca. */
+    refused?: boolean;
+  }>;
 
   /** Garante que o domínio definitivo esteja atribuído ao projeto de deploy. */
   ensureDomain: (
@@ -574,6 +653,25 @@ export function parseDeployQuotaError(
  */
 export const DEFAULT_MASTER_REPO = "mahara-apps/unitos-master";
 
+/**
+ * Teto absoluto para a publicação de uma atualização. Passado esse tempo a
+ * operação encerra com motivo em vez de ser retomada para sempre pelo watchdog
+ * (foi o que deixou uma instalação presa em "build em andamento" por ~1h).
+ */
+export const BUILD_MAX_MINUTES = 20;
+
+/**
+ * Reconhece as duas recusas da hospedagem que NÃO se resolvem esperando nem
+ * repetindo a chamada: repositório não resolvido pela API e política "somente
+ * publicação disparada pelo Git em produção". Em ambos a saída é publicar pelo
+ * push no repositório da instalação.
+ */
+export function isGitOnlyOrMissingRepo(text: string): boolean {
+  return /incorrect_git_source_info|repository can't be found|not allowed in production|only git deployments/i.test(
+    text ?? "",
+  );
+}
+
 /* ------------------------------------------------------------- GitHub API */
 
 export type PublishSnapshotOptions = {
@@ -592,6 +690,10 @@ export type PublishSnapshotResult = {
   ok: boolean;
   /** true quando o orçamento de tempo acabou: retomar continua de onde parou. */
   partial?: boolean;
+  /** ISO: quando a cota do GitHub volta. Só em pausa por limite de uso. */
+  waitUntil?: string | null;
+  /** Motivo legível da pausa (limite de uso), quando houver. */
+  note?: string;
   commitSha?: string;
   changed?: number;
   error?: string;
@@ -642,6 +744,11 @@ export type CodeClient = {
     canCreate?: boolean;
   }>;
   /**
+   * Permissões efetivas do token da instalação: leitura/gravação no repositório
+   * de destino, criação de repositório e quanto resta da cota de uso.
+   */
+  permissions: () => Promise<Array<{ label: string; ok: boolean; detail: string; area: "code" }>>;
+  /**
    * Publica no repositório da instalação exatamente a árvore do MASTER no
    * commit informado. Quando os objetos são compartilhados (template/fork), a
    * árvore é montada direto com os SHAs do MASTER — 3 chamadas. Caso contrário
@@ -657,6 +764,12 @@ export type CodeClient = {
 
 type TreeEntry = { path?: string; mode?: string; type?: string; sha?: string };
 
+const GITHUB_TRANSIENT_RETRY_MS = [1_000, 3_000] as const;
+
+function isRetryableGithubStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
 /**
  * Cliente GitHub do provisionamento. Publica o código do MASTER no repositório
  * DA INSTALAÇÃO — o MASTER é sempre a origem (template), nunca o destino.
@@ -667,43 +780,109 @@ export function createCodeClient(input: {
   repo: string;
   masterRepo?: string | null;
   branch?: string | null;
+  /**
+   * Token do MASTER. Toda LEITURA do repositório do MASTER usa esta credencial;
+   * o token da instalação fica só para gravar no repositório de destino. Sem
+   * essa separação, um único token acumula milhares de leituras por publicação
+   * e estoura o limite de uso por conta do GitHub (HTTP 403 "API rate limit").
+   */
+  masterToken?: string | null;
   fetchImpl?: Fetcher;
 }): CodeClient {
   const doFetch = input.fetchImpl ?? fetch;
   const master = (input.masterRepo ?? "").trim() || DEFAULT_MASTER_REPO;
   const branch = (input.branch ?? "").trim() || "main";
   const target = `${input.owner}/${input.repo}`;
-  const headers = {
-    authorization: `Bearer ${input.token}`,
+  const baseHeaders = {
     accept: "application/vnd.github+json",
     "content-type": "application/json",
     "user-agent": "unitos-installation-manager",
   };
+  const headers = { ...baseHeaders, authorization: `Bearer ${input.token}` };
+  const masterHeaders = {
+    ...baseHeaders,
+    authorization: `Bearer ${(input.masterToken ?? "").trim() || input.token}`,
+  };
+  /**
+   * Só LEITURA (GET) do repositório do MASTER usa o token do MASTER. Escritas
+   * em `/repos/{master}/generate` e `/forks` criam no destino e continuam com o
+   * token da instalação.
+   */
+  const readsMaster = (path: string, init?: RequestInit) =>
+    (init?.method ?? "GET").toUpperCase() === "GET" && path.startsWith(`/repos/${master}`);
   const rawApi = (path: string, init?: RequestInit) =>
-    doFetch(`https://api.github.com${path}`, { ...init, headers });
+    doFetch(`https://api.github.com${path}`, {
+      ...init,
+      headers: readsMaster(path, init) ? masterHeaders : headers,
+    });
 
   /**
-   * Recuo automático em limite de uso do GitHub (403/429 com Retry-After ou
-   * cabeçalho de rate limit esgotado). Nunca espera mais que ~8s por tentativa.
+   * Limite de uso do GitHub atingido. `resetAt` (epoch em segundos) diz quando
+   * a cota volta — pode ser até uma hora, então esperar dentro da requisição é
+   * inviável: a operação é devolvida como retomável.
    */
-  const api = async (path: string, init?: RequestInit): Promise<Response> => {
+  let rateLimit: { resetAt: number | null } | null = null;
+
+  const rateLimitedResponse = (res: Response) => {
+    if (res.status !== 403 && res.status !== 429) return null;
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    const retryAfter = Number(res.headers.get("retry-after") ?? "0");
+    if (remaining !== "0" && !(retryAfter > 0)) return null;
+    const reset = Number(res.headers.get("x-ratelimit-reset") ?? "0");
+    const resetAt =
+      reset > 0 ? reset : retryAfter > 0 ? Math.floor(Date.now() / 1000) + retryAfter : null;
+    return { resetAt };
+  };
+
+  /**
+   * Recuo automático em instabilidade e em limites curtos (Retry-After de
+   * poucos segundos). Nunca espera mais que ~8s por tentativa.
+   */
+  const api = async (
+    path: string,
+    init?: RequestInit,
+    retryTransient = false,
+  ): Promise<Response> => {
     let attempt = 0;
     for (;;) {
       const res = await rawApi(path, init);
-      const limited =
-        (res.status === 403 || res.status === 429) &&
-        (res.headers.get("retry-after") !== null ||
-          res.headers.get("x-ratelimit-remaining") === "0");
-      if (!limited || attempt >= 2) return res;
+      const limited = rateLimitedResponse(res);
+      if (limited) rateLimit = limited;
       const retryAfter = Number(res.headers.get("retry-after") ?? "0");
-      const waitMs = Math.min(8000, Math.max(1000, (retryAfter || 2) * 1000));
+      // Cota principal esgotada (reset distante): não insiste — devolve para
+      // que a operação seja retomada quando a cota voltar.
+      const shortWait = retryAfter > 0 && retryAfter <= 8;
+      const transient = retryTransient && isRetryableGithubStatus(res.status);
+      const retryable = transient || (limited !== null && shortWait);
+      if (!retryable || attempt >= GITHUB_TRANSIENT_RETRY_MS.length) return res;
+      const waitMs = Math.min(
+        8_000,
+        Math.max(
+          1_000,
+          retryAfter > 0 ? retryAfter * 1_000 : (GITHUB_TRANSIENT_RETRY_MS[attempt] ?? 3_000),
+        ),
+      );
       attempt += 1;
       await new Promise((r) => setTimeout(r, waitMs));
     }
   };
 
   const fail = async (res: Response, what: string) => {
+    const limited = rateLimitedResponse(res);
     const text = await res.text().catch(() => "");
+    if (limited || /api rate limit exceeded|secondary rate limit/i.test(text)) {
+      const resetAt = limited?.resetAt ?? null;
+      const when = resetAt ? ` A cota volta em ${formatDateTimeBr(new Date(resetAt * 1000))}.` : "";
+      return (
+        `Limite de uso da API do GitHub atingido ao ${what}.${when} ` +
+        `Não é problema de permissão: o progresso salvo é reaproveitado e a ` +
+        `operação é retomada automaticamente. Use um token do GitHub exclusivo ` +
+        `desta instalação para evitar disputa de cota.`
+      );
+    }
+    if (isRetryableGithubStatus(res.status)) {
+      return `Instabilidade temporária do GitHub (HTTP ${res.status}) ao ${what}. O progresso salvo será reaproveitado; tente novamente em alguns minutos.`;
+    }
     return `HTTP ${res.status} ao ${what} (${text.slice(0, 200)})`;
   };
 
@@ -747,6 +926,81 @@ export function createCodeClient(input: {
         };
       } catch (e) {
         return { ok: false, detail: (e as Error).message };
+      }
+    },
+    async permissions() {
+      const checks: Array<{ label: string; ok: boolean; detail: string; area: "code" }> = [];
+      const push = (label: string, ok: boolean, detail: string) =>
+        checks.push({ label, ok, detail, area: "code" as const });
+      try {
+        const quota = await rawApi("/rate_limit");
+        if (quota.ok) {
+          const body = (await quota.json().catch(() => ({}))) as {
+            resources?: { core?: { remaining?: number; limit?: number; reset?: number } };
+          };
+          const core = body.resources?.core ?? {};
+          const remaining = core.remaining ?? 0;
+          push(
+            "Cota de uso do GitHub",
+            remaining > 500,
+            `${remaining}/${core.limit ?? "?"} chamadas restantes${
+              core.reset ? ` — renova em ${formatDateTimeBr(new Date(core.reset * 1000))}` : ""
+            }`,
+          );
+        } else {
+          push("Cota de uso do GitHub", false, await fail(quota, "consultar a cota do token"));
+        }
+
+        const login = await viewerLogin();
+        push(
+          "Token válido (leitura de metadados)",
+          Boolean(login),
+          login ? `token da conta ${login}` : "o token não foi aceito pelo GitHub",
+        );
+
+        const repoRes = await api(`/repos/${target}`);
+        if (repoRes.ok) {
+          const body = (await repoRes.json().catch(() => ({}))) as {
+            permissions?: { push?: boolean; admin?: boolean };
+          };
+          push(
+            "Gravação no repositório da instalação",
+            Boolean(body.permissions?.push),
+            body.permissions?.push
+              ? `${target} com permissão de gravação`
+              : `${target} acessível apenas para leitura — habilite Conteúdo: leitura e gravação`,
+          );
+        } else if (repoRes.status === 404) {
+          const isPersonal = login.toLowerCase() === input.owner.trim().toLowerCase();
+          const ownerRes = isPersonal ? null : await api(`/orgs/${input.owner}`);
+          const reaches = isPersonal || Boolean(ownerRes?.ok);
+          push(
+            "Criação do repositório da instalação",
+            reaches,
+            reaches
+              ? `${target} ainda não existe e será criado em ${input.owner}`
+              : `o token não alcança ${input.owner} — habilite Administração: leitura e gravação`,
+          );
+        } else {
+          push(
+            "Acesso ao repositório da instalação",
+            false,
+            await fail(repoRes, `consultar ${target}`),
+          );
+        }
+
+        const masterRes = await api(`/repos/${master}`);
+        push(
+          "Leitura do código do MASTER",
+          masterRes.ok,
+          masterRes.ok
+            ? `${master} acessível com a credencial do MASTER`
+            : await fail(masterRes, `ler ${master}`),
+        );
+        return checks;
+      } catch (e) {
+        push("Repositório", false, (e as Error).message);
+        return checks;
       }
     },
     async ensureRepo() {
@@ -974,11 +1228,18 @@ export function createCodeClient(input: {
       try {
         await notify(2, "lendo a árvore do MASTER");
         const tree = async (repo: string, ref: string) => {
-          const res = await api(`/repos/${repo}/git/trees/${ref}?recursive=1`);
+          const res = await api(`/repos/${repo}/git/trees/${ref}?recursive=1`, undefined, true);
           if (!res.ok)
             return { ok: false as const, error: await fail(res, `ler a árvore de ${repo}`) };
-          const body = (await res.json().catch(() => ({}))) as { tree?: TreeEntry[] };
-          return { ok: true as const, entries: (body.tree ?? []).filter((e) => e.type === "blob") };
+          const body = (await res.json().catch(() => ({}))) as {
+            sha?: string;
+            tree?: TreeEntry[];
+          };
+          return {
+            ok: true as const,
+            rootSha: body.sha ?? null,
+            entries: (body.tree ?? []).filter((e) => e.type === "blob"),
+          };
         };
 
         const source = await tree(master, sha);
@@ -1053,21 +1314,18 @@ export function createCodeClient(input: {
           sha: null,
         }));
 
-        /** Árvore apontando direto para os SHAs do MASTER (template/fork). */
-        const sharedEntries = () =>
-          changed.map((file) => ({
-            path: file.path,
-            mode: file.mode ?? "100644",
-            type: "blob",
-            sha: file.sha,
-          }));
-
         /**
          * Cópia dos blobs para o destino, em paralelo controlado, com
          * checkpoint por lote e orçamento de tempo.
          */
         const copiedEntries = async (): Promise<
-          | { ok: true; partial: true; changed: number }
+          | {
+              ok: true;
+              partial: true;
+              changed: number;
+              waitUntil?: string | null;
+              note?: string;
+            }
           | { ok: true; entries: Array<Record<string, unknown>> }
           | { ok: false; error: string }
         > => {
@@ -1086,7 +1344,7 @@ export function createCodeClient(input: {
                 cursor += 1;
                 const file = batch[index];
                 if (!file || batchError) return;
-                const blob = await api(`/repos/${master}/git/blobs/${file.sha}`);
+                const blob = await api(`/repos/${master}/git/blobs/${file.sha}`, undefined, true);
                 if (!blob.ok) {
                   batchError = await fail(blob, `ler ${file.path} do MASTER`);
                   return;
@@ -1095,13 +1353,17 @@ export function createCodeClient(input: {
                   content?: string;
                   encoding?: string;
                 };
-                const created = await api(`/repos/${target}/git/blobs`, {
-                  method: "POST",
-                  body: JSON.stringify({
-                    content: body.content ?? "",
-                    encoding: body.encoding ?? "base64",
-                  }),
-                });
+                const created = await api(
+                  `/repos/${target}/git/blobs`,
+                  {
+                    method: "POST",
+                    body: JSON.stringify({
+                      content: body.content ?? "",
+                      encoding: body.encoding ?? "base64",
+                    }),
+                  },
+                  true,
+                );
                 if (!created.ok) {
                   batchError = await fail(created, `publicar ${file.path} em ${target}`);
                   return;
@@ -1121,6 +1383,19 @@ export function createCodeClient(input: {
             );
             if (batchError) {
               await checkpoint();
+              // Limite de uso do GitHub não é falha: devolve retomável com o
+              // horário de liberação; o progresso já copiado é preservado.
+              if (rateLimit) {
+                return {
+                  ok: true,
+                  partial: true,
+                  changed: copied,
+                  waitUntil: rateLimit.resetAt
+                    ? new Date(rateLimit.resetAt * 1000).toISOString()
+                    : null,
+                  note: batchError,
+                };
+              }
               return { ok: false, error: batchError };
             }
             await checkpoint();
@@ -1144,27 +1419,20 @@ export function createCodeClient(input: {
           return { ok: true, entries };
         };
 
-        // Caminho rápido: repositório gerado do template ou fork do MASTER já
-        // contém os objetos, então a árvore aponta direto para os SHAs do
-        // MASTER — 3 chamadas em vez de 2 por arquivo. A checagem usa uma
-        // amostra e só vale se TODOS os objetos amostrados existirem.
-        const samples = [0, 1, Math.floor(changed.length / 2), changed.length - 1]
-          .filter((i, at, all) => i >= 0 && all.indexOf(i) === at)
-          .map((i) => changed[i]?.sha)
-          .filter((s): s is string => Boolean(s));
-        let sharedObjects = samples.length > 0;
-        for (const candidate of samples) {
-          const check = await api(`/repos/${target}/git/blobs/${candidate}`);
-          if (!check.ok) {
-            sharedObjects = false;
-            break;
-          }
+        // Caminho rápido: template/fork compartilha a árvore raiz completa do
+        // MASTER. Reutilizá-la elimina o POST gigante de milhares de entradas e
+        // preserva o snapshot exato, inclusive remoções.
+        let sharedObjects = Boolean(source.rootSha);
+        if (source.rootSha) {
+          const check = await api(`/repos/${target}/git/trees/${source.rootSha}`, undefined, true);
+          sharedObjects = check.ok;
         }
 
         let entries: Array<Record<string, unknown>>;
+        let treeSha: string | null = sharedObjects ? source.rootSha : null;
         if (sharedObjects) {
           await notify(80, `${changed.length} arquivos reaproveitados do MASTER`);
-          entries = sharedEntries();
+          entries = [];
         } else {
           const copied = await copiedEntries();
           if (!copied.ok) return { ok: false, error: copied.error };
@@ -1174,37 +1442,34 @@ export function createCodeClient(input: {
 
         await notify(92, "montando a árvore do repositório");
         const buildTree = async (list: Array<Record<string, unknown>>) =>
-          api(`/repos/${target}/git/trees`, {
-            method: "POST",
-            body: JSON.stringify(
-              parent
-                ? { base_tree: parent, tree: [...list, ...removalEntries] }
-                : { tree: [...list, ...removalEntries] },
-            ),
-          });
+          api(
+            `/repos/${target}/git/trees`,
+            {
+              method: "POST",
+              body: JSON.stringify(
+                parent
+                  ? { base_tree: parent, tree: [...list, ...removalEntries] }
+                  : { tree: [...list, ...removalEntries] },
+              ),
+            },
+            true,
+          );
 
-        let newTree = await buildTree(entries);
-        if (!newTree.ok && sharedObjects && (newTree.status === 422 || newTree.status === 404)) {
-          // O repositório não compartilha os objetos do MASTER (fork ainda
-          // sincronizando ou repositório criado vazio): copia os blobs.
-          await notify(6, "objetos do MASTER indisponíveis; copiando arquivos");
-          const copied = await copiedEntries();
-          if (!copied.ok) return { ok: false, error: copied.error };
-          if ("partial" in copied) return copied;
-          entries = copied.entries;
-          newTree = await buildTree(entries);
+        if (!treeSha) {
+          const newTree = await buildTree(entries);
+          if (!newTree.ok)
+            return { ok: false, error: await fail(newTree, `montar a árvore de ${target}`) };
+          const treeJson = (await newTree.json().catch(() => ({}))) as { sha?: string };
+          treeSha = treeJson.sha ?? null;
         }
-        if (!newTree.ok)
-          return { ok: false, error: await fail(newTree, `montar a árvore de ${target}`) };
-
-        const treeJson = (await newTree.json().catch(() => ({}))) as { sha?: string };
+        if (!treeSha) return { ok: false, error: `árvore de ${target} não retornada` };
 
         await notify(96, "criando o commit da versão");
         const commit = await api(`/repos/${target}/git/commits`, {
           method: "POST",
           body: JSON.stringify({
             message: `Unitos: publicar versão do MASTER (${sha.slice(0, 7)})`,
-            tree: treeJson.sha,
+            tree: treeSha,
             parents: parent ? [parent] : [],
           }),
         });
@@ -1369,7 +1634,7 @@ export function createDeployClient(input: {
       }
     },
 
-    async linkRepository(repo) {
+    async linkRepository(repo, options) {
       const slug = (repo ?? "").trim() || targetRepo;
       try {
         const res = await doFetch(
@@ -1381,11 +1646,14 @@ export function createDeployClient(input: {
         }
         const body = (await res.json().catch(() => ({}))) as {
           id?: string;
-          link?: { repo?: string; org?: string };
+          link?: { repo?: string; org?: string; sourceless?: boolean };
         };
         const id = encodeURIComponent(body.id ?? input.project);
         const current = `${body.link?.org ?? ""}/${body.link?.repo ?? ""}`.toLowerCase();
-        if (current === slug.toLowerCase()) return { ok: true };
+        // `force` religa mesmo quando o slug já é o correto: é o caso do vínculo
+        // "sourceless", em que o repositório aparece ligado sem disparar builds.
+        if (current === slug.toLowerCase() && !options?.force) return { ok: true };
+
         if (body.link?.repo) {
           await doFetch(
             `https://api.vercel.com/v9/projects/${id}/link?${qs()}`.replace(/\?$/, ""),
@@ -1469,6 +1737,11 @@ export function createDeployClient(input: {
               repo?: string;
               org?: string;
               productionBranch?: string;
+              /**
+               * `true` = vínculo "sem fonte": o repositório aparece ligado, mas
+               * os pushes NÃO disparam publicação. Precisa religar.
+               */
+              sourceless?: boolean;
             };
           };
         };
@@ -1481,12 +1754,14 @@ export function createDeployClient(input: {
         // O projeto precisa apontar para o repositório DA INSTALAÇÃO (o código
         // do MASTER é publicado nele). Se estiver ligado a outro repositório,
         // religa — é o que faz a atualização realmente trazer código novo.
+        // Vínculo "sourceless" também é religado: sem fonte, nenhum push publica
+        // e a política "apenas Git em produção" tranca a atualização.
         const current = `${body.link?.org ?? ""}/${body.link?.repo ?? ""}`.toLowerCase();
-        if (current !== targetRepo.toLowerCase()) {
-          const relinked = await client.linkRepository(targetRepo);
-          if (!relinked.ok) {
-            return { ok: false, error: relinked.error };
-          }
+        if (current !== targetRepo.toLowerCase() || body.link?.sourceless === true) {
+          // Religar pode falhar sem culpa da atualização (integração do GitHub
+          // não instalada na conta). Não abortamos: a publicação ainda funciona
+          // apontando a origem Git direto na chamada.
+          await client.linkRepository(targetRepo, { force: true });
           body = (await readProject()) ?? body;
         }
 
@@ -1495,16 +1770,35 @@ export function createDeployClient(input: {
         await client.setAutoDeploy(true);
 
         const link = body.link;
-        const repoId = link?.repoId;
-        const org = (link?.org ?? "").trim();
-        const repoName = (link?.repo ?? "").trim();
-        if (!link?.type || (!repoId && !(org && repoName))) {
+        const [targetOrg = "", targetName = ""] = targetRepo.split("/");
+        const org = (link?.org ?? "").trim() || targetOrg.trim();
+        const repoName = (link?.repo ?? "").trim() || targetName.trim();
+        const type = link?.type || "github";
+        let repoId = link?.repoId;
+
+        // Sem vínculo utilizável, buscamos o id do repositório no GitHub. Isso
+        // mantém a atualização funcionando mesmo quando a hospedagem perdeu o
+        // vínculo (antes caía em "rebuild", que republica código ANTIGO).
+        if (!repoId && org && repoName && (input.githubToken ?? "").trim()) {
+          const gh = await doFetch(`https://api.github.com/repos/${org}/${repoName}`, {
+            headers: {
+              Authorization: `Bearer ${(input.githubToken ?? "").trim()}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "unitos-installer",
+            },
+          }).catch(() => null);
+          if (gh?.ok) {
+            const ghBody = (await gh.json().catch(() => ({}))) as { id?: number };
+            if (ghBody.id) repoId = ghBody.id;
+          }
+        }
+
+        if (!org || !repoName) {
           const fallback = await client.redeploy();
           return { ...fallback, source: "rebuild" as const };
         }
-        const branch = (link.productionBranch ?? "main").trim() || "main";
+        const branch = (link?.productionBranch ?? "main").trim() || "main";
         const ref = (options?.sha ?? "").trim() || branch;
-        const type = link.type;
 
         // A Vercel aceita mais de uma forma de identificar a origem Git e nem
         // todas funcionam em todo projeto (repositório recriado, id antigo em
@@ -1528,6 +1822,9 @@ export function createDeployClient(input: {
               headers,
               body: JSON.stringify({
                 name: body.name ?? input.project,
+                // Amarrar ao projeto por id evita publicar em um projeto novo
+                // quando o vínculo do repositório está ausente.
+                ...(body.id ? { project: body.id } : {}),
                 target: "production",
                 gitSource,
               }),
@@ -1547,9 +1844,13 @@ export function createDeployClient(input: {
               error: "cota diária de deployments da Vercel esgotada (plano gratuito: 100/dia)",
             };
           }
-          if (/incorrect_git_source_info|repository can't be found/i.test(text)) {
+          // Repositório não resolvido OU política da conta que só aceita
+          // publicação disparada pelo Git: nos dois casos a saída é a mesma —
+          // publicar pelo push no repositório da instalação.
+          if (isGitOnlyOrMissingRepo(text)) {
             gitSourceUnavailable = true;
           }
+
           attempts.push(`HTTP ${created.status} (${text.slice(0, 160)})`);
         }
 
@@ -1612,16 +1913,26 @@ export function createDeployClient(input: {
         if (!res.ok) {
           return { ok: false, error: `HTTP ${res.status} ao consultar o deployment` };
         }
-        const body = (await res.json().catch(() => ({}))) as { readyState?: string; url?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          readyState?: string;
+          url?: string;
+          readyStateReason?: string;
+          alwaysRefuseToBuild?: boolean;
+        };
+        const state = body.readyState ?? undefined;
+        const refused = state === "BLOCKED" || body.alwaysRefuseToBuild === true;
         return {
           ok: true,
-          state: body.readyState ?? undefined,
-          url: body.url ? `https://${body.url}` : undefined,
+          ...(state ? { state } : {}),
+          ...(body.url ? { url: `https://${body.url}` } : {}),
+          ...(body.readyStateReason ? { reason: body.readyStateReason } : {}),
+          ...(refused ? { refused: true } : {}),
         };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
     },
+
     async setEnv(entries) {
       try {
         const res = await doFetch(
@@ -1827,8 +2138,12 @@ export type StageProgress = {
   /** Commit do MASTER que a publicação em andamento está copiando. */
   codeSourceSha?: string;
 
-  /** Deployment de atualização já criado; retomadas apenas consultam este ID. */
-  updateDeploymentId?: string;
+  /**
+   * Deployment de atualização já criado; retomadas apenas consultam este ID.
+   * `null` limpa o checkpoint (deployment recusado/abandonado).
+   */
+  updateDeploymentId?: string | null;
+
   updateDeploymentSource?: "git" | "rebuild";
   updateDeploymentRef?: string;
   /** Versão do pacote do MASTER já publicada nesta operação (registro da versão). */
@@ -2026,6 +2341,9 @@ export async function runAutomatedProvision(input: {
   const managementToken = (env["UNITOS_SUPABASE_MANAGEMENT_TOKEN"] ?? "").trim();
   const deployToken = (env["UNITOS_VERCEL_TOKEN"] ?? "").trim();
   const githubToken = (env["UNITOS_GITHUB_TOKEN"] ?? "").trim();
+  // Leitura do MASTER usa sempre a credencial do MASTER: divide a cota de uso
+  // do GitHub e evita o 403 "API rate limit" no token da instalação.
+  const masterGithubToken = (process.env["UNITOS_GITHUB_TOKEN"] ?? "").trim() || githubToken;
   const teamId = (env["UNITOS_VERCEL_TEAM_ID"] ?? "").trim() || null;
 
   const management = createManagementClient({
@@ -2035,6 +2353,7 @@ export async function runAutomatedProvision(input: {
   });
   const code = createCodeClient({
     token: githubToken,
+    masterToken: masterGithubToken,
     owner: repo.owner,
     repo: repo.repo,
     masterRepo,
@@ -2056,13 +2375,19 @@ export async function runAutomatedProvision(input: {
     "select count(*)::int as schemas from information_schema.schemata where schema_name in ('auth','storage','vault')",
   );
   if (!ping.ok) {
+    const detail = (ping.error ?? "").trim();
+    // Instabilidade do Supabase não deve ser reportada como falha de credencial.
+    const transient = /Instabilidade tempor|limitando as chamadas|timeout/i.test(detail);
     blocked.push(
-      `Supabase destino inacessível com a credencial de gestão: ${ping.error ?? ""}`.trim(),
+      transient
+        ? detail
+        : `Supabase destino inacessível com a credencial de gestão: ${detail}`.trim(),
     );
     await mark("supabase", "error", ping.error);
-    checks.supabase = "error";
+    checks.supabase = transient ? "attention" : "error";
     return finish(null, null);
   }
+
   const schemas = Number((ping.rows[0] as { schemas?: number } | undefined)?.schemas ?? 0);
   if (schemas < 3) {
     blocked.push("O alvo não é um projeto Supabase completo (auth/storage/vault ausentes).");
@@ -2146,7 +2471,9 @@ export async function runAutomatedProvision(input: {
       await mark(
         "code",
         "running",
-        `publicando código em ${repo.slug} — ${published.changed ?? 0} arquivos nesta rodada (continua)`,
+        published.note
+          ? published.note
+          : `publicando código em ${repo.slug} — ${published.changed ?? 0} arquivos nesta rodada (continua)`,
       );
       return { result: "RUNNING", reasons: [], appUrl: null, urlSource: null, steps };
     }
@@ -3044,6 +3371,9 @@ export async function runAutomatedUpdate(input: {
   });
   const code = createCodeClient({
     token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+    masterToken:
+      (process.env["UNITOS_GITHUB_TOKEN"] ?? "").trim() ||
+      (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
     owner: repo.owner,
     repo: repo.repo,
     masterRepo,
@@ -3110,9 +3440,34 @@ export async function runAutomatedUpdate(input: {
     if (!ensured.ok) {
       return fail("BLOCKED", ensured.error ?? `repositório ${repo.slug} indisponível`);
     }
-    const published = await code.publishSnapshot(targetSha);
+    const reusableBlobs =
+      checkpoint.codeSourceSha === targetSha ? (checkpoint.codeBlobs ?? {}) : {};
+    await saveStageProgress(client, operation, {
+      codeSourceSha: targetSha,
+      codeBlobs: reusableBlobs,
+    });
+    const published = await code.publishSnapshot(targetSha, {
+      blobMap: reusableBlobs,
+      timeBudgetMs: 20_000,
+      onProgress: async (progress) => {
+        await report(client, operation, "code", "running", progress.detail, progress.percent);
+      },
+      onCheckpoint: async (blobMap) => {
+        await saveStageProgress(client, operation, {
+          codeSourceSha: targetSha,
+          codeBlobs: blobMap,
+        });
+      },
+    });
     if (!published.ok) {
       return fail("FAIL", published.error ?? `não foi possível publicar em ${repo.slug}`);
+    }
+    if (published.partial) {
+      const detail =
+        published.note ??
+        `publicando código em ${repo.slug} — ${published.changed ?? 0} arquivos nesta rodada (continua)`;
+      await report(client, operation, "code", "running", detail);
+      return { result: "PENDING", reasons: [detail] };
     }
     buildRef = published.commitSha ?? null;
     changedFiles = typeof published.changed === "number" ? published.changed : null;
@@ -3120,8 +3475,70 @@ export async function runAutomatedUpdate(input: {
       codeDone: true,
       codeSha: targetSha,
       codeRepo: repo.slug,
+      codeBlobs: {},
     });
   }
+
+  /**
+   * Saída por PUSH quando a API não pode publicar: cota diária estourada, a
+   * Vercel não resolve o repositório, ou a conta só aceita publicação disparada
+   * pelo Git em produção. O código autorizado JÁ está no repositório da
+   * instalação, então basta ligar o build automático e forçar o gatilho.
+   */
+  const finishByGitPush = async (
+    cause: string,
+    options?: { forceNudge?: boolean },
+  ): Promise<{ result: "PASS" | "FAIL" | "BLOCKED"; reasons: string[] }> => {
+    await deploy.setAutoDeploy(true);
+    const needsNudge = options?.forceNudge === true || changedFiles === 0;
+    const nudge = needsNudge
+      ? await code.nudgeDeploy("chore(unitos): republicar versao autorizada")
+      : { ok: true as const, error: undefined as string | undefined };
+    const appliedByPush = publishedRelease ?? MASTER_RELEASE_VERSION;
+    const shortPush = targetSha ? targetSha.slice(0, 7) : null;
+    if (!nudge.ok) {
+      return fail(
+        "FAIL",
+        `${cause} · publicação pelo Git também falhou: ${nudge.error ?? ""}`.trim(),
+        "build",
+      );
+    }
+    if (targetSha) {
+      await (
+        client.from("installations") as unknown as {
+          update: (v: Record<string, unknown>) => {
+            eq: (c: string, v: string) => Promise<unknown>;
+          };
+        }
+      )
+        .update({
+          pinned_commit_sha: targetSha,
+          pinned_release: appliedByPush,
+          pinned_at: new Date().toISOString(),
+        })
+        .eq("id", installation.id)
+        .then(
+          () => undefined,
+          () => undefined,
+        );
+    }
+    await report(client, operation, "code", "done", "código publicado no repositório");
+    await report(client, operation, "build", "done", `build disparado pelo Git (${cause})`);
+    await report(
+      client,
+      operation,
+      "version",
+      "done",
+      shortPush ? `${appliedByPush} (${shortPush})` : appliedByPush,
+    );
+    await finalizeOperation(client as never, operation as never, {
+      ok: true,
+      warnings: true,
+      version: appliedByPush,
+      summary: `Código do MASTER (${appliedByPush}${shortPush ? ` · ${shortPush}` : ""}) publicado no repositório da instalação; o build saiu pelo Git porque ${cause}. Confira a publicação na hospedagem em alguns minutos.`,
+    }).catch(() => undefined);
+    return { result: "PASS", reasons: [] };
+  };
 
   if (!deploymentId) {
     await report(client, operation, "code", "running");
@@ -3130,60 +3547,10 @@ export async function runAutomatedUpdate(input: {
     const created = await deploy.deployLatestCode({ sha: buildRef });
     if (!created.ok || !created.deploymentId) {
       if (created.quotaExceeded || created.gitSourceUnavailable) {
-        // O código autorizado JÁ está no repositório da instalação. Com o build
-        // automático por Git ligado, o push publica sem depender da API: aqui
-        // garantimos o gatilho e fixamos a versão realmente publicada.
-        await deploy.setAutoDeploy(true);
-        const nudge =
-          changedFiles === 0
-            ? await code.nudgeDeploy("chore(unitos): republicar versao autorizada")
-            : { ok: true as const };
-        const appliedByPush = publishedRelease ?? MASTER_RELEASE_VERSION;
-        const shortPush = targetSha ? targetSha.slice(0, 7) : null;
         const cause = created.quotaExceeded
           ? "cota diária de deployments por API da Vercel esgotada"
           : "a Vercel não resolveu o repositório pela API";
-        if (!nudge.ok) {
-          return fail(
-            "FAIL",
-            `${created.error ?? cause} · publicação pelo Git também falhou: ${nudge.error ?? ""}`.trim(),
-          );
-        }
-        if (targetSha) {
-          await (
-            client.from("installations") as unknown as {
-              update: (v: Record<string, unknown>) => {
-                eq: (c: string, v: string) => Promise<unknown>;
-              };
-            }
-          )
-            .update({
-              pinned_commit_sha: targetSha,
-              pinned_release: appliedByPush,
-              pinned_at: new Date().toISOString(),
-            })
-            .eq("id", installation.id)
-            .then(
-              () => undefined,
-              () => undefined,
-            );
-        }
-        await report(client, operation, "code", "done", "código publicado no repositório");
-        await report(client, operation, "build", "done", `build disparado pelo Git (${cause})`);
-        await report(
-          client,
-          operation,
-          "version",
-          "done",
-          shortPush ? `${appliedByPush} (${shortPush})` : appliedByPush,
-        );
-        await finalizeOperation(client as never, operation as never, {
-          ok: true,
-          warnings: true,
-          version: appliedByPush,
-          summary: `Código do MASTER (${appliedByPush}${shortPush ? ` · ${shortPush}` : ""}) publicado no repositório da instalação; o build saiu pelo Git porque ${cause}. Confira a publicação na Vercel em alguns minutos.`,
-        }).catch(() => undefined);
-        return { result: "PASS", reasons: [] };
+        return finishByGitPush(cause);
       }
       return fail("FAIL", created.error ?? "não foi possível disparar o deployment");
     }
@@ -3230,11 +3597,16 @@ export async function runAutomatedUpdate(input: {
   const deadline = Date.now() + (input.waitMs ?? 45_000);
   let state = "QUEUED";
   let url: string | null = null;
+  let refusedReason: string | null = null;
   while (Date.now() < deadline) {
     const status = await deploy.deploymentState(deploymentId);
     if (status.ok) {
       state = status.state ?? state;
       url = status.url ?? url;
+      if (status.refused) {
+        refusedReason = status.reason ?? `a hospedagem recusou a publicação (${state})`;
+        break;
+      }
       if (state === "READY") break;
       if (state === "ERROR" || state === "CANCELED") break;
     }
@@ -3244,11 +3616,42 @@ export async function runAutomatedUpdate(input: {
     await sleep(3_000);
   }
 
+  if (refusedReason) {
+    // Estado TERMINAL: esperar mais nunca vira READY (ex.: a conta só aceita
+    // publicação disparada pelo Git em produção). Antes disso a operação ficava
+    // presa em "build em andamento (BLOCKED)" e o watchdog a retomava sem fim.
+    const onlyGit = /not allowed in production|only git deployments/i.test(refusedReason);
+    const cause = onlyGit
+      ? "a hospedagem só aceita publicação disparada pelo Git em produção"
+      : `a hospedagem recusou a publicação (${refusedReason})`;
+    // Limpa o deployment recusado do checkpoint: a retomada não deve voltar a
+    // consultá-lo.
+    await saveStageProgress(client, operation, { updateDeploymentId: null });
+    return finishByGitPush(cause, { forceNudge: true });
+  }
+
   if (state === "ERROR" || state === "CANCELED") {
     return fail("FAIL", `o build terminou em ${state}`, "build");
   }
 
   if (state !== "READY") {
+    // Teto absoluto: sem conclusão em BUILD_MAX_MINUTES a operação encerra com
+    // motivo claro, em vez de ser retomada indefinidamente pelo watchdog.
+    const startedAt = Date.parse(
+      ((operation as unknown as { started_at?: string | null; created_at?: string | null })
+        .started_at ??
+        (operation as unknown as { created_at?: string | null }).created_at ??
+        "") as string,
+    );
+    const elapsedMin = Number.isFinite(startedAt) ? (Date.now() - startedAt) / 60_000 : 0;
+    if (elapsedMin >= BUILD_MAX_MINUTES) {
+      await saveStageProgress(client, operation, { updateDeploymentId: null });
+      return fail(
+        "FAIL",
+        `a publicação não concluiu em ${BUILD_MAX_MINUTES} minutos (último estado: ${state}). Confira a hospedagem e autorize a atualização novamente.`,
+        "build",
+      );
+    }
     // Não encerra prematuramente. O cron/watchdog retomará a MESMA operação e
     // consultará o MESMO deployment persistido até READY ou erro terminal.
     await report(client, operation, "build", "running", `build em andamento (${state})`);

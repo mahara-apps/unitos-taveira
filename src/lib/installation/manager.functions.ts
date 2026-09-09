@@ -182,6 +182,15 @@ function mapOperation(row: any): InstallationOperationRecord {
   };
 }
 
+/**
+ * Credencial do MASTER para LER o código-fonte. O token da instalação fica só
+ * para gravar no repositório dela: separar as duas contas divide a cota de uso
+ * do GitHub e evita o 403 "API rate limit exceeded" durante a publicação.
+ */
+function masterGithubToken(): string {
+  return (process.env["UNITOS_GITHUB_TOKEN"] ?? "").trim();
+}
+
 async function guard(context: { supabase: unknown; userId: string }) {
   const { assertMasterInstallation } = await import("./manager.server");
   assertMasterInstallation();
@@ -278,6 +287,32 @@ function clean(value: string | null | undefined): string | null {
   return v ? v : null;
 }
 
+async function assertSupabaseManagementAccess(input: {
+  token: string;
+  supabaseProjectRef?: string | null;
+  supabaseUrl?: string | null;
+}): Promise<void> {
+  const { extractProjectRef } = await import("./automation-contract");
+  const projectRef = extractProjectRef(input);
+  if (!projectRef) {
+    throw new Error("Informe a URL ou o Project ref do Supabase antes de salvar o token.");
+  }
+  const { createManagementClient } = await import("./automation.server");
+  const management = createManagementClient({ token: input.token.trim(), projectRef });
+  const database = await management.query("select 1 as ok");
+  if (!database.ok) {
+    throw new Error(
+      `Este token não pode administrar o projeto informado. ${database.error ?? "Acesso recusado."}`,
+    );
+  }
+  const keys = await management.keys();
+  if (!keys.ok || !keys.publishableKey || !keys.serviceRoleKey) {
+    throw new Error(
+      `Este token não possui todos os acessos exigidos pelo provisionamento. ${keys.error ?? "Não foi possível ler as chaves de API do projeto."}`,
+    );
+  }
+}
+
 /**
  * Cadastro de instalação no modelo BYOK: o Supabase Access Token do cliente é
  * obrigatório e gravado cifrado no mesmo passo. Se a gravação falhar, o
@@ -301,6 +336,12 @@ export const createInstallationFn = createServerFn({ method: "POST" })
 
     const validation = validateInstallationInput(data);
     if (!validation.ok) throw new Error(validation.error);
+
+    await assertSupabaseManagementAccess({
+      token: data.supabaseManagementToken,
+      supabaseProjectRef: data.supabaseProjectRef,
+      supabaseUrl: data.supabaseUrl,
+    });
 
     const insert = {
       name: data.name.trim(),
@@ -378,6 +419,11 @@ export const updateInstallationFn = createServerFn({ method: "POST" })
 
     const token = (data.supabaseManagementToken ?? "").trim();
     if (token) {
+      await assertSupabaseManagementAccess({
+        token,
+        supabaseProjectRef: data.supabaseProjectRef,
+        supabaseUrl: data.supabaseUrl,
+      });
       const { saveInstallationCredentials } = await import("./credentials.server");
       try {
         await saveInstallationCredentials(context.supabase as never, data.id, context.userId, {
@@ -1315,6 +1361,7 @@ export const getMasterVersionFn = createServerFn({ method: "GET" })
       const [owner, repo] = masterRepo.split("/");
       const code = createCodeClient({
         token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+        masterToken: masterGithubToken(),
         owner: owner ?? "",
         repo: repo ?? "",
         masterRepo,
@@ -1600,6 +1647,7 @@ export const syncInstallationVersionFn = createServerFn({ method: "POST" })
 
     const code = createCodeClient({
       token: (env["UNITOS_GITHUB_TOKEN"] ?? "").trim(),
+      masterToken: masterGithubToken(),
       owner: repo.owner,
       repo: repo.repo,
       masterRepo,
@@ -1668,6 +1716,21 @@ export const saveInstallationCredentialsFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await guard(context);
+    const incomingSupabaseToken = data.supabaseManagementToken?.trim();
+    if (incomingSupabaseToken) {
+      const { data: installation, error: installationError } = await context.supabase
+        .from("installations")
+        .select("supabase_project_ref, supabase_url")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (installationError) throw installationError;
+      if (!installation) throw new Error("Instalação não encontrada.");
+      await assertSupabaseManagementAccess({
+        token: incomingSupabaseToken,
+        supabaseProjectRef: installation.supabase_project_ref,
+        supabaseUrl: installation.supabase_url,
+      });
+    }
     const { saveInstallationCredentials, getInstallationCredentialsStatus } =
       await import("./credentials.server");
     const patch: Record<string, string> = {};
@@ -1803,6 +1866,7 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
         database: { ok: false, detail: target.reason },
         deploy: { ok: false, detail: "dados da instalação incompletos" },
         code: { ok: false, detail: "dados da instalação incompletos" },
+        checks: [],
       };
     }
     if (!capability.available) {
@@ -1810,6 +1874,7 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
         database: { ok: false, detail: capability.blockedReasons.join(" | ") },
         deploy: { ok: false, detail: capability.blockedReasons.join(" | ") },
         code: { ok: false, detail: capability.blockedReasons.join(" | ") },
+        checks: [],
       };
     }
 
@@ -1819,6 +1884,16 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
       projectRef: target.projectRef,
     });
     const ping = await management.query("select 1 as ok");
+    const keys = ping.ok ? await management.keys() : null;
+    const database =
+      ping.ok && keys?.ok && keys.publishableKey && keys.serviceRoleKey
+        ? { ok: true, detail: `banco e chaves do projeto ${target.projectRef} acessíveis` }
+        : {
+            ok: false,
+            detail: ping.ok
+              ? (keys?.error ?? "o token não permite ler todas as chaves de API do projeto")
+              : (ping.error ?? "acesso ao banco recusado"),
+          };
 
     const deploy = createDeployClient({
       token: (env["UNITOS_VERCEL_TOKEN"] ?? "").trim(),
@@ -1866,6 +1941,12 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
       gitRepoUrl: record.gitRepoUrl ?? null,
       masterRepo,
     });
+    const permissionChecks: Array<{
+      area: "database" | "deploy" | "code";
+      label: string;
+      ok: boolean;
+      detail: string;
+    }> = [];
     let code: { ok: boolean; detail: string } = {
       ok: false,
       detail: repo.ok ? "token do repositório não configurado" : repo.reason,
@@ -1874,21 +1955,32 @@ export const testInstallationCredentialsFn = createServerFn({ method: "POST" })
     if (repo.ok && githubToken) {
       const client = createCodeClient({
         token: githubToken,
+        masterToken: masterGithubToken(),
         owner: repo.owner,
         repo: repo.repo,
         masterRepo,
       });
       const diagnosis = await client.diagnose();
       code = { ok: diagnosis.ok, detail: diagnosis.detail };
+      permissionChecks.push(...(await client.permissions()));
     }
 
     return {
-      database: {
-        ok: ping.ok,
-        detail: ping.ok ? `banco ${target.projectRef} acessível` : (ping.error ?? "acesso negado"),
-      },
+      database,
       deploy: { ok: project.ok, detail: deployDetail },
       code,
+      // Lista permissão por permissão: o painel mostra exatamente o que falta.
+      checks: [
+        { area: "database" as const, label: "Banco e chaves do projeto", ...database },
+        {
+          area: "deploy" as const,
+          label: "Projeto de publicação",
+          ok: project.ok,
+          detail: deployDetail,
+        },
+        { area: "code" as const, label: "Repositório da instalação", ...code },
+        ...permissionChecks,
+      ],
     };
   });
 
@@ -1941,6 +2033,7 @@ export const adoptInstallationRepositoryFn = createServerFn({ method: "POST" })
 
     const code = createCodeClient({
       token: githubToken,
+      masterToken: masterGithubToken(),
       owner,
       repo: repoName,
       masterRepo,
