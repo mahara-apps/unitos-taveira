@@ -42,7 +42,13 @@ describe("atualização de código da instalação", () => {
         match: /v9\/projects\//,
         body: {
           name: "unitos-teste",
-          link: { type: "github", org: "mahara-apps", repo: "unitos-master", repoId: 42, productionBranch: "main" },
+          link: {
+            type: "github",
+            org: "mahara-apps",
+            repo: "unitos-master",
+            repoId: 42,
+            productionBranch: "main",
+          },
         },
       },
       { match: /v13\/deployments\?/, body: { id: "dpl_1" } },
@@ -64,7 +70,13 @@ describe("atualização de código da instalação", () => {
         body: {
           id: "prj_1",
           name: "unitos-teste",
-          link: { type: "github", org: "mahara-apps", repo: "unitos-teste", repoId: 7, productionBranch: "main" },
+          link: {
+            type: "github",
+            org: "mahara-apps",
+            repo: "unitos-teste",
+            repoId: 7,
+            productionBranch: "main",
+          },
         },
       },
       { match: /\/link/, body: { ok: true } },
@@ -77,11 +89,13 @@ describe("atualização de código da instalação", () => {
     expect(link?.body).toMatchObject({ repo: "mahara-apps/unitos-master", gitBranch: "main" });
   });
 
-
   it("sem repositório ligado cai para rebuild e sinaliza que não traz código novo", async () => {
     const { impl } = fakeFetch([
       { match: /v9\/projects\//, body: { name: "unitos-teste" } },
-      { match: /v6\/deployments/, body: { deployments: [{ uid: "dpl_old", name: "unitos-teste" }] } },
+      {
+        match: /v6\/deployments/,
+        body: { deployments: [{ uid: "dpl_old", name: "unitos-teste" }] },
+      },
       { match: /v13\/deployments\?/, body: { id: "dpl_2" } },
     ]);
     const client = createDeployClient({ token: "t", project: "unitos-teste", fetchImpl: impl });
@@ -89,7 +103,7 @@ describe("atualização de código da instalação", () => {
     expect(res).toMatchObject({ ok: true, source: "rebuild" });
   });
 
-  it("desliga o build automático da branch e publica o commit autorizado", async () => {
+  it("mantém o build automático ligado e publica o commit autorizado", async () => {
     const { impl, calls } = fakeFetch([
       {
         match: /v9\/projects\//,
@@ -109,13 +123,13 @@ describe("atualização de código da instalação", () => {
     const client = createDeployClient({ token: "t", project: "unitos-teste", fetchImpl: impl });
     const res = await client.deployLatestCode({ sha: "abcdef1234567890" });
     expect(res).toMatchObject({ ok: true, deploymentId: "dpl_9", ref: "abcdef1234567890" });
-    // auto-deploy desligado: a instalação externa não publica sozinha
+    // auto-deploy LIGADO: rede de segurança quando a API da Vercel falha
     const patch = calls.find((c) => c.method === "PATCH");
     expect(patch?.body).toEqual({
       deploymentPolicy: {
         deploymentSources: [
           {
-            enabled: false,
+            enabled: true,
             environments: [
               { type: "system", target: "production" },
               { type: "system", target: "preview" },
@@ -135,7 +149,12 @@ describe("atualização de código da instalação", () => {
     const { impl } = fakeFetch([
       { match: /api\.github\.com\/repos\/.+\/commits\/main/, body: { sha: "cafe1234567" } },
     ]);
-    const client = createDeployClient({ token: "t", project: "p", fetchImpl: impl });
+    const client = createDeployClient({
+      token: "t",
+      project: "p",
+      fetchImpl: impl,
+      githubToken: "gh",
+    });
     await expect(client.latestCommit()).resolves.toMatchObject({ ok: true, sha: "cafe1234567" });
   });
 
@@ -166,5 +185,41 @@ describe("atualização de código da instalação", () => {
       updateDeploymentRef: "main",
     });
     expect(JSON.stringify(detail)).not.toMatch(/token|secret|password/i);
+  });
+});
+
+describe("quando a Vercel não encontra o repositório", () => {
+  it("tenta owner/repo e sinaliza gitSourceUnavailable para publicar pelo Git", async () => {
+    const { impl, calls } = fakeFetch([
+      {
+        match: /v9\/projects\//,
+        body: {
+          name: "unitos-taveira",
+          link: {
+            type: "github",
+            org: "mahara-apps",
+            repo: "unitos-taveira",
+            repoId: 99,
+            productionBranch: "main",
+          },
+        },
+      },
+      {
+        match: /v13\/deployments\?/,
+        status: 400,
+        body: {
+          error: {
+            code: "incorrect_git_source_info",
+            message: "The provided GitHub repository can't be found.",
+          },
+        },
+      },
+    ]);
+    const client = createDeployClient({ token: "t", project: "unitos-taveira", fetchImpl: impl });
+    const res = await client.deployLatestCode({ sha: "abc1234" });
+    expect(res.ok).toBe(false);
+    expect(res.gitSourceUnavailable).toBe(true);
+    const deployPosts = calls.filter((c) => c.method === "POST" && /v13\/deployments/.test(c.url));
+    expect(deployPosts.length).toBeGreaterThan(1);
   });
 });

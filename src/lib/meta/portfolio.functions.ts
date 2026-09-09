@@ -706,6 +706,17 @@ export const linkMetaAccount = createServerFn({ method: "POST" })
     }
 
     const connectionIds: string[] = [];
+    /**
+     * Retorno explícito do que foi realmente vinculado nesta ação. Página +
+     * Instagram vêm juntos, e a UI precisa dos dois para marcar os canais e
+     * concluir o vínculo com o cliente em um único passo.
+     */
+    const linked: Array<{
+      channel: "facebook" | "instagram" | "threads" | "ads";
+      externalId: string;
+      connectionId: string;
+      label: string;
+    }> = [];
 
     for (const spec of specs) {
       if (spec.tokenToStore === null && !session.user_token_ciphertext) {
@@ -764,6 +775,12 @@ export const linkMetaAccount = createServerFn({ method: "POST" })
         .single();
       if (upErr) throw upErr;
       connectionIds.push(upserted.id);
+      linked.push({
+        channel: spec.channel,
+        externalId: spec.externalId,
+        connectionId: upserted.id,
+        label: spec.externalName,
+      });
 
       if (data.clientId) {
         const { error: assignErr } = await context.supabase.from("client_social_accounts").upsert(
@@ -783,6 +800,7 @@ export const linkMetaAccount = createServerFn({ method: "POST" })
       ok: true,
       connectionId: connectionIds[0]!,
       connectionIds,
+      linked,
       linkedChannels: specs.map((s) => s.channel),
     };
   });

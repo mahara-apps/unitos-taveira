@@ -21,6 +21,8 @@ export const CRITICAL_ACTION_KEYS = [
   "installation.complete_operation",
   "installation.sync_version",
   "installation.delete",
+  "installation.suspend",
+  "installation.resume",
   "installation.clear_credentials",
   "installation.rotate_secret",
   // Exclusões com perda de dados
@@ -111,6 +113,21 @@ export const CRITICAL_ACTIONS: Record<CriticalActionKey, CriticalActionDefinitio
     key: "installation.sync_version",
     title: "Sincronizar versão",
     impact: "Reescreve a versão registrada da instalação com base no código realmente publicado.",
+    irreversible: false,
+    targetType: "installation",
+  },
+  "installation.suspend": {
+    key: "installation.suspend",
+    title: "Suspender instalação",
+    impact:
+      "Bloqueia o acesso de todas as pessoas daquele ambiente (menos o Super Admin) até você reativar. Nenhum dado é apagado.",
+    irreversible: false,
+    targetType: "installation",
+  },
+  "installation.resume": {
+    key: "installation.resume",
+    title: "Reativar instalação",
+    impact: "Libera de volta o acesso das pessoas daquele ambiente.",
     irreversible: false,
     targetType: "installation",
   },

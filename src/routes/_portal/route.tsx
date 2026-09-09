@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { MandatoryPasswordReset } from "@/components/auth/mandatory-password-reset";
 import { getCachedUser } from "@/lib/auth-cache";
 import { getCachedPortalAccess } from "@/lib/access-cache";
+import { ServiceStateBoundary } from "@/components/service-state-boundary";
 
 /**
  * Área autenticada do portal do cliente (Etapa 1 — login opcional).
@@ -27,9 +28,11 @@ export const Route = createFileRoute("/_portal")({
 
 function PortalAreaShell() {
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <Outlet />
-      <MandatoryPasswordReset />
-    </div>
+    <ServiceStateBoundary>
+      <div className="min-h-dvh bg-background text-foreground">
+        <Outlet />
+        <MandatoryPasswordReset />
+      </div>
+    </ServiceStateBoundary>
   );
 }

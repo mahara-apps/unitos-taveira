@@ -16,7 +16,11 @@
  * - a credencial da instalação tem PRECEDÊNCIA sobre o env global.
  */
 
-import { AUTOMATION_CREDENTIAL_VARS, type AutomationEnv } from "./automation-contract";
+import {
+  AUTOMATION_CREDENTIAL_VARS,
+  BYOK_SUPABASE_MARKER,
+  type AutomationEnv,
+} from "./automation-contract";
 
 export type InstallationCredentialField =
   | "supabaseManagementToken"
@@ -287,6 +291,31 @@ function normalize(env: AutomationEnv): ResolvedAutomationEnv {
   return out;
 }
 
+/**
+ * Descobre se a instalação é BYOK (cadastrada com o token do próprio cliente).
+ * Ambiente antigo, sem a coluna, responde `false` e mantém o comportamento
+ * anterior — nenhuma instalação existente para de funcionar.
+ */
+export async function requiresOwnSupabaseToken(
+  client: Client,
+  installationId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from("installations")
+      .select("requires_own_supabase_token")
+      .eq("id", installationId)
+      .maybeSingle();
+    if (error) return false;
+    return (
+      (data as { requires_own_supabase_token?: boolean } | null)?.requires_own_supabase_token ===
+      true
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveInstallationEnv(
   client: Client,
   installationId: string,
@@ -294,6 +323,15 @@ export async function resolveInstallationEnv(
 ): Promise<ResolvedAutomationEnv> {
   const { runtimeEnv } = await import("@/lib/runtime-env.server");
   const env: AutomationEnv = { ...(baseEnv ?? runtimeEnv()) };
+
+  // BYOK: instalações novas não herdam o token global do MASTER. Sem o token
+  // próprio a automação falha de forma explícita, em vez de tocar num projeto
+  // com credencial de outra conta.
+  const byok = await requiresOwnSupabaseToken(client, installationId);
+  if (byok) {
+    for (const name of AUTOMATION_CREDENTIAL_VARS.supabaseManagement) delete env[name];
+    env[BYOK_SUPABASE_MARKER] = "1";
+  }
 
   let row: Row | null = null;
   try {

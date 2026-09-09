@@ -10,10 +10,13 @@ import {
   Copy,
   Loader2,
   MoreHorizontal,
+  Pause,
   Pencil,
+  Play,
   RefreshCw,
   Rocket,
   ShieldCheck,
+  Trash2,
   XCircle,
 } from "lucide-react";
 
@@ -33,6 +36,8 @@ import {
   inspectInstallationIntegrationsFn,
   startInstallationOperationFn,
   updateInstallationFn,
+  deleteInstallationFn,
+  setInstallationServiceStateFn,
   type IntegrationsInspection,
 } from "@/lib/installation/manager.functions";
 
@@ -76,9 +81,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -204,6 +212,8 @@ function InstallationDetailPage() {
   const restartFn = useServerFn(restartAutomatedProvisionFn);
   const resumeFn = useServerFn(resumeAutomatedProvisionFn);
   const editFn = useServerFn(updateInstallationFn);
+  const removeFn = useServerFn(deleteInstallationFn);
+  const serviceStateFn = useServerFn(setInstallationServiceStateFn);
 
   const [runCommand, setRunCommand] = useState<string | null>(null);
   const [critical, setCritical] = useState<{
@@ -214,6 +224,10 @@ function InstallationDetailPage() {
   const [integrations, setIntegrations] = useState<IntegrationsInspection | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
+  // Token do cliente: vazio MANTÉM o token guardado (nunca apaga sem querer).
+  const [editToken, setEditToken] = useState("");
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
 
   const [updateOpen, setUpdateOpen] = useState(false);
   const [provisionOpen, setProvisionOpen] = useState(false);
@@ -442,11 +456,43 @@ function InstallationDetailPage() {
           gitRepoUrl: form.gitRepoUrl,
           deployProject: form.deployProject,
           notes: form.notes,
+          ...(editToken.trim() ? { supabaseManagementToken: editToken.trim() } : {}),
         },
       }),
     onSuccess: () => {
-      toast.success("Dados da instalação atualizados.");
+      toast.success(
+        editToken.trim()
+          ? "Dados e acesso do Supabase atualizados."
+          : "Dados da instalação atualizados.",
+      );
+      setEditToken("");
       setEditOpen(false);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: (confirmLabel: string) => removeFn({ data: { id, confirmLabel } }),
+    onSuccess: () => {
+      toast.success("Instalação removida do painel.");
+      void qc.invalidateQueries({ queryKey: ["installations"] });
+      void navigate({ to: "/admin/instalacoes" });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const serviceState = useMutation({
+    mutationFn: (input: { state: "active" | "suspended"; reason?: string; confirmLabel: string }) =>
+      serviceStateFn({ data: { id, ...input } }),
+    onSuccess: (_res, input) => {
+      toast.success(
+        input.state === "suspended"
+          ? "Ambiente suspenso. Só o Super Admin consegue entrar."
+          : "Ambiente reativado.",
+      );
+      setSuspendOpen(false);
+      setSuspendReason("");
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -525,6 +571,7 @@ function InstallationDetailPage() {
       deployProject: inst.deployProject ?? "",
       notes: inst.notes ?? "",
     });
+    setEditToken("");
     setEditOpen(true);
   };
 
@@ -704,6 +751,44 @@ function InstallationDetailPage() {
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={health.isPending} onClick={() => health.mutate()}>
                   <RefreshCw className="mr-2 h-3.5 w-3.5" /> Reavaliar saúde
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={serviceState.isPending}
+                  onClick={() => {
+                    setSuspendReason("");
+                    setSuspendOpen(true);
+                  }}
+                >
+                  <Pause className="mr-2 h-3.5 w-3.5" /> Suspender ambiente…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={serviceState.isPending}
+                  onClick={() =>
+                    setCritical({
+                      action: "installation.resume",
+                      run: (confirmLabel) => serviceState.mutate({ state: "active", confirmLabel }),
+                    })
+                  }
+                >
+                  <Play className="mr-2 h-3.5 w-3.5" /> Reativar ambiente…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={remove.isPending}
+                  onClick={() =>
+                    setCritical({
+                      action: "installation.delete",
+                      details: [
+                        { label: "Ambiente do cliente", value: "continua no ar, nada é apagado" },
+                        { label: "Painel do MASTER", value: "cadastro e histórico são removidos" },
+                      ],
+                      run: (confirmLabel) => remove.mutate(confirmLabel),
+                    })
+                  }
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Excluir do painel…
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1499,6 +1584,22 @@ function InstallationDetailPage() {
                 />
               </div>
             ))}
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+              <Label htmlFor="edit-token" className="text-xs">
+                Supabase Access Token do cliente
+              </Label>
+              <PasswordInput
+                id="edit-token"
+                value={editToken}
+                autoComplete="off"
+                placeholder="Deixe em branco para manter o token atual"
+                onChange={(e) => setEditToken(e.target.value)}
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Guardado de forma cifrada. Em branco, o token que já está salvo continua valendo —
+                preencha só para trocar.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditOpen(false)}>
@@ -1507,6 +1608,55 @@ function InstallationDetailPage() {
             <Button disabled={edit.isPending || !form.name.trim()} onClick={() => edit.mutate()}>
               {edit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspensão: motivo obrigatório — é o texto que a pessoa vê na tela de bloqueio. */}
+      <Dialog open={suspendOpen} onOpenChange={setSuspendOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Suspender ambiente</DialogTitle>
+            <DialogDescription>
+              Bloqueia a entrada de todas as pessoas desse ambiente, menos o Super Admin. Nenhuma
+              informação é apagada e você pode reativar quando quiser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="suspend-reason" className="text-xs">
+              Motivo (aparece para quem tentar entrar)
+            </Label>
+            <Textarea
+              id="suspend-reason"
+              rows={3}
+              value={suspendReason}
+              placeholder="Ex.: acesso suspenso por pendência de pagamento."
+              onChange={(e) => setSuspendReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSuspendOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={serviceState.isPending || !suspendReason.trim()}
+              onClick={() =>
+                setCritical({
+                  action: "installation.suspend",
+                  details: [{ label: "Motivo", value: suspendReason.trim() }],
+                  run: (confirmLabel) =>
+                    serviceState.mutate({
+                      state: "suspended",
+                      reason: suspendReason.trim(),
+                      confirmLabel,
+                    }),
+                })
+              }
+            >
+              {serviceState.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continuar
             </Button>
           </DialogFooter>
         </DialogContent>

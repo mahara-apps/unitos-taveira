@@ -21,6 +21,12 @@
  *   local.
  */
 
+import {
+  ACTIVE_SERVICE_STATE,
+  isServiceState,
+  type ServiceStateInfo,
+} from "./service-state";
+
 export type InstallationSettings = {
   appUrl: string | null;
   logoUrl: string | null;
@@ -29,6 +35,10 @@ export type InstallationSettings = {
   loginLogoUrl: string | null;
   emailFrom: string | null;
   emailFromName: string | null;
+  /** Estado operacional: active | maintenance | suspended. */
+  serviceState: string | null;
+  serviceMessage: string | null;
+  serviceUntil: string | null;
 };
 
 const EMPTY: InstallationSettings = {
@@ -39,6 +49,9 @@ const EMPTY: InstallationSettings = {
   loginLogoUrl: null,
   emailFrom: null,
   emailFromName: null,
+  serviceState: null,
+  serviceMessage: null,
+  serviceUntil: null,
 };
 
 type Row = {
@@ -49,6 +62,9 @@ type Row = {
   login_logo_url?: string | null;
   email_from?: string | null;
   email_from_name?: string | null;
+  service_state?: string | null;
+  service_message?: string | null;
+  service_until?: string | null;
 };
 
 const CACHE_MS = 30_000;
@@ -64,6 +80,9 @@ function map(row: Row | null): InstallationSettings {
     loginLogoUrl: row.login_logo_url ?? null,
     emailFrom: row.email_from ?? null,
     emailFromName: row.email_from_name ?? null,
+    serviceState: row.service_state ?? null,
+    serviceMessage: row.service_message ?? null,
+    serviceUntil: row.service_until ?? null,
   };
 }
 
@@ -77,7 +96,7 @@ export async function getInstallationSettings(opts?: {
     const res = await supabaseAdmin
       .from("installation")
       .select(
-        "app_url, logo_url, logo_dark_url, icon_url, login_logo_url, email_from, email_from_name",
+        "app_url, logo_url, logo_dark_url, icon_url, login_logo_url, email_from, email_from_name, service_state, service_message, service_until",
       )
       .limit(1)
       .maybeSingle();
@@ -102,7 +121,10 @@ export async function updateInstallationSettings(
       | "icon_url"
       | "login_logo_url"
       | "email_from"
-      | "email_from_name",
+      | "email_from_name"
+      | "service_state"
+      | "service_message"
+      | "service_until",
       string | null
     >
   >,
@@ -114,9 +136,51 @@ export async function updateInstallationSettings(
     .eq("id", true);
   if (error) throw new Error(error.message);
   cache = null;
+  serviceCache = null;
 }
 
 /** Somente para testes: limpa o memo por worker. */
 export function __resetInstallationSettingsCache(): void {
   cache = null;
+}
+
+/**
+ * Estado operacional (faixa de atualização / tela de suspensão).
+ *
+ * Cache curto e independente do branding: o estado muda no meio de uma
+ * atualização e a tela precisa perceber rápido. Instalações antigas (sem as
+ * colunas) respondem `active`.
+ */
+const SERVICE_CACHE_MS = 10_000;
+let serviceCache: { at: number; value: ServiceStateInfo } | null = null;
+
+export async function getInstallationServiceState(opts?: {
+  fresh?: boolean;
+}): Promise<ServiceStateInfo> {
+  if (!opts?.fresh && serviceCache && Date.now() - serviceCache.at < SERVICE_CACHE_MS) {
+    return serviceCache.value;
+  }
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const res = await supabaseAdmin
+      .from("installation")
+      .select("service_state, service_message, service_until")
+      .limit(1)
+      .maybeSingle();
+    const row = ((res as { data: unknown }).data as Row | null) ?? null;
+    const value: ServiceStateInfo = {
+      state: isServiceState(row?.service_state) ? row!.service_state! : "active",
+      message: row?.service_message ?? null,
+      until: row?.service_until ?? null,
+    };
+    serviceCache = { at: Date.now(), value };
+    return value;
+  } catch {
+    return serviceCache?.value ?? ACTIVE_SERVICE_STATE;
+  }
+}
+
+/** Somente para testes: limpa o memo do estado operacional. */
+export function __resetServiceStateCache(): void {
+  serviceCache = null;
 }

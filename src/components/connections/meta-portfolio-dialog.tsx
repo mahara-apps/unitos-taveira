@@ -70,6 +70,12 @@ import { humanizeMetaError } from "@/lib/meta/error-messages";
 import { DiscoveryProgress } from "./discovery-progress";
 import { readAuthorizeUrl } from "@/lib/meta/connect-flow";
 import { assignFinishState } from "@/lib/meta/assign-completion";
+import {
+  type LinkedAccount,
+  pairHint,
+  selectionEntriesFromLinked,
+  unlinkTargets,
+} from "@/lib/meta/link-pair";
 
 /**
  * Status canônico por conta descoberta: 🟢 Pronto · 🟠 Autorização necessária
@@ -411,6 +417,7 @@ export function MetaAssetsPanel({
       targetId: string;
       connect: boolean;
       existingConnectionId: string | null;
+      removals?: Array<{ channel: string; lookupId: string; connectionId: string }>;
     }) => {
       if (input.connect) {
         return linkFn({
@@ -427,10 +434,26 @@ export function MetaAssetsPanel({
           },
         });
       }
-      if (!input.existingConnectionId) return { ok: true };
-      return unlinkFn({ data: { brandId, connectionId: input.existingConnectionId } });
+      const removals =
+        input.removals && input.removals.length > 0
+          ? input.removals
+          : input.existingConnectionId
+            ? [
+                {
+                  channel: input.channel,
+                  lookupId: input.targetId,
+                  connectionId: input.existingConnectionId,
+                },
+              ]
+            : [];
+      for (const removal of removals) {
+        await unlinkFn({ data: { brandId, connectionId: removal.connectionId } });
+      }
+      return { ok: true };
     },
+
     onSuccess: (_r, vars) => {
+      const result = _r as { linked?: LinkedAccount[]; connectionId?: string };
       qc.setQueryData<PortfolioResponse>(queryKey, (old) => {
         if (!old) return old;
         const connected = {
@@ -439,43 +462,48 @@ export function MetaAssetsPanel({
           threads: { ...old.connected.threads },
           ads: { ...old.connected.ads },
         };
-        const lookupId =
-          vars.channel === "instagram"
-            ? (old.pages.find((p) => p.pageId === vars.targetId)?.instagramBusinessId ??
-              vars.targetId)
-            : vars.targetId;
         if (vars.connect) {
-          const result = _r as Record<string, unknown>;
-          if (typeof result.connectionId === "string") {
-            connected[vars.channel][lookupId] = result.connectionId;
-            const label =
-              old.pages.find((p) => p.pageId === vars.targetId)?.pageName ??
-              old.threadsAccounts?.find((t) => t.threadsUserId === vars.targetId)?.username ??
-              old.adAccounts?.find((a) => a.adAccountId === vars.targetId)?.name ??
-              vars.targetId;
-            const connectionId = result.connectionId;
-            const entry: SelectedAccount = {
-              connectionId,
-              label,
-              channel: vars.channel,
-              targetId: vars.targetId,
-              lookupId,
-            };
-            setLinkedNow((prev) =>
-              prev.some((x) => x.connectionId === connectionId) ? prev : [...prev, entry],
-            );
+          const linkedList: LinkedAccount[] = Array.isArray(result.linked)
+            ? result.linked
+            : typeof result.connectionId === "string"
+              ? [
+                  {
+                    channel: vars.channel,
+                    externalId: vars.targetId,
+                    connectionId: result.connectionId,
+                    label: vars.targetId,
+                  },
+                ]
+              : [];
+          const entries = selectionEntriesFromLinked(linkedList, old.pages);
+          for (const entry of entries) {
+            connected[entry.channel][entry.lookupId] = entry.connectionId;
+          }
+          if (entries.length > 0) {
+            setLinkedNow((prev) => {
+              const next = [...prev];
+              for (const entry of entries) {
+                if (!next.some((x) => x.connectionId === entry.connectionId)) next.push(entry);
+              }
+              return next;
+            });
           }
         } else {
-          const removed = connected[vars.channel][lookupId];
-          delete connected[vars.channel][lookupId];
-          if (removed) setLinkedNow((prev) => prev.filter((x) => x.connectionId !== removed));
+          for (const removal of vars.removals ?? []) {
+            delete connected[removal.channel as "facebook" | "instagram"][removal.lookupId];
+            setLinkedNow((prev) => prev.filter((x) => x.connectionId !== removal.connectionId));
+          }
         }
         return { ...old, connected };
       });
       toast.success(
         vars.connect
-          ? "Conta ativada — escolha o cliente no rodapé para concluir"
-          : "Conta desativada",
+          ? Array.isArray(result.linked) && result.linked.length > 1
+            ? "Página e Instagram ativados — escolha o cliente no rodapé para concluir"
+            : "Conta ativada — escolha o cliente no rodapé para concluir"
+          : (vars.removals?.length ?? 0) > 1
+            ? "Página e Instagram desativados"
+            : "Conta desativada",
       );
       invalidate();
     },
@@ -504,7 +532,24 @@ export function MetaAssetsPanel({
               ? data?.connected.threads
               : data?.connected.ads;
       const existing = lookupId ? (map?.[lookupId] ?? null) : null;
-      await mut.mutateAsync({ channel, targetId, connect, existingConnectionId: existing });
+      // Desativar uma Página remove também o Instagram vinculado no mesmo par.
+      const removals =
+        !connect && channel === "facebook" && data
+          ? unlinkTargets({
+              channel,
+              page: data.pages.find((p) => p.pageId === targetId) ?? null,
+              connected: { facebook: data.connected.facebook, instagram: data.connected.instagram },
+            })
+          : !connect && existing && lookupId
+            ? [{ channel, lookupId, connectionId: existing }]
+            : [];
+      await mut.mutateAsync({
+        channel,
+        targetId,
+        connect,
+        existingConnectionId: existing,
+        removals,
+      });
     } finally {
       setPending((s) => {
         const next = new Set(s);
@@ -900,6 +945,16 @@ export function MetaAssetsPanel({
                             <p className="truncate text-[11px] text-muted-foreground">
                               {p.category ?? "Página"} · Page ID {p.pageId}
                             </p>
+                            <p
+                              className={`truncate text-[11px] ${
+                                p.instagramBusinessId
+                                  ? "text-[#DD2A7B]"
+                                  : "text-muted-foreground/80"
+                              }`}
+                            >
+                              {pairHint(p)}
+                            </p>
+
                             <div className="mt-1">
                               <AccountStatusBadge
                                 status={accountDiscoveryStatus(publishAuth, "facebook", p.pageId)}

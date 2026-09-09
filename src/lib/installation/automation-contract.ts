@@ -32,6 +32,12 @@ export const AUTOMATION_CREDENTIAL_VARS = {
   github: ["UNITOS_GITHUB_TOKEN"],
 } as const;
 
+/**
+ * Marcador interno (não é credencial): sinaliza que o env resolvido pertence a
+ * uma instalação BYOK, que exige o Supabase Access Token do próprio cliente.
+ */
+export const BYOK_SUPABASE_MARKER = "UNITOS_INSTALLATION_BYOK_SUPABASE";
+
 export type AutomationEnv = Record<string, string | undefined | null>;
 
 function pick(env: AutomationEnv, names: readonly string[]): string | null {
@@ -80,6 +86,9 @@ export function resolveAutomationCapability(env: AutomationEnv): AutomationCapab
   const management = pick(env, AUTOMATION_CREDENTIAL_VARS.supabaseManagement);
   const vercel = pick(env, AUTOMATION_CREDENTIAL_VARS.vercel);
   const github = pick(env, AUTOMATION_CREDENTIAL_VARS.github);
+  // Marcador posto por `resolveInstallationEnv`: instalação BYOK não usa o
+  // token global do MASTER, então a mensagem precisa apontar a tela certa.
+  const byok = (env[BYOK_SUPABASE_MARKER] ?? "") === "1";
 
   const supabase: CapabilityState = management
     ? {
@@ -90,9 +99,10 @@ export function resolveAutomationCapability(env: AutomationEnv): AutomationCapab
       }
     : {
         available: false,
-        reason:
-          "Credencial de gestão do Supabase ausente no runtime do MASTER — provisionamento automático BLOCKED. Nomes aceitos: " +
-          AUTOMATION_CREDENTIAL_VARS.supabaseManagement.join(", "),
+        reason: byok
+          ? "Supabase Access Token desta instalação ausente ou ilegível — provisionamento BLOCKED. Preencha o token em Acessos da instalação (esta instalação não usa o acesso central)."
+          : "Credencial de gestão do Supabase ausente no runtime do MASTER — provisionamento automático BLOCKED. Nomes aceitos: " +
+            AUTOMATION_CREDENTIAL_VARS.supabaseManagement.join(", "),
         resolvedFrom: null,
         acceptedNames: AUTOMATION_CREDENTIAL_VARS.supabaseManagement,
       };

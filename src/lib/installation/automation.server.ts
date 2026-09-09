@@ -515,6 +515,12 @@ export type DeployClient = {
     error?: string;
     /** Cota diária de deployments da API esgotada (402 / free-per-day). */
     quotaExceeded?: boolean;
+    /**
+     * A Vercel não consegue resolver o repositório informado
+     * (`incorrect_git_source_info`): o vínculo existe, mas o app da Vercel no
+     * GitHub não alcança o repositório. Nesse caso a publicação sai por push.
+     */
+    gitSourceUnavailable?: boolean;
     /** Epoch (s) em que a cota volta, quando a Vercel informa. */
     resetAt?: number;
   }>;
@@ -1484,46 +1490,76 @@ export function createDeployClient(input: {
           body = (await readProject()) ?? body;
         }
 
-        // Instalação externa NUNCA publica sozinha a cada commit no MASTER:
-        // o build automático da branch fica desligado e o deploy só acontece
-        // aqui, quando o Super Admin autoriza a atualização.
-        await client.setAutoDeploy(false);
+        // O build automático da branch fica LIGADO: é a rede de segurança quando
+        // a API da Vercel não consegue resolver o repositório (um push publica).
+        await client.setAutoDeploy(true);
 
         const link = body.link;
         const repoId = link?.repoId;
-        if (!link?.type || repoId === undefined || repoId === null) {
+        const org = (link?.org ?? "").trim();
+        const repoName = (link?.repo ?? "").trim();
+        if (!link?.type || (!repoId && !(org && repoName))) {
           const fallback = await client.redeploy();
           return { ...fallback, source: "rebuild" as const };
         }
         const branch = (link.productionBranch ?? "main").trim() || "main";
         const ref = (options?.sha ?? "").trim() || branch;
+        const type = link.type;
 
-        const created = await doFetch(
-          `https://api.vercel.com/v13/deployments?${qs("forceNew=1")}`,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              name: body.name ?? input.project,
-              target: "production",
-              gitSource: { type: link.type, repoId: String(repoId), ref },
-            }),
-          },
-        );
-        if (!created.ok) {
+        // A Vercel aceita mais de uma forma de identificar a origem Git e nem
+        // todas funcionam em todo projeto (repositório recriado, id antigo em
+        // cache, app do GitHub reinstalado). Tentamos todas antes de desistir.
+        const variants: Array<Record<string, unknown>> = [];
+        if (repoId !== undefined && repoId !== null && String(repoId).trim()) {
+          variants.push({ type, repoId: String(repoId), ref });
+        }
+        if (org && repoName) {
+          variants.push({ type, org, repo: repoName, ref });
+          variants.push({ type, repo: `${org}/${repoName}`, ref });
+        }
+
+        const attempts: string[] = [];
+        let gitSourceUnavailable = false;
+        for (const gitSource of variants) {
+          const created = await doFetch(
+            `https://api.vercel.com/v13/deployments?${qs("forceNew=1")}`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                name: body.name ?? input.project,
+                target: "production",
+                gitSource,
+              }),
+            },
+          );
+          if (created.ok) {
+            const json = (await created.json().catch(() => ({}))) as { id?: string; uid?: string };
+            return { ok: true, deploymentId: json.id ?? json.uid, source: "git" as const, ref };
+          }
           const text = await created.text().catch(() => "");
           const quota = parseDeployQuotaError(created.status, text);
-          return {
-            ok: false,
-            quotaExceeded: quota.quotaExceeded || undefined,
-            resetAt: quota.resetAt,
-            error: quota.quotaExceeded
-              ? "cota diária de deployments da Vercel esgotada (plano gratuito: 100/dia)"
-              : `HTTP ${created.status} ao disparar deployment do código (${text.slice(0, 200)})`,
-          };
+          if (quota.quotaExceeded) {
+            return {
+              ok: false,
+              quotaExceeded: true,
+              resetAt: quota.resetAt,
+              error: "cota diária de deployments da Vercel esgotada (plano gratuito: 100/dia)",
+            };
+          }
+          if (/incorrect_git_source_info|repository can't be found/i.test(text)) {
+            gitSourceUnavailable = true;
+          }
+          attempts.push(`HTTP ${created.status} (${text.slice(0, 160)})`);
         }
-        const json = (await created.json().catch(() => ({}))) as { id?: string; uid?: string };
-        return { ok: true, deploymentId: json.id ?? json.uid, source: "git" as const, ref };
+
+        return {
+          ok: false,
+          gitSourceUnavailable: gitSourceUnavailable || undefined,
+          error: gitSourceUnavailable
+            ? `a Vercel não encontrou o repositório ${org}/${repoName} ao disparar o deployment — confira se o app da Vercel no GitHub tem acesso a esse repositório (${attempts.join(" · ")})`
+            : `não foi possível disparar o deployment do código (${attempts.join(" · ")})`,
+        };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
@@ -2142,26 +2178,15 @@ export async function runAutomatedProvision(input: {
     checks.configuration = "attention";
     return finish(null, null);
   }
-  // Instalação externa nunca publica sozinha a cada commit: o build automático
-  // fica desligado quando o plano da Vercel permite. Em plano Hobby a política
-  // não existe: seguimos com aviso, sem bloquear o provisionamento.
-  const autoDeployOff = await deploy.setAutoDeploy(false);
-  if (!autoDeployOff.ok) {
-    blocked.push(
-      `Auto-deploy por Git não pôde ser desligado em ${target.deployProject}: ${
-        autoDeployOff.error ?? ""
-      }`.trim(),
-    );
-    await mark("deploy_link", "error", autoDeployOff.error ?? "auto-deploy segue ligado");
-    checks.configuration = "attention";
-    return finish(null, null);
-  }
+  // O build automático por Git fica LIGADO: é a rede de segurança quando a API
+  // da Vercel não consegue disparar o deployment. Não bloqueia o provisionamento.
+  const autoDeployOn = await deploy.setAutoDeploy(true);
   await mark(
     "deploy_link",
     "done",
-    autoDeployOff.unsupported
-      ? `projeto ligado a ${repo.slug} · auto-deploy por Git segue ligado (${autoDeployOff.error ?? "plano da Vercel sem política de deployment"})`
-      : `projeto ligado a ${repo.slug} · auto-deploy por Git desligado`,
+    autoDeployOn.ok
+      ? `projeto ligado a ${repo.slug} · auto-deploy por Git ligado`
+      : `projeto ligado a ${repo.slug} · auto-deploy por Git não confirmado (${autoDeployOn.error ?? "sem detalhe"})`,
   );
 
   /* 5. baseline do banco — roda DEPOIS de código, deploy conectado e variáveis:
@@ -2170,14 +2195,29 @@ export async function runAutomatedProvision(input: {
     appUrl: string | null,
     urlSource: "custom_domain" | "deploy" | null,
   ): Promise<AutomationRunResult | null> => {
-    const baseline: { id: string; label: string; sql: string }[] = [
-      { id: "database", label: "000_extensions", sql: baseline000 },
-      { id: "database", label: "001_initial_schema", sql: baseline001 },
-      { id: "database", label: "005_auth_trigger", sql: baseline005 },
-      { id: "database", label: "007_delta_migrations", sql: baseline007 },
-      { id: "storage", label: "003_storage_buckets", sql: baseline003 },
-      { id: "storage", label: "006_storage_policies", sql: baseline006 },
-      { id: "seeds", label: "004_seeds", sql: baseline004 },
+    // `key` é o identificador do checkpoint. O delta MUDA a cada release do
+    // MASTER, então seu checkpoint carrega a impressão digital do conteúdo:
+    // sem isso, um provisionamento antigo que marcou "007_delta_migrations:
+    // aplicado" fazia a versão nova ser PULADA e a validação final acusava
+    // colunas/tabelas ausentes. Os arquivos de baseline fixo seguem por label.
+    const baseline: { id: string; label: string; key: string; sql: string }[] = [
+      { id: "database", label: "000_extensions", key: "000_extensions", sql: baseline000 },
+      { id: "database", label: "001_initial_schema", key: "001_initial_schema", sql: baseline001 },
+      { id: "database", label: "005_auth_trigger", key: "005_auth_trigger", sql: baseline005 },
+      {
+        id: "database",
+        label: UPDATE_DELTA_LABEL,
+        key: deltaProgressKey(baseline007),
+        sql: baseline007,
+      },
+      { id: "storage", label: "003_storage_buckets", key: "003_storage_buckets", sql: baseline003 },
+      {
+        id: "storage",
+        label: "006_storage_policies",
+        key: "006_storage_policies",
+        sql: baseline006,
+      },
+      { id: "seeds", label: "004_seeds", key: "004_seeds", sql: baseline004 },
     ];
 
     // Checkpoint: o Worker tem vida limitada. Cada arquivo (e cada lote dentro
@@ -2206,7 +2246,7 @@ export async function runAutomatedProvision(input: {
         currentGroup = file.id;
         await mark(file.id, "running", null, groupPercent(file.id, 0));
       }
-      if (progress[file.label] === DONE) {
+      if (progress[file.key] === DONE) {
         groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
         await mark(
           file.id,
@@ -2220,7 +2260,7 @@ export async function runAutomatedProvision(input: {
       // A Management API executa como `postgres` (não superusuário): comandos
       // exclusivos de superusuário do dump são removidos antes de enviar.
       const prepared = sanitizeBaselineSqlForManagementApi(file.sql);
-      const alreadyApplied = progress[file.label] ?? 0;
+      const alreadyApplied = progress[file.key] ?? 0;
       // Nunca envie o arquivo inteiro em uma única chamada. Além de não gerar
       // heartbeat durante sua execução, 001 (530 KB) e 007 podiam exceder a vida
       // do runtime. O mesmo caminho curto/idempotente vale para primeira execução
@@ -2233,7 +2273,7 @@ export async function runAutomatedProvision(input: {
           ? { maxStatements: input.maxStatementsPerInvocation }
           : {}),
         onProgress: async (processed, total) => {
-          progress[file.label] = processed;
+          progress[file.key] = processed;
           await saveBaselineProgress(client, operation, progress);
           const percent = Math.min(99, Math.round((processed / Math.max(total, 1)) * 100));
           const action = alreadyApplied > 0 ? "retomando aplicação" : "aplicando";
@@ -2247,7 +2287,7 @@ export async function runAutomatedProvision(input: {
       });
       if (!perStatement.ok) {
         if (typeof perStatement.processed === "number" && perStatement.processed > 0) {
-          progress[file.label] = perStatement.processed;
+          progress[file.key] = perStatement.processed;
           await saveBaselineProgress(client, operation, progress);
         }
         failures.push(`${file.label}: ${perStatement.error ?? "falha ao aplicar"}`);
@@ -2268,7 +2308,7 @@ export async function runAutomatedProvision(input: {
           steps,
         };
       }
-      progress[file.label] = DONE;
+      progress[file.key] = DONE;
       groupDone[file.id] = (groupDone[file.id] ?? 0) + 1;
       await saveBaselineProgress(client, operation, progress);
     }
@@ -2429,9 +2469,9 @@ export async function runAutomatedProvision(input: {
       await mark("deploy", "error", plan.reason);
       return finish(url.origin, url.source);
     }
-    // Instalação externa não pode republicar sozinha a cada commit no MASTER:
-    // desliga o build automático da branch já no provisionamento.
-    await deploy.setAutoDeploy(false);
+    // O build automático por Git fica ligado: garante publicação mesmo quando a
+    // API da Vercel não consegue disparar o deployment.
+    await deploy.setAutoDeploy(true);
     const envResult = await deploy.setEnv(plan.entries);
 
     if (!envResult.ok) {
@@ -2457,26 +2497,30 @@ export async function runAutomatedProvision(input: {
     const redeployed = await deploy.deployLatestCode();
     let publishNote = redeployed.ok ? "novo deployment disparado" : "";
     if (!redeployed.ok) {
-      if (redeployed.quotaExceeded) {
-        // Plano gratuito: 100 deployments por API/dia. A publicação pelo Git NÃO
-        // consome essa cota, então religamos o build automático e empurramos um
-        // commit vazio. Cota esgotada não invalida o provisionamento.
+      if (redeployed.quotaExceeded || redeployed.gitSourceUnavailable) {
+        // Duas situações têm a MESMA saída: cota diária da API esgotada ou a
+        // Vercel não resolvendo o repositório. Em ambas a publicação sai por
+        // push no Git (auto-deploy ligado), sem invalidar o provisionamento.
         const auto = await deploy.setAutoDeploy(true);
         const nudge = await code.nudgeDeploy(
           "chore(unitos): republicar com as variaveis da instalacao",
         );
-        const resetAt = redeployed.resetAt
-          ? ` — cota volta em ${formatDateTimeBr(new Date(redeployed.resetAt * 1000))}`
-          : "";
+        const cause = redeployed.quotaExceeded
+          ? `cota de deployments por API esgotada${
+              redeployed.resetAt
+                ? ` — cota volta em ${formatDateTimeBr(new Date(redeployed.resetAt * 1000))}`
+                : ""
+            }`
+          : "a Vercel não resolveu o repositório pela API";
         if (nudge.ok) {
-          publishNote = `publicação pelo Git (cota de deployments por API esgotada${resetAt})`;
+          publishNote = `publicação pelo Git (${cause})`;
         } else {
           failures.push(
-            `Publicação pendente: cota diária de deployments da Vercel esgotada${resetAt}. Tentativa pelo Git também não funcionou: ${
+            `Publicação pendente: ${cause}. Tentativa pelo Git também não funcionou: ${
               nudge.error ?? ""
             }${auto.ok ? "" : ` · auto-deploy: ${auto.error ?? ""}`}`.trim(),
           );
-          publishNote = "publicação pendente (cota da Vercel)";
+          publishNote = "publicação pendente";
         }
       } else {
         blocked.push(
@@ -2797,6 +2841,16 @@ function deltaFingerprint(sql: string): string {
 }
 
 /**
+ * Chave de checkpoint do delta no provisionamento. Inclui a impressão digital
+ * do conteúdo: quando o MASTER publica um pacote novo, o checkpoint antigo não
+ * vale mais e o delta é aplicado de novo (idempotente por statement) em vez de
+ * ser pulado como "já aplicado".
+ */
+export function deltaProgressKey(sql: string): string {
+  return `${UPDATE_DELTA_LABEL}:${deltaFingerprint(sql)}`;
+}
+
+/**
  * Aplica o delta de banco do MASTER no Supabase da instalação, item por item,
  * com checkpoint e ledger no banco de destino. Idempotente: repetir com o mesmo
  * delta já registrado é no-op.
@@ -3075,6 +3129,62 @@ export async function runAutomatedUpdate(input: {
     // publicado), nunca o SHA do MASTER — ele não existe no outro repositório.
     const created = await deploy.deployLatestCode({ sha: buildRef });
     if (!created.ok || !created.deploymentId) {
+      if (created.quotaExceeded || created.gitSourceUnavailable) {
+        // O código autorizado JÁ está no repositório da instalação. Com o build
+        // automático por Git ligado, o push publica sem depender da API: aqui
+        // garantimos o gatilho e fixamos a versão realmente publicada.
+        await deploy.setAutoDeploy(true);
+        const nudge =
+          changedFiles === 0
+            ? await code.nudgeDeploy("chore(unitos): republicar versao autorizada")
+            : { ok: true as const };
+        const appliedByPush = publishedRelease ?? MASTER_RELEASE_VERSION;
+        const shortPush = targetSha ? targetSha.slice(0, 7) : null;
+        const cause = created.quotaExceeded
+          ? "cota diária de deployments por API da Vercel esgotada"
+          : "a Vercel não resolveu o repositório pela API";
+        if (!nudge.ok) {
+          return fail(
+            "FAIL",
+            `${created.error ?? cause} · publicação pelo Git também falhou: ${nudge.error ?? ""}`.trim(),
+          );
+        }
+        if (targetSha) {
+          await (
+            client.from("installations") as unknown as {
+              update: (v: Record<string, unknown>) => {
+                eq: (c: string, v: string) => Promise<unknown>;
+              };
+            }
+          )
+            .update({
+              pinned_commit_sha: targetSha,
+              pinned_release: appliedByPush,
+              pinned_at: new Date().toISOString(),
+            })
+            .eq("id", installation.id)
+            .then(
+              () => undefined,
+              () => undefined,
+            );
+        }
+        await report(client, operation, "code", "done", "código publicado no repositório");
+        await report(client, operation, "build", "done", `build disparado pelo Git (${cause})`);
+        await report(
+          client,
+          operation,
+          "version",
+          "done",
+          shortPush ? `${appliedByPush} (${shortPush})` : appliedByPush,
+        );
+        await finalizeOperation(client as never, operation as never, {
+          ok: true,
+          warnings: true,
+          version: appliedByPush,
+          summary: `Código do MASTER (${appliedByPush}${shortPush ? ` · ${shortPush}` : ""}) publicado no repositório da instalação; o build saiu pelo Git porque ${cause}. Confira a publicação na Vercel em alguns minutos.`,
+        }).catch(() => undefined);
+        return { result: "PASS", reasons: [] };
+      }
       return fail("FAIL", created.error ?? "não foi possível disparar o deployment");
     }
     deploymentId = created.deploymentId;

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,6 +45,7 @@ type FormState = {
   gitRepoUrl: string;
   deployProject: string;
   notes: string;
+  supabaseManagementToken: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -54,6 +56,7 @@ const EMPTY_FORM: FormState = {
   gitRepoUrl: "",
   deployProject: "",
   notes: "",
+  supabaseManagementToken: "",
 };
 
 type Filter = "all" | "running" | "outdated" | "problems";
@@ -109,8 +112,11 @@ function AdminInstallationsPage() {
   const [filter, setFilter] = useState<Filter>("all");
 
   const create = useMutation({
-    mutationFn: () =>
-      createFn({
+    mutationFn: () => {
+      if (!form.supabaseManagementToken.trim()) {
+        throw new Error("Informe o Supabase Access Token do cliente para cadastrar a instalação.");
+      }
+      return createFn({
         data: {
           name: form.name,
           domain: form.domain || null,
@@ -119,8 +125,10 @@ function AdminInstallationsPage() {
           gitRepoUrl: form.gitRepoUrl || null,
           deployProject: form.deployProject || null,
           notes: form.notes || null,
+          supabaseManagementToken: form.supabaseManagementToken.trim(),
         },
-      }),
+      });
+    },
     onSuccess: (record) => {
       toast.success("Instalação criada. Ela ainda não está pronta.");
       setForm(EMPTY_FORM);
@@ -295,8 +303,8 @@ function AdminInstallationsPage() {
           <DialogHeader>
             <DialogTitle>Nova instalação</DialogTitle>
             <DialogDescription>
-              Registre apenas metadados: Supabase, repositório e deploy próprios. Nenhum segredo do
-              destino pode ser informado aqui.
+              Cada instalação usa o acesso do próprio cliente. Informe o Supabase Access Token dele:
+              ele é guardado cifrado e nunca aparece de novo na tela.
             </DialogDescription>
           </DialogHeader>
 
@@ -330,6 +338,28 @@ function AdminInstallationsPage() {
               value={form.deployProject}
               onChange={(v) => setForm({ ...form, deployProject: v })}
             />
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Supabase Access Token do cliente</Label>
+              <PasswordInput
+                value={form.supabaseManagementToken}
+                placeholder="sbp_..."
+                autoComplete="off"
+                onChange={(e) => setForm({ ...form, supabaseManagementToken: e.target.value })}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Obrigatório. Guardado cifrado e nunca exibido outra vez — esta instalação usa o
+                acesso do próprio cliente, não o acesso central.{" "}
+                <a
+                  href="https://supabase.com/dashboard/account/tokens"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  Gerar token no Supabase
+                </a>
+                .
+              </p>
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs">Observações</Label>
               <Textarea

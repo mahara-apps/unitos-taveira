@@ -20,6 +20,7 @@ import { getCachedPortalAccess } from "@/lib/access-cache";
 import { isWorkspaceScopedQueryKey, queryKeyCarriesScopeId } from "@/lib/session-reset";
 import { WorkspaceResolver } from "@/components/workspace-resolver";
 import { AppLoading } from "@/components/app-loading";
+import { ServiceStateBoundary } from "@/components/service-state-boundary";
 
 const fallbackTitles: Record<string, string> = {
   "/dashboard": "Painel",
@@ -96,6 +97,14 @@ function WorkspaceQueryReset() {
 }
 
 function AppShell() {
+  return (
+    <ServiceStateBoundary>
+      <AppShellContent />
+    </ServiceStateBoundary>
+  );
+}
+
+function AppShellContent() {
   return (
     <ActiveContextProvider>
       <WorkspaceResolver />
