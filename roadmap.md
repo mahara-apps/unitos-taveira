@@ -5,7 +5,8 @@
 - [ ] Publicar o MASTER 1.3.53 com o diagnóstico correto de domínio/modo de teste/permissão no Resend.
 - [x] Corrigir a corrida de redirecionamento em `/admin` que causava `Uncaught undefined`; sincronizar MASTER 1.3.54.
 - [x] Corrigir seleção de deployment duplicado da Casa 8, reconciliar a versão comprovada e sincronizar MASTER 1.3.55.
-- [ ] Corrigir limpeza do modo de manutenção nas retomadas pelo cron, liberar e forçar a atualização da Taveira; sincronizar MASTER.
+- [x] Corrigir limpeza do modo de manutenção nas retomadas pelo cron, liberar e tentar a atualização da Taveira; MASTER 1.3.56 sincronizado.
+- [ ] Concluir a atualização 1.3.56 da Taveira; bloqueada pela hospedagem, que recusou publicação via REST e exige Git.
 - [x] Publicar o MASTER 1.3.7 e atualizar a Taveira, com validação final.
 - [x] Tornar a ação de atualização inequívoca e proteger o reprovisionamento na tela.
 - [x] Concluir Lixeira de conteúdos/pipelines com retenção de 30 dias e propagação MASTER.
