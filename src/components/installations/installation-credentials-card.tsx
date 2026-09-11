@@ -41,6 +41,8 @@ import { formatDateTimeBr } from "@/lib/timezone";
 
 type Draft = {
   supabaseManagementToken: string;
+  supabasePublishableKey: string;
+  supabaseServiceRoleKey: string;
   vercelToken: string;
   vercelTeamId: string;
   githubToken: string;
@@ -48,6 +50,8 @@ type Draft = {
 
 const EMPTY: Draft = {
   supabaseManagementToken: "",
+  supabasePublishableKey: "",
+  supabaseServiceRoleKey: "",
   vercelToken: "",
   vercelTeamId: "",
   githubToken: "",
@@ -80,13 +84,36 @@ const FIELDS: {
     },
   },
   {
+    key: "supabasePublishableKey",
+    label: "Chave publicável do projeto",
+    hint: "Use quando o token de gestão acessa o banco, mas o Supabase não permite revelar as chaves pela API.",
+    requirements: [
+      "Copie a chave Publishable ou anon em Project Settings → API Keys.",
+      "Ela será testada contra a URL do Supabase desta instalação antes de ser salva.",
+    ],
+    secret: true,
+    placeholder: "sb_publishable_... ou JWT anon",
+  },
+  {
+    key: "supabaseServiceRoleKey",
+    label: "Chave de serviço do projeto",
+    hint: "Necessária para o servidor da instalação acessar tarefas administrativas.",
+    requirements: [
+      "Copie a chave Secret ou service_role em Project Settings → API Keys.",
+      "Nunca use uma chave do MASTER; ela precisa pertencer ao mesmo Project ref desta instalação.",
+    ],
+    secret: true,
+    placeholder: "sb_secret_... ou JWT service_role",
+  },
+  {
     key: "vercelToken",
     label: "Token de deploy",
     hint: "Usado para variáveis, vínculo do repositório e publicação.",
     requirements: [
       "Gere na conta dona do projeto de publicação.",
       "Precisa permitir criar publicações e alterar variáveis do projeto.",
-      "Se o projeto pertence a uma equipe, informe também a equipe abaixo.",
+      "Se o projeto pertence a uma equipe, o sistema tenta localizar essa equipe automaticamente.",
+      "Se a equipe não estiver visível para o token, informe o Team ID abaixo.",
     ],
     secret: true,
     placeholder: "token de deploy",
@@ -95,8 +122,11 @@ const FIELDS: {
   {
     key: "vercelTeamId",
     label: "Equipe de deploy (opcional)",
-    hint: "Informe quando o projeto pertence a uma equipe.",
-    requirements: ["Projeto em conta pessoal: deixe vazio."],
+    hint: "Normalmente pode ficar vazio; use quando a localização automática não encontrar o projeto.",
+    requirements: [
+      "Projeto em conta pessoal: deixe vazio.",
+      "Projeto de equipe: use o ID iniciado por team_, não o nome exibido da equipe.",
+    ],
     secret: false,
     placeholder: "team_...",
   },
@@ -106,9 +136,13 @@ const FIELDS: {
     hint: "Publica o código do MASTER no repositório desta instalação.",
     requirements: [
       "Token de acesso pessoal com acesso ao dono/organização do repositório desta instalação.",
-      "Permissões: Metadados (leitura), Conteúdo (leitura e gravação), Administração (leitura e gravação, para criar o repositório) e Fluxos de trabalho (gravação, se houver automações).",
+      'Permissões: Metadados (leitura), Conteúdo (leitura e gravação — "Contents: Read and write") e Fluxos de trabalho (gravação, se houver automações). A conta também precisa poder criar repositórios no destino.',
+      "No token fino, marque o repositório desta instalação em “Repository access”: sem ele o GitHub aceita ler e recusa gravar (“Resource not accessible by personal access token”).",
+
       "Não precisa acessar o repositório do MASTER: a leitura do código usa a credencial do MASTER.",
       "Use um token exclusivo desta instalação — o limite de uso do GitHub é por conta e tokens compartilhados causam a falha “API rate limit exceeded”.",
+      "O repositório MASTER precisa estar marcado como Template repository; instalações novas não usam mais repositório vazio nem cópia arquivo por arquivo.",
+      "Administração é opcional: sem ela, um repositório técnico antigo fica intacto e a cópia operacional recebe automaticamente outro nome. Não habilite permissão para excluir repositórios.",
     ],
     secret: true,
     placeholder: "ghp_...",
@@ -131,6 +165,7 @@ export function InstallationCredentialsCard({ installationId }: { installationId
   const [checks, setChecks] = useState<
     Array<{ area: string; label: string; ok: boolean; detail: string }>
   >([]);
+  const [summary, setSummary] = useState("");
   const [repoDraft, setRepoDraft] = useState("");
 
   const status = useQuery({
@@ -178,9 +213,9 @@ export function InstallationCredentialsCard({ installationId }: { installationId
     onSuccess: (result) => {
       const list = result.checks ?? [];
       setChecks(list);
-      const failing = list.filter((check) => !check.ok);
-      if (!failing.length) toast.success("Todos os acessos e permissões conferidos.");
-      else toast.error(`${failing.length} permissão(ões) pendente(s) — veja a lista abaixo.`);
+      setSummary(result.summary ?? "");
+      if (result.ok) toast.success("OK — todos os acessos necessários estão liberados.");
+      else toast.error(result.summary ?? "Há acessos faltando — veja a lista abaixo.");
     },
     onError: (error: unknown) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível testar."),
@@ -200,6 +235,8 @@ export function InstallationCredentialsCard({ installationId }: { installationId
   const data = status.data;
   const anyConfigured =
     data?.supabaseManagementToken.configured ||
+    data?.supabasePublishableKey.configured ||
+    data?.supabaseServiceRoleKey.configured ||
     data?.vercelToken.configured ||
     data?.githubToken.configured;
 
@@ -348,6 +385,7 @@ export function InstallationCredentialsCard({ installationId }: { installationId
         {checks.length > 0 && (
           <div className="space-y-1.5 rounded-md border p-3">
             <p className="text-xs font-medium">Resultado do teste de acesso</p>
+            {summary && <p className="text-[11px] text-muted-foreground">{summary}</p>}
             <ul className="space-y-1">
               {checks.map((check) => (
                 <li key={`${check.area}-${check.label}`} className="flex gap-1.5 text-[11px]">

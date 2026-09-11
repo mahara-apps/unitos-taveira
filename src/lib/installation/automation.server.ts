@@ -410,7 +410,36 @@ export type ManagementClient = {
     serviceRoleKey?: string;
     error?: string;
   }>;
+  /**
+   * PATCH em `/config/auth`. Opcional no tipo porque testes usam dublês
+   * simples — quem chama trata a ausência como "não aplicado".
+   */
+  configureAuth?: (
+    patch: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; error?: string }>;
 };
+
+/**
+ * Padrão de autenticação de toda instalação nova: confirmação de e-mail
+ * DESLIGADA. O Supabase de cada instalação usa o remetente padrão dele, sem
+ * DNS apontado, então o e-mail de confirmação nunca chega e o primeiro acesso
+ * (/setup) ficaria preso. Convites e reset continuam disponíveis.
+ */
+export const INSTALLATION_AUTH_DEFAULTS = { mailer_autoconfirm: true } as const;
+
+/** Aplica os padrões de auth no destino. Nunca bloqueia a operação. */
+export async function applyInstallationAuthDefaults(
+  management: ManagementClient,
+): Promise<{ applied: boolean; detail: string }> {
+  if (!management.configureAuth) {
+    return { applied: false, detail: "cliente de gestão sem suporte a config/auth" };
+  }
+  const res = await management.configureAuth({ ...INSTALLATION_AUTH_DEFAULTS });
+  return res.ok
+    ? { applied: true, detail: "confirmação de e-mail desligada no destino" }
+    : { applied: false, detail: res.error ?? "não foi possível ajustar a autenticação" };
+}
+
 
 function managementApiError(status: number, body: string, operation: "database" | "keys"): string {
   if (status === 401) {
@@ -448,6 +477,39 @@ export function isRetryableManagementStatus(status: number): boolean {
 }
 
 const RETRY_DELAYS_MS = [1_000, 3_000, 7_000];
+
+/**
+ * Normaliza as respostas de chaves da Management API. Há duas formas em uso:
+ * lista (`[{ name|type, api_key }]`) e objeto legado
+ * (`{ anon_key, service_role_key }`).
+ */
+export function extractSupabaseApiKeys(body: unknown): {
+  publishableKey?: string;
+  serviceRoleKey?: string;
+} {
+  const clean = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+  if (Array.isArray(body)) {
+    const rows = body as Array<{ name?: string; type?: string; api_key?: string }>;
+    const find = (name: string) =>
+      clean(rows.find((k) => k?.name === name || k?.type === name)?.api_key);
+    return {
+      publishableKey: find("anon") ?? find("publishable"),
+      serviceRoleKey: find("service_role") ?? find("secret"),
+    };
+  }
+
+  if (body && typeof body === "object") {
+    const row = body as Record<string, unknown>;
+    return {
+      publishableKey: clean(row["anon_key"]) ?? clean(row["publishable_key"]),
+      serviceRoleKey: clean(row["service_role_key"]) ?? clean(row["secret_key"]),
+    };
+  }
+
+  return {};
+}
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -512,41 +574,118 @@ export function createManagementClient(input: {
           ok: false,
           error: "sem resposta da Management API",
         };
-      for (let attempt = 0; attempt < attempts; attempt++) {
-        try {
-          const res = await doFetch(`${base}/api-keys?reveal=true`, { headers });
-          if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            last = { ok: false, error: managementApiError(res.status, text, "keys") };
-            if (!isRetryableManagementStatus(res.status)) return last;
-          } else {
-            const body = (await res.json().catch(() => [])) as Array<{
-              name?: string;
-              type?: string;
-              api_key?: string;
-            }>;
-            const find = (name: string) =>
-              body.find((k) => k.name === name || k.type === name)?.api_key ?? undefined;
-            return {
-              ok: true,
-              publishableKey: find("anon") ?? find("publishable"),
-              serviceRoleKey: find("service_role") ?? find("secret"),
-            };
+      // A revelação das chaves novas (`reveal=true`) exige privilégio maior do
+      // que a simples leitura. Um token que só enxerga as chaves legadas
+      // (anon/service_role) responde 403 ali e 200 nos outros caminhos — então
+      // tentamos os três antes de declarar o destino inacessível.
+      for (const path of ["/api-keys?reveal=true", "/api-keys/legacy", "/api-keys"]) {
+        for (let attempt = 0; attempt < attempts; attempt++) {
+          try {
+            const res = await doFetch(`${base}${path}`, { headers });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              last = { ok: false, error: managementApiError(res.status, text, "keys") };
+              if (!isRetryableManagementStatus(res.status)) break;
+            } else {
+              const body = (await res.json().catch(() => null)) as unknown;
+              const found = extractSupabaseApiKeys(body);
+              if (found.publishableKey && found.serviceRoleKey) {
+                return { ok: true, ...found };
+              }
+              last = {
+                ok: false,
+                error: "o token leu o projeto, mas não retornou as chaves anon e service_role.",
+              };
+              break;
+            }
+          } catch (e) {
+            last = { ok: false, error: (e as Error).message };
           }
+          if (attempt < attempts - 1) await sleep(RETRY_DELAYS_MS[attempt]);
+        }
+      }
+      return last;
+    },
+    async configureAuth(patch) {
+      let last = { ok: false, error: "sem resposta da Management API" };
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12_000);
+        try {
+          const res = await doFetch(`${base}/config/auth`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(patch),
+            signal: controller.signal,
+          });
+          if (res.ok) return { ok: true };
+          const text = await res.text().catch(() => "");
+          last = { ok: false, error: managementApiError(res.status, text, "database") };
+          if (!isRetryableManagementStatus(res.status)) return last;
         } catch (e) {
-          last = { ok: false, error: (e as Error).message };
+          const aborted = e instanceof Error && e.name === "AbortError";
+          last = {
+            ok: false,
+            error: aborted ? "timeout de 12s na Management API" : (e as Error).message,
+          };
+        } finally {
+          clearTimeout(timer);
         }
         if (attempt < attempts - 1) await sleep(RETRY_DELAYS_MS[attempt]);
       }
       return last;
     },
   };
+
+}
+
+export async function validateSupabaseProjectKeys(input: {
+  supabaseUrl: string;
+  publishableKey: string;
+  serviceRoleKey: string;
+  fetchImpl?: Fetcher;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const origin = input.supabaseUrl.trim().replace(/\/+$/, "");
+  if (!/^https:\/\/[a-z0-9]{16,}\.supabase\.co$/i.test(origin)) {
+    return { ok: false, error: "URL do Supabase inválida para validar as chaves." };
+  }
+  const doFetch = input.fetchImpl ?? fetch;
+  const check = async (key: string, label: string) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await doFetch(`${origin}/rest/v1/installation?select=id&limit=1`, {
+        headers: { apikey: key, authorization: `Bearer ${key}` },
+        signal: controller.signal,
+      });
+      if (res.status === 401 || res.status === 403) {
+        return `${label} recusada pelo projeto informado (HTTP ${res.status}).`;
+      }
+      if (res.status >= 500) return `${label}: Supabase temporariamente indisponível (HTTP ${res.status}).`;
+      return null;
+    } catch (cause) {
+      return `${label}: ${cause instanceof Error && cause.name === "AbortError" ? "timeout" : "sem resposta"}.`;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const publishableError = await check(input.publishableKey, "Chave publicável");
+  if (publishableError) return { ok: false, error: publishableError };
+  const serviceError = await check(input.serviceRoleKey, "Chave de serviço");
+  if (serviceError) return { ok: false, error: serviceError };
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------- Vercel API */
 
 export type DeployClient = {
-  deploymentUrl: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+  deploymentUrl: () => Promise<{
+    ok: boolean;
+    url?: string;
+    error?: string;
+    /** Nome canônico devolvido pela Vercel, útil para corrigir cadastros antigos. */
+    projectName?: string;
+  }>;
   /** Redeploy da producao — necessario para que as variaveis gravadas valham. */
   redeploy: () => Promise<{ ok: boolean; deploymentId?: string; error?: string }>;
   /**
@@ -700,12 +839,19 @@ export type PublishSnapshotResult = {
 };
 
 export type CodeClient = {
-  /** Cria (template -> fork -> vazio) ou confirma o repositório da instalação. */
-  ensureRepo: () => Promise<{
+  /** Cria pelo template ou confirma o repositório da instalação. */
+  ensureRepo: (options?: {
+    /** Provisionamento inicial: exige template e pode recuperar o README técnico conhecido. */
+    initialProvision?: boolean;
+  }) => Promise<{
     ok: boolean;
     created?: boolean;
-    /** "template" | "fork" | "blank" | "existing" */
+    /** "template" | "template_recovered" | "template_alternate" | "existing" */
     via?: string;
+    /** Destino efetivo quando um repositório técnico antigo foi preservado intacto. */
+    repoSlug?: string;
+    /** Commit real da branch criada pelo GitHub a partir do template. */
+    commitSha?: string;
     error?: string;
   }>;
   /** Commit atual da branch de produção do MASTER — versão a publicar. */
@@ -750,7 +896,7 @@ export type CodeClient = {
   permissions: () => Promise<Array<{ label: string; ok: boolean; detail: string; area: "code" }>>;
   /**
    * Publica no repositório da instalação exatamente a árvore do MASTER no
-   * commit informado. Quando os objetos são compartilhados (template/fork), a
+   * commit informado. Quando os objetos são compartilhados, a
    * árvore é montada direto com os SHAs do MASTER — 3 chamadas. Caso contrário
    * copia só o que difere, em paralelo, com checkpoint e orçamento de tempo.
    */
@@ -792,7 +938,7 @@ export function createCodeClient(input: {
   const doFetch = input.fetchImpl ?? fetch;
   const master = (input.masterRepo ?? "").trim() || DEFAULT_MASTER_REPO;
   const branch = (input.branch ?? "").trim() || "main";
-  const target = `${input.owner}/${input.repo}`;
+  let target = `${input.owner}/${input.repo}`;
   const baseHeaders = {
     accept: "application/vnd.github+json",
     "content-type": "application/json",
@@ -805,8 +951,8 @@ export function createCodeClient(input: {
   };
   /**
    * Só LEITURA (GET) do repositório do MASTER usa o token do MASTER. Escritas
-   * em `/repos/{master}/generate` e `/forks` criam no destino e continuam com o
-   * token da instalação.
+   * em `/repos/{master}/generate` cria no destino e continua com o token da
+   * instalação.
    */
   const readsMaster = (path: string, init?: RequestInit) =>
     (init?.method ?? "GET").toUpperCase() === "GET" && path.startsWith(`/repos/${master}`);
@@ -913,7 +1059,7 @@ export function createCodeClient(input: {
           `MASTER ${master} acessível`,
           masterJson.is_template
             ? "marcado como template (criação rápida disponível)"
-            : "NÃO está marcado como template (a criação usará fork ou repositório vazio)",
+            : "NÃO está marcado como template (a criação rápida está bloqueada)",
           reachesOwner
             ? `destino ${input.owner} alcançado`
             : `destino ${input.owner} inacessível com este token`,
@@ -963,14 +1109,32 @@ export function createCodeClient(input: {
           const body = (await repoRes.json().catch(() => ({}))) as {
             permissions?: { push?: boolean; admin?: boolean };
           };
-          push(
-            "Gravação no repositório da instalação",
-            Boolean(body.permissions?.push),
-            body.permissions?.push
-              ? `${target} com permissão de gravação`
-              : `${target} acessível apenas para leitura — habilite Conteúdo: leitura e gravação`,
-          );
+          if (!body.permissions?.push) {
+            push(
+              "Gravação no repositório da instalação",
+              false,
+              `${target} acessível apenas para leitura — habilite Conteúdo: leitura e gravação`,
+            );
+          } else {
+            /* `permissions.push` do metadado mente para tokens finos sem
+             * "Contents: read and write". A única prova é escrever de fato:
+             * criamos um blob solto (não referenciado por nenhum commit, o
+             * GitHub o descarta sozinho) exatamente no endpoint que a
+             * publicação usa. */
+            const probe = await api(`/repos/${target}/git/blobs`, {
+              method: "POST",
+              body: JSON.stringify({ content: "unitos-preflight", encoding: "utf-8" }),
+            });
+            push(
+              "Gravação no repositório da instalação",
+              probe.ok,
+              probe.ok
+                ? `${target} com permissão de gravação confirmada`
+                : `${target} não aceita gravação com este token — no GitHub, em Repository permissions, habilite "Contents: Read and write" e inclua ${target} entre os repositórios do token (${await fail(probe, `gravar em ${target}`)})`,
+            );
+          }
         } else if (repoRes.status === 404) {
+
           const isPersonal = login.toLowerCase() === input.owner.trim().toLowerCase();
           const ownerRes = isPersonal ? null : await api(`/orgs/${input.owner}`);
           const reaches = isPersonal || Boolean(ownerRes?.ok);
@@ -990,6 +1154,16 @@ export function createCodeClient(input: {
         }
 
         const masterRes = await api(`/repos/${master}`);
+        let templateReady = false;
+        if (masterRes.ok) {
+          const masterBody = (await masterRes
+            .clone()
+            .json()
+            .catch(() => ({}))) as {
+            is_template?: boolean;
+          };
+          templateReady = masterBody.is_template === true;
+        }
         push(
           "Leitura do código do MASTER",
           masterRes.ok,
@@ -997,21 +1171,271 @@ export function createCodeClient(input: {
             ? `${master} acessível com a credencial do MASTER`
             : await fail(masterRes, `ler ${master}`),
         );
+        push(
+          "Criação rápida pelo template",
+          templateReady,
+          templateReady
+            ? `${master} está pronto para gerar uma cópia completa`
+            : `${master} precisa estar marcado como Template repository no GitHub`,
+        );
         return checks;
       } catch (e) {
         push("Repositório", false, (e as Error).message);
         return checks;
       }
     },
-    async ensureRepo() {
+    async ensureRepo(options) {
       try {
         const existing = await api(`/repos/${target}`);
-        if (existing.ok) return { ok: true, created: false, via: "existing" };
-        if (existing.status !== 404) {
+        if (existing.ok) {
+          if (!options?.initialProvision) return { ok: true, created: false, via: "existing" };
+
+          // Recuperação estritamente limitada ao commit técnico criado pelo fluxo
+          // legado. Qualquer outro conteúdo é preservado. O repositório técnico
+          // nunca é excluído: ele é renomeado e arquivado como backup.
+          const head = await api(`/repos/${target}/git/ref/heads/${branch}`);
+          const headBody = (await head.json().catch(() => ({}))) as { object?: { sha?: string } };
+          const headSha = headBody.object?.sha;
+          const tree = headSha
+            ? await api(`/repos/${target}/git/trees/${headSha}?recursive=1`)
+            : new Response("branch ausente", { status: 404 });
+          const treeBody = (await tree.json().catch(() => ({}))) as { tree?: TreeEntry[] };
+          const files = (treeBody.tree ?? []).filter((entry) => entry.type === "blob");
+          const onlyReadme = files.length === 1 && files[0]?.path === "README.md";
+          let knownSeed = false;
+          if (onlyReadme) {
+            const content = await api(`/repos/${target}/contents/README.md?ref=${branch}`);
+            const contentBody = (await content.json().catch(() => ({}))) as {
+              content?: string;
+              encoding?: string;
+            };
+            const decoded =
+              contentBody.encoding === "base64" && contentBody.content
+                ? new TextDecoder().decode(
+                    Uint8Array.from(atob(contentBody.content.replace(/\s+/g, "")), (c) =>
+                      c.charCodeAt(0),
+                    ),
+                  )
+                : "";
+            knownSeed =
+              decoded ===
+              `# ${input.repo}\n\nInstalação Unitos. Código publicado a partir do MASTER.\n`;
+          }
+          if (!knownSeed) return { ok: true, created: false, via: "existing", commitSha: headSha };
+
+          const masterInfo = await api(`/repos/${master}`);
+          if (!masterInfo.ok) {
+            return { ok: false, error: await fail(masterInfo, `ler o template ${master}`) };
+          }
+          const masterBody = (await masterInfo.json().catch(() => ({}))) as {
+            is_template?: boolean;
+          };
+          if (!masterBody.is_template) {
+            return {
+              ok: false,
+              error: `${master} não está marcado como Template repository no GitHub. Ative essa opção no MASTER antes de provisionar. O repositório técnico foi preservado.`,
+            };
+          }
+
+          const backupBase = `${input.repo}-legacy-readme`;
+          let backupName = backupBase;
+          for (let suffix = 1; suffix <= 20; suffix += 1) {
+            const candidate = suffix === 1 ? backupBase : `${backupBase}-${suffix}`;
+            const candidateRes = await api(`/repos/${input.owner}/${candidate}`);
+            if (candidateRes.status === 404) {
+              backupName = candidate;
+              break;
+            }
+            if (!candidateRes.ok) {
+              return {
+                ok: false,
+                error: await fail(candidateRes, `verificar o nome de backup ${candidate}`),
+              };
+            }
+            if (suffix === 20) {
+              return {
+                ok: false,
+                error: `Não foi encontrado um nome livre para preservar o repositório técnico ${target}.`,
+              };
+            }
+          }
+
+          const renamed = await api(`/repos/${target}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: backupName }),
+          });
+          if (!renamed.ok) {
+            // Tokens fine-grained podem gerar repositórios pelo template, mas
+            // não renomear um repositório existente. Nesse caso, o README
+            // técnico fica intacto e a instalação passa a usar um novo slug.
+            if (renamed.status !== 403) {
+              return {
+                ok: false,
+                error: await fail(renamed, `preservar o repositório técnico ${target} como backup`),
+              };
+            }
+            let alternateName: string | null = null;
+            for (let suffix = 1; suffix <= 20; suffix += 1) {
+              const candidate = suffix === 1 ? `${input.repo}-app` : `${input.repo}-app-${suffix}`;
+              const candidateRes = await api(`/repos/${input.owner}/${candidate}`);
+              if (candidateRes.status === 404) {
+                alternateName = candidate;
+                break;
+              }
+              if (!candidateRes.ok) {
+                return {
+                  ok: false,
+                  error: await fail(candidateRes, `verificar o novo repositório ${candidate}`),
+                };
+              }
+            }
+            if (!alternateName) {
+              return {
+                ok: false,
+                error: `Não foi encontrado um nome livre para criar a cópia operacional de ${target}.`,
+              };
+            }
+            const alternateTarget = `${input.owner}/${alternateName}`;
+            const alternate = await api(`/repos/${master}/generate`, {
+              method: "POST",
+              body: JSON.stringify({
+                owner: input.owner,
+                name: alternateName,
+                private: true,
+                include_all_branches: false,
+                description: "Instalação Unitos gerada a partir do MASTER",
+              }),
+            });
+            if (!alternate.ok) {
+              return {
+                ok: false,
+                error:
+                  `${await fail(alternate, `gerar a cópia completa ${alternateTarget} a partir de ${master}`)}. ` +
+                  `O repositório técnico ${target} permaneceu intacto.`,
+              };
+            }
+            target = alternateTarget;
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+              const generatedHead = await api(
+                `/repos/${target}/commits/${branch}`,
+                undefined,
+                true,
+              );
+              if (generatedHead.ok) {
+                const body = (await generatedHead.json().catch(() => ({}))) as { sha?: string };
+                if (body.sha) {
+                  return {
+                    ok: true,
+                    created: true,
+                    via: "template_alternate",
+                    repoSlug: target,
+                    commitSha: body.sha,
+                  };
+                }
+              }
+              await new Promise((resolve) => setTimeout(resolve, 1_000));
+            }
+            return {
+              ok: false,
+              error: `A cópia completa foi criada em ${target}, mas a branch ${branch} ainda não ficou disponível. Tente novamente em alguns instantes.`,
+            };
+          }
+
+          const backupTarget = `${input.owner}/${backupName}`;
+          const archived = await api(`/repos/${backupTarget}`, {
+            method: "PATCH",
+            body: JSON.stringify({ archived: true }),
+          });
+          if (!archived.ok) {
+            const restored = await api(`/repos/${backupTarget}`, {
+              method: "PATCH",
+              body: JSON.stringify({ name: input.repo }),
+            });
+            return {
+              ok: false,
+              error:
+                `${await fail(archived, `arquivar o backup técnico ${backupTarget}`)}. ` +
+                (restored.ok
+                  ? "O nome original foi restaurado com segurança."
+                  : `A restauração também falhou: ${await fail(restored, `restaurar ${target}`)}`),
+            };
+          }
+
+          const created = await api(`/repos/${master}/generate`, {
+            method: "POST",
+            body: JSON.stringify({
+              owner: input.owner,
+              name: input.repo,
+              private: true,
+              include_all_branches: false,
+              description: "Instalação Unitos gerada a partir do MASTER",
+            }),
+          });
+          if (!created.ok) {
+            // Não consulta o slug antigo antes do rollback: o GitHub redireciona
+            // nomes renomeados e poderia produzir um falso positivo. Tenta a
+            // restauração diretamente; conflito significa que a geração criou o
+            // destino apesar da resposta de erro, então o backup fica preservado.
+            const unarchived = await api(`/repos/${backupTarget}`, {
+              method: "PATCH",
+              body: JSON.stringify({ archived: false }),
+            });
+            const restored = unarchived.ok
+              ? await api(`/repos/${backupTarget}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ name: input.repo }),
+                })
+              : unarchived;
+            const rollback = restored.ok
+              ? "O nome original foi restaurado com segurança."
+              : `O backup foi preservado, mas a restauração automática falhou: ${await fail(restored, `restaurar ${target}`)}`;
+            return {
+              ok: false,
+              error:
+                `${await fail(created, `gerar a cópia completa ${target} a partir de ${master}`)}. ` +
+                `${rollback} Nenhum repositório foi excluído.`,
+            };
+          }
+
+          for (let attempt = 0; attempt < 12; attempt += 1) {
+            const generatedHead = await api(`/repos/${target}/commits/${branch}`, undefined, true);
+            if (generatedHead.ok) {
+              const body = (await generatedHead.json().catch(() => ({}))) as { sha?: string };
+              if (body.sha) {
+                return {
+                  ok: true,
+                  created: true,
+                  via: "template_recovered",
+                  repoSlug: target,
+                  commitSha: body.sha,
+                };
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+          }
+          return {
+            ok: false,
+            error: `A cópia completa de ${master} foi solicitada, mas a branch ${branch} de ${target} ainda não ficou disponível. O backup técnico ${backupTarget} permanece arquivado. Tente retomar em alguns instantes.`,
+          };
+        } else if (existing.status !== 404) {
           return { ok: false, error: await fail(existing, `consultar o repositório ${target}`) };
         }
-        // 1ª tentativa: gerar do template do MASTER. Objetos compartilhados =>
-        // a publicação da versão termina em segundos.
+
+        const masterInfo = await api(`/repos/${master}`);
+        if (!masterInfo.ok) {
+          return { ok: false, error: await fail(masterInfo, `ler o template ${master}`) };
+        }
+        const masterBody = (await masterInfo.json().catch(() => ({}))) as {
+          is_template?: boolean;
+        };
+        if (!masterBody.is_template) {
+          return {
+            ok: false,
+            error: `${master} não está marcado como Template repository no GitHub. Ative essa opção no MASTER antes de provisionar. Nenhum repositório vazio foi criado.`,
+          };
+        }
+
+        // Único caminho para instalação nova: o GitHub gera uma cópia integral.
         const created = await api(`/repos/${master}/generate`, {
           method: "POST",
           body: JSON.stringify({
@@ -1022,53 +1446,36 @@ export function createCodeClient(input: {
             description: "Instalação Unitos gerada a partir do MASTER",
           }),
         });
-        if (created.ok) return { ok: true, created: true, via: "template" };
-        const templateError = await fail(created, `criar ${target} a partir do template ${master}`);
-
-        // 2ª tentativa: fork do MASTER. Também compartilha objetos, então a
-        // publicação continua sendo rápida mesmo sem template.
-        const forked = await api(`/repos/${master}/forks`, {
-          method: "POST",
-          body: JSON.stringify({
-            organization: input.owner,
-            name: input.repo,
-            default_branch_only: true,
-          }),
-        });
-        let forkError = "";
-        if (forked.ok || forked.status === 202) {
-          // O fork é assíncrono: espera o repositório aparecer.
-          for (let i = 0; i < 10; i += 1) {
-            const check = await api(`/repos/${target}`);
-            if (check.ok) return { ok: true, created: true, via: "fork" };
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-          forkError = `fork de ${master} solicitado, mas ${target} não ficou disponível`;
-        } else {
-          forkError = await fail(forked, `criar ${target} como fork de ${master}`);
+        if (!created.ok) {
+          return {
+            ok: false,
+            error:
+              `${await fail(created, `gerar a cópia completa ${target} a partir de ${master}`)}. ` +
+              `O token precisa de Administração: leitura e gravação na organização ${input.owner}. ` +
+              `Nenhum repositório vazio foi criado.`,
+          };
         }
 
-        // 3ª tentativa: repositório vazio; o código do MASTER é publicado
-        // arquivo por arquivo (mais lento, com checkpoint e retomada).
-        const body = JSON.stringify({
-          name: input.repo,
-          private: true,
-          auto_init: false,
-          description: "Instalação Unitos (código publicado a partir do MASTER)",
-        });
-        const login = await viewerLogin();
-        const isPersonal = login.toLowerCase() === input.owner.trim().toLowerCase();
-        const blank = isPersonal
-          ? await api(`/user/repos`, { method: "POST", body })
-          : await api(`/orgs/${input.owner}/repos`, { method: "POST", body });
-        if (blank.ok) return { ok: true, created: true, via: "blank" };
-        const blankError = await fail(blank, `criar o repositório vazio ${target}`);
+        // A geração pode responder antes da branch existir. Só libera a próxima
+        // etapa quando o código completo e a versão estiverem legíveis.
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const head = await api(`/repos/${target}/commits/${branch}`, undefined, true);
+          if (head.ok) {
+            const body = (await head.json().catch(() => ({}))) as { sha?: string };
+            if (body.sha) {
+              return {
+                ok: true,
+                created: true,
+                via: "template",
+                commitSha: body.sha,
+              };
+            }
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
         return {
           ok: false,
-          error:
-            `${templateError}; ${forkError}; ${blankError}. Verifique se o token tem permissão de ` +
-            `criação de repositórios (fine-grained: Administration = Read and write ` +
-            `na organização ${input.owner}) e se o MASTER está marcado como template.`,
+          error: `A cópia completa de ${master} foi solicitada, mas a branch ${branch} de ${target} ainda não ficou disponível. Tente retomar em alguns instantes.`,
         };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
@@ -1419,7 +1826,7 @@ export function createCodeClient(input: {
           return { ok: true, entries };
         };
 
-        // Caminho rápido: template/fork compartilha a árvore raiz completa do
+        // Caminho rápido: repositórios relacionados compartilham a árvore raiz do
         // MASTER. Reutilizá-la elimina o POST gigante de milhares de entradas e
         // preserva o snapshot exato, inclusive remoções.
         let sharedObjects = Boolean(source.rootSha);
@@ -1514,25 +1921,108 @@ export function createDeployClient(input: {
   fetchImpl?: Fetcher;
 }): DeployClient {
   const doFetch = input.fetchImpl ?? fetch;
-  const team = input.teamId ? `teamId=${encodeURIComponent(input.teamId)}` : "";
-  const qs = (extra?: string) => [team, extra].filter(Boolean).join("&");
+  let resolvedTeamId = (input.teamId ?? "").trim() || null;
+  const qs = (extra?: string) =>
+    [resolvedTeamId ? `teamId=${encodeURIComponent(resolvedTeamId)}` : "", extra]
+      .filter(Boolean)
+      .join("&");
   const headers = {
     authorization: `Bearer ${input.token}`,
     "content-type": "application/json",
   };
-  const project = encodeURIComponent(input.project);
+  let resolvedProjectName = input.project;
+  const projectPath = () => encodeURIComponent(resolvedProjectName);
   const masterRepo = (input.masterRepo ?? "").trim() || DEFAULT_MASTER_REPO;
   const targetRepo = (input.repo ?? "").trim() || masterRepo;
+
+  /**
+   * Tokens da Vercel podem enxergar projetos pessoais e de várias equipes. A
+   * API responde 403/404 quando o projeto pertence a uma equipe e a consulta
+   * omite (ou traz um Team ID antigo). Descobrimos esse escopo uma vez e o
+   * reutilizamos em vínculo, variáveis e deployment.
+   */
+  const fetchProject = async (): Promise<Response> => {
+    const request = (teamId: string | null) => {
+      const suffix = teamId ? `?teamId=${encodeURIComponent(teamId)}` : "";
+      return doFetch(`https://api.vercel.com/v9/projects/${projectPath()}${suffix}`, { headers });
+    };
+    const initial = await request(resolvedTeamId);
+    if (initial.ok || (initial.status !== 403 && initial.status !== 404)) return initial;
+
+    // Cadastros antigos podem ter sido salvos sem um separador do slug
+    // (ex.: unitos-casa8), enquanto o projeto real é unitos-casa-8. Procuramos
+    // apenas uma equivalência canônica única entre os projetos visíveis; nunca
+    // escolhemos por similaridade aproximada.
+    const canonical = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const requestedCanonical = canonical(input.project);
+    const discoverEquivalent = async (teamId: string | null): Promise<Response | null> => {
+      const suffix = teamId ? `&teamId=${encodeURIComponent(teamId)}` : "";
+      const list = await doFetch(`https://api.vercel.com/v9/projects?limit=100${suffix}`, {
+        headers,
+      }).catch(() => null);
+      if (!list?.ok) return null;
+      const body = (await list.json().catch(() => ({}))) as {
+        projects?: Array<{ name?: string }>;
+      };
+      const matches = (body.projects ?? [])
+        .map((candidate) => (candidate.name ?? "").trim())
+        .filter((name) => name && canonical(name) === requestedCanonical);
+      if (matches.length !== 1 || matches[0] === input.project) return null;
+      resolvedProjectName = matches[0];
+      const matched = await request(teamId);
+      if (matched.ok) {
+        resolvedTeamId = teamId;
+        return matched;
+      }
+      resolvedProjectName = input.project;
+      return null;
+    };
+
+    const personalMatch = await discoverEquivalent(resolvedTeamId);
+    if (personalMatch) return personalMatch;
+
+    const teams = await doFetch("https://api.vercel.com/v2/teams?limit=100", { headers }).catch(
+      () => null,
+    );
+    if (!teams?.ok) return initial;
+    const payload = (await teams.json().catch(() => ({}))) as {
+      teams?: Array<{ id?: string }>;
+    };
+    for (const candidate of payload.teams ?? []) {
+      const teamId = (candidate.id ?? "").trim();
+      if (!teamId || teamId === resolvedTeamId) continue;
+      const scoped = await request(teamId);
+      if (scoped.ok) {
+        resolvedTeamId = teamId;
+        return scoped;
+      }
+      const equivalent = await discoverEquivalent(teamId);
+      if (equivalent) return equivalent;
+    }
+    return initial;
+  };
+
+  const projectAccessError = async (res: Response) => {
+    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    // A Vercel devolve `invalidToken: true` quando o próprio token não vale
+    // mais (revogado/expirado/copiado incompleto) — mesmo com status 403. Nesse
+    // caso não é questão de equipe nem de permissão no projeto.
+    const invalidToken = /"invalidToken"\s*:\s*true/.test(detail);
+    const hint =
+      res.status === 401 || invalidToken
+        ? "o token de publicação é inválido, expirado ou foi revogado — gere um novo token na Vercel (Account Settings → Tokens, com escopo da equipe dona do projeto) e salve-o novamente em Acessos"
+        : res.status === 403 || res.status === 404
+          ? "o token não acessa o projeto em nenhuma equipe visível; confirme a conta dona do projeto e a permissão do token"
+          : "consulta recusada pela Vercel";
+    return `HTTP ${res.status} ao consultar o projeto de deploy — ${hint}${detail ? ` (${detail})` : ""}`;
+  };
 
   const client: DeployClient = {
     async deploymentUrl() {
       try {
-        const res = await doFetch(
-          `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
-          { headers },
-        );
+        const res = await fetchProject();
         if (!res.ok) {
-          return { ok: false, error: `HTTP ${res.status} ao consultar o projeto de deploy` };
+          return { ok: false, error: await projectAccessError(res) };
         }
         const body = (await res.json().catch(() => ({}))) as {
           name?: string;
@@ -1548,7 +2038,11 @@ export function createDeployClient(input: {
         if (!candidate) {
           return { ok: false, error: "o deploy ainda não expôs uma URL pública" };
         }
-        return { ok: true, url: candidate.startsWith("http") ? candidate : `https://${candidate}` };
+        return {
+          ok: true,
+          url: candidate.startsWith("http") ? candidate : `https://${candidate}`,
+          projectName: (body.name ?? resolvedProjectName).trim(),
+        };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
@@ -1556,7 +2050,7 @@ export function createDeployClient(input: {
     async redeploy() {
       try {
         const list = await doFetch(
-          `https://api.vercel.com/v6/deployments?${qs(`app=${project}&target=production&limit=1`)}`,
+          `https://api.vercel.com/v6/deployments?${qs(`app=${projectPath()}&target=production&limit=1`)}`,
           { headers },
         );
         if (!list.ok) {
@@ -1611,7 +2105,7 @@ export function createDeployClient(input: {
       };
       try {
         const res = await doFetch(
-          `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
+          `https://api.vercel.com/v9/projects/${projectPath()}?${qs()}`.replace(/\?$/, ""),
           { method: "PATCH", headers, body: JSON.stringify(body) },
         );
         if (res.ok) return { ok: true };
@@ -1637,12 +2131,9 @@ export function createDeployClient(input: {
     async linkRepository(repo, options) {
       const slug = (repo ?? "").trim() || targetRepo;
       try {
-        const res = await doFetch(
-          `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
-          { headers },
-        );
+        const res = await fetchProject();
         if (!res.ok) {
-          return { ok: false, error: `HTTP ${res.status} ao consultar o projeto de deploy` };
+          return { ok: false, error: await projectAccessError(res) };
         }
         const body = (await res.json().catch(() => ({}))) as {
           id?: string;
@@ -1723,10 +2214,7 @@ export function createDeployClient(input: {
     async deployLatestCode(options) {
       try {
         const readProject = async () => {
-          const res = await doFetch(
-            `https://api.vercel.com/v9/projects/${project}?${qs()}`.replace(/\?$/, ""),
-            { headers },
-          );
+          const res = await fetchProject();
           if (!res.ok) return null;
           return (await res.json().catch(() => ({}))) as {
             id?: string;
@@ -1874,7 +2362,7 @@ export function createDeployClient(input: {
       if (!host) return { ok: false, error: "domínio vazio" };
       try {
         const read = await doFetch(
-          `https://api.vercel.com/v9/projects/${project}/domains/${encodeURIComponent(host)}?${qs()}`.replace(
+          `https://api.vercel.com/v9/projects/${projectPath()}/domains/${encodeURIComponent(host)}?${qs()}`.replace(
             /\?$/,
             "",
           ),
@@ -1885,7 +2373,7 @@ export function createDeployClient(input: {
           return { ok: true, added: false, verified: body.verified === true };
         }
         const created = await doFetch(
-          `https://api.vercel.com/v10/projects/${project}/domains?${qs()}`.replace(/\?$/, ""),
+          `https://api.vercel.com/v10/projects/${projectPath()}/domains?${qs()}`.replace(/\?$/, ""),
           { method: "POST", headers, body: JSON.stringify({ name: host }) },
         );
         if (!created.ok) {
@@ -1936,7 +2424,7 @@ export function createDeployClient(input: {
     async setEnv(entries) {
       try {
         const res = await doFetch(
-          `https://api.vercel.com/v10/projects/${project}/env?${qs("upsert=true")}`,
+          `https://api.vercel.com/v10/projects/${projectPath()}/env?${qs("upsert=true")}`,
           {
             method: "POST",
             headers,
@@ -1966,7 +2454,7 @@ export function createDeployClient(input: {
     async listEnv(plainKeys = []) {
       try {
         const res = await doFetch(
-          `https://api.vercel.com/v9/projects/${project}/env?${qs("decrypt=false")}`,
+          `https://api.vercel.com/v9/projects/${projectPath()}/env?${qs("decrypt=false")}`,
           { headers },
         );
         if (!res.ok) {
@@ -2241,6 +2729,139 @@ async function report(
   }).catch(() => undefined);
 }
 
+/* ------------------------------------------------- preflight de credenciais */
+
+export type AccessCheck = {
+  area: "database" | "deploy" | "code";
+  label: string;
+  ok: boolean;
+  detail: string;
+};
+
+export type AccessPreflight = {
+  checks: AccessCheck[];
+  /** Permissão faltante: interrompe imediatamente, sem tentar publicar. */
+  terminal: string | null;
+  /** Instabilidade momentânea do provedor: vale tentar de novo em minutos. */
+  transient: string | null;
+};
+
+/** 401/403 = permissão; 502/503/504/429 = instabilidade momentânea. */
+export function classifyAccessFailure(detail: string): "permission" | "transient" | "other" {
+  const text = (detail ?? "").trim();
+  if (/HTTP 401|HTTP 403|rate limit|não acessa o projeto|privileges/i.test(text))
+    return "permission";
+  if (/HTTP 429|HTTP 50[234]|Instabilidade tempor|limitando as chamadas|timeout/i.test(text))
+    return "transient";
+  return "other";
+}
+
+/**
+ * O GitHub responde "Resource not accessible by personal access token" sem
+ * dizer qual permissão falta. Traduzimos para a ação concreta no token.
+ */
+export function withRepoWriteHint(detail: string, repoSlug: string): string {
+  const text = (detail ?? "").trim();
+  if (!/HTTP 403|not accessible by personal access token|Resource not accessible/i.test(text)) {
+    return text;
+  }
+  if (/Contents: Read and write/i.test(text)) return text;
+  return `${text} — o token do GitHub precisa de "Contents: Read and write" (e "Metadata: Read-only") com ${repoSlug} entre os repositórios autorizados. Gere/edite o token em github.com/settings/tokens e salve-o novamente nos acessos da instalação.`;
+}
+
+
+/**
+ * Confere, na ordem em que serão usadas, se as três credenciais têm de fato as
+ * permissões da operação. Falta de permissão devolve `terminal` (a operação é
+ * recusada antes de começar); instabilidade devolve `transient`.
+ *
+ * O projeto de deploy ainda não existir NÃO é bloqueio: em instalação nova ele
+ * pode ser criado depois.
+ */
+export async function preflightAccess(input: {
+  management?: ManagementClient | null;
+  suppliedKeys?: { publishableKey?: string | null; serviceRoleKey?: string | null } | null;
+  deploy?: DeployClient | null;
+  code?: CodeClient | null;
+  projectRef?: string | null;
+  deployProject?: string | null;
+}): Promise<AccessPreflight> {
+  const checks: AccessCheck[] = [];
+  let terminal: string | null = null;
+  let transient: string | null = null;
+
+  const note = (area: AccessCheck["area"], label: string, ok: boolean, detail: string) => {
+    checks.push({ area, label, ok, detail });
+    if (ok) return;
+    // Só bloqueia diante de negativa clara de permissão ou instabilidade do
+    // provedor; qualquer outro detalhe é reportado e resolvido na própria etapa.
+    const kind = classifyAccessFailure(detail);
+    if (kind === "transient") transient ??= `${label}: ${detail}`;
+    else if (kind === "permission") terminal ??= `${label}: ${detail}`;
+  };
+
+  if (input.management) {
+    const ping = await input.management.query("select 1 as ok");
+    note(
+      "database",
+      "Acesso ao banco da instalação",
+      ping.ok,
+      ping.ok
+        ? `projeto ${input.projectRef ?? "destino"} acessível`
+        : (ping.error ?? "acesso recusado"),
+    );
+    if (ping.ok) {
+      const supplied = input.suppliedKeys;
+      const keys =
+        supplied?.publishableKey && supplied.serviceRoleKey
+          ? { ok: true, publishableKey: supplied.publishableKey, serviceRoleKey: supplied.serviceRoleKey }
+          : await input.management.keys();
+      const ok = keys.ok && Boolean(keys.publishableKey) && Boolean(keys.serviceRoleKey);
+      note(
+        "database",
+        "Leitura das chaves do projeto",
+        ok,
+        ok
+          ? "chaves publicável e de serviço legíveis"
+          : (keys.error ?? "o token não permite ler todas as chaves de API do projeto"),
+      );
+    }
+  }
+
+  if (input.deploy) {
+    const project = await input.deploy.deploymentUrl();
+    const detail = project.ok
+      ? `projeto ${input.deployProject ?? ""} acessível`.trim()
+      : (project.error ?? "acesso negado");
+    // 404 = projeto ainda não criado; não é falta de permissão.
+    const pending = !project.ok && /HTTP 404|não encontrado/i.test(detail);
+    if (pending) {
+      checks.push({
+        area: "deploy",
+        label: "Acesso ao projeto de publicação",
+        ok: false,
+        detail: `${detail} — será criado/ligado durante a operação`,
+      });
+    } else {
+      note("deploy", "Acesso ao projeto de publicação", project.ok, detail);
+    }
+  }
+
+  if (input.code) {
+    const permissions = await input.code.permissions();
+    for (const item of permissions) {
+      // "Criação rápida pelo template" é conveniência: não bloqueia a operação.
+      if (/template/i.test(item.label)) {
+        checks.push({ area: "code", label: item.label, ok: item.ok, detail: item.detail });
+        continue;
+      }
+      note("code", item.label, item.ok, item.detail);
+    }
+  }
+
+  return { checks, terminal, transient };
+}
+
 /**
  * Executa o provisionamento automático completo. Nunca simula sucesso:
  * qualquer dependência ausente encerra a operação como BLOCKED.
@@ -2258,26 +2879,32 @@ export async function runAutomatedProvision(input: {
   const { client, operation, installation } = input;
   const failures: string[] = [];
   const blocked: string[] = [];
+  // Pendências externas ao provisionamento (ex.: DNS do domínio definitivo
+  // ainda não publicado pelo dono do domínio). O ambiente está aplicado e
+  // utilizável: registrar como aviso, nunca como bloqueio da instalação.
+  const pendingNotes: string[] = [];
   const checks: Partial<Record<HealthCheckId, CheckState>> = {};
   const steps: AutomationRunResult["steps"] = [];
 
   const finish = async (appUrl: string | null, source: "custom_domain" | "deploy" | null) => {
     const outcome = automationOutcome({ blocked, failures });
+    const notes = pendingNotes.length ? ` Pendências: ${pendingNotes.join(" | ")}` : "";
     await finalizeOperation(client as never, operation as never, {
       ok: outcome.result === "PASS",
-      warnings: outcome.result === "PASS" && blocked.length > 0,
+      warnings: outcome.result === "PASS" && (blocked.length > 0 || pendingNotes.length > 0),
       // PASS => a instalação passa a rodar a versão do MASTER, e o status
       // derivado vira "Atualizada" (operacional). Sem isso ficaria em "Atenção".
       version: outcome.result === "PASS" ? MASTER_RELEASE_VERSION : null,
       summary:
         outcome.result === "PASS"
-          ? `Provisionamento automático concluído${appUrl ? ` em ${appUrl}` : ""}.`
-          : `${outcome.result}: ${outcome.reasons.join(" | ")}`,
+          ? `Provisionamento automático concluído${appUrl ? ` em ${appUrl}` : ""}.${notes}`
+          : `${outcome.result}: ${outcome.reasons.join(" | ")}${notes}`,
       errorKind: outcome.result === "PASS" ? null : outcome.result.toLowerCase(),
       checks: checks as never,
     }).catch(() => undefined);
     return { ...outcome, appUrl, urlSource: source, steps };
   };
+
 
   const mark = async (
     id: string,
@@ -2359,6 +2986,7 @@ export async function runAutomatedProvision(input: {
     masterRepo,
     fetchImpl: input.fetchImpl,
   });
+
   const deploy = createDeployClient({
     token: deployToken,
     project: target.deployProject,
@@ -2369,7 +2997,7 @@ export async function runAutomatedProvision(input: {
     fetchImpl: input.fetchImpl,
   });
 
-  /* 2. Supabase destino: conectividade, plataforma e chaves */
+  /* 3. Supabase destino: conectividade, plataforma e chaves */
   await mark("supabase", "running");
   const ping = await management.query(
     "select count(*)::int as schemas from information_schema.schemata where schema_name in ('auth','storage','vault')",
@@ -2397,7 +3025,15 @@ export async function runAutomatedProvision(input: {
   }
 
   const keys = await management.keys();
-  if (!keys.ok || !keys.publishableKey || !keys.serviceRoleKey) {
+  const suppliedPublishable = (env["UNITOS_SUPABASE_PUBLISHABLE_KEY"] ?? "").trim();
+  const suppliedServiceRole = (env["UNITOS_SUPABASE_SERVICE_ROLE_KEY"] ?? "").trim();
+  const resolvedKeys =
+    keys.ok && keys.publishableKey && keys.serviceRoleKey
+      ? keys
+      : suppliedPublishable && suppliedServiceRole
+        ? { ok: true, publishableKey: suppliedPublishable, serviceRoleKey: suppliedServiceRole }
+        : keys;
+  if (!resolvedKeys.ok || !resolvedKeys.publishableKey || !resolvedKeys.serviceRoleKey) {
     blocked.push(
       `Não foi possível ler as chaves do Supabase destino: ${keys.error ?? "chaves não retornadas"}`,
     );
@@ -2406,12 +3042,46 @@ export async function runAutomatedProvision(input: {
     return finish(null, null);
   }
   checks.supabase = "ok";
-  await mark("supabase", "done", `projeto ${target.projectRef} acessível`);
+  // Confirmação de e-mail desligada por padrão: o remetente padrão do Supabase
+  // não tem DNS apontado, então o link de confirmação do /setup não chegaria.
+  const authDefaults = await applyInstallationAuthDefaults(management);
+  if (!authDefaults.applied) {
+    pendingNotes.push(`Confirmação de e-mail não pôde ser desligada: ${authDefaults.detail}`);
+  }
+  await mark(
+    "supabase",
+    "done",
+    `projeto ${target.projectRef} acessível${authDefaults.applied ? " · confirmação de e-mail desligada" : ""}`,
+  );
+
+
+  /* 3. preflight dos acessos de publicação e repositório, antes de qualquer
+   * escrita: negativa de permissão encerra aqui, dizendo o acesso exato que
+   * falta; instabilidade do provedor pede nova tentativa em minutos. */
+  const preflight = await preflightAccess({
+    management,
+    suppliedKeys: resolvedKeys,
+    deploy,
+    code,
+    deployProject: target.deployProject,
+  });
+  if (preflight.terminal || preflight.transient) {
+    const failing = preflight.checks.find((c) => !c.ok && c.area === "deploy");
+    const stepId = failing ? "deploy_link" : "code";
+    const reason = preflight.terminal
+      ? `Acesso insuficiente antes de publicar — ${preflight.terminal}`
+      : `Instabilidade momentânea ao conferir os acessos — ${preflight.transient}. Tente novamente em alguns minutos.`;
+    blocked.push(reason);
+    await mark(stepId, "error", reason);
+    checks.configuration = "attention";
+    return finish(null, null);
+  }
 
   /* 3. código no repositório DA INSTALAÇÃO (gerado do template do MASTER).
    * Sem código publicado o deploy não tem o que construir — por isso esta etapa
    * vem antes de conectar a Vercel, gravar variáveis e preparar o banco. */
   const codeStage = await readStageProgress(client, operation);
+  let provisionRepoSlug = codeStage.codeRepo ?? repo.slug;
   await mark("code", "running");
   if (codeStage.codeDone && codeStage.codeSha) {
     await mark(
@@ -2420,12 +3090,39 @@ export async function runAutomatedProvision(input: {
       `código já publicado em ${repo.slug} (${codeStage.codeSha.slice(0, 7)}) — checkpoint`,
     );
   } else {
-    const ensured = await code.ensureRepo();
+    const ensured = await code.ensureRepo({ initialProvision: true });
     if (!ensured.ok) {
       blocked.push(`Repositório da instalação indisponível: ${ensured.error ?? ""}`.trim());
       await mark("code", "error", ensured.error ?? "repositório indisponível");
       checks.code = "error";
       return finish(null, null);
+    }
+    const effectiveRepoSlug = ensured.repoSlug ?? repo.slug;
+    provisionRepoSlug = effectiveRepoSlug;
+    if (effectiveRepoSlug !== repo.slug) {
+      const updated = await (
+        client as never as {
+          from: (table: string) => {
+            update: (values: Record<string, unknown>) => {
+              eq: (
+                column: string,
+                value: string,
+              ) => Promise<{ error?: { message?: string } | null }>;
+            };
+          };
+        }
+      )
+        .from("installations")
+        .update({ git_repo_url: `https://github.com/${effectiveRepoSlug}` })
+        .eq("id", installation.id);
+      if (updated.error) {
+        blocked.push(
+          `A cópia foi criada em ${effectiveRepoSlug}, mas o cadastro não pôde ser atualizado.`,
+        );
+        await mark("code", "error", updated.error.message ?? "falha ao atualizar repositório");
+        checks.code = "error";
+        return finish(null, null);
+      }
     }
     const masterHead = await code.masterHeadSha();
     if (!masterHead.ok || !masterHead.sha) {
@@ -2438,69 +3135,100 @@ export async function runAutomatedProvision(input: {
       checks.code = "error";
       return finish(null, null);
     }
-    // Retomada continua do checkpoint: blobs já copiados não são copiados de
-    // novo. Se o commit do MASTER mudou, o mapa antigo é descartado.
-    const reusableBlobs =
-      codeStage.codeSourceSha === masterHead.sha ? (codeStage.codeBlobs ?? {}) : {};
-    await saveStageProgress(client, operation, {
-      codeSourceSha: masterHead.sha,
-      codeBlobs: reusableBlobs,
-    });
-    const published = await code.publishSnapshot(masterHead.sha, {
-      blobMap: reusableBlobs,
-      // Janela curta do Worker: ao esgotar, devolve `partial` e o watchdog
-      // retoma a MESMA operação exatamente daqui.
-      timeBudgetMs: 20_000,
-      onProgress: async (p) => {
-        await mark("code", "running", p.detail, p.percent);
-      },
-      onCheckpoint: async (blobMap) => {
-        await saveStageProgress(client, operation, {
-          codeSourceSha: masterHead.sha,
-          codeBlobs: blobMap,
-        });
-      },
-    });
-    if (!published.ok) {
-      failures.push(`Código não publicado em ${repo.slug}: ${published.error ?? ""}`.trim());
-      await mark("code", "error", published.error ?? "publicação falhou");
+    const [sourceRelease, installedRelease] = await Promise.all([
+      code.releaseAtCommit(masterHead.sha),
+      code.installedRelease(),
+    ]);
+    if (!sourceRelease.ok || !sourceRelease.version || !installedRelease.ok) {
+      const reason =
+        installedRelease.error ??
+        sourceRelease.error ??
+        "não foi possível ler a versão do código no repositório da instalação";
+      blocked.push(
+        ensured.created
+          ? `Cópia do template não validada: ${reason}`
+          : `O repositório ${effectiveRepoSlug} não parece ser uma cópia do template do MASTER: ${reason}. Gere-o novamente a partir do template.`,
+      );
+      await mark("code", "error", reason);
       checks.code = "error";
       return finish(null, null);
     }
-    if (published.partial) {
+
+    // Cópia do template apenas DESATUALIZADA não é bloqueio: sincronizamos a
+    // versão do MASTER no repositório da instalação, como na atualização.
+    let publishedSha = installedRelease.sha ?? masterHead.sha;
+    if (sourceRelease.version !== installedRelease.version) {
       await mark(
         "code",
         "running",
-        published.note
-          ? published.note
-          : `publicando código em ${repo.slug} — ${published.changed ?? 0} arquivos nesta rodada (continua)`,
+        `cópia em ${installedRelease.version ?? "versão desconhecida"}; sincronizando para ${sourceRelease.version}`,
       );
-      return { result: "RUNNING", reasons: [], appUrl: null, urlSource: null, steps };
+      const stage = await readStageProgress(client, operation);
+      const reusable = stage.codeSourceSha === masterHead.sha ? (stage.codeBlobs ?? {}) : {};
+      const published = await code.publishSnapshot(masterHead.sha, {
+        blobMap: reusable,
+        timeBudgetMs: 20_000,
+        onProgress: async (progress) => {
+          await report(client, operation, "code", "running", progress.detail, progress.percent);
+        },
+        onCheckpoint: async (blobMap) => {
+          await saveStageProgress(client, operation, {
+            codeSourceSha: masterHead.sha,
+            codeBlobs: blobMap,
+          });
+        },
+      });
+      if (!published.ok) {
+        const detail = withRepoWriteHint(
+          published.error ?? `não foi possível sincronizar ${effectiveRepoSlug}`,
+          effectiveRepoSlug,
+        );
+        const kind = classifyAccessFailure(detail);
+        if (kind === "permission") blocked.push(`Código não sincronizado: ${detail}`);
+        else failures.push(`Código não sincronizado: ${detail}`);
+
+        await mark("code", "error", detail);
+        checks.code = "error";
+        return finish(null, null);
+      }
+      if (published.partial) {
+        const detail =
+          published.note ??
+          `sincronizando ${effectiveRepoSlug} — ${published.changed ?? 0} arquivos nesta rodada (continua)`;
+        failures.push(`${detail} Tente novamente para retomar de onde parou.`);
+        await mark("code", "error", detail);
+        checks.code = "attention";
+        return finish(null, null);
+      }
+      publishedSha = published.commitSha ?? masterHead.sha;
     }
+
     await saveStageProgress(client, operation, {
       codeDone: true,
+      codeSourceSha: masterHead.sha,
       codeSha: masterHead.sha,
-      codeRepo: repo.slug,
+      codeRepo: effectiveRepoSlug,
       codeBlobs: {},
     });
     checks.code = "ok";
     await mark(
       "code",
       "done",
-      `${
-        ensured.created ? `repositório criado (${ensured.via ?? "novo"}) e ` : ""
-      }código do MASTER publicado em ${repo.slug} (${masterHead.sha.slice(0, 7)}${
-        published.changed !== undefined ? `, ${published.changed} arquivos` : ""
-      })`,
+      ensured.created
+        ? `cópia completa do template criada em ${effectiveRepoSlug} (${(ensured.commitSha ?? masterHead.sha).slice(0, 7)})`
+        : `código do template em ${effectiveRepoSlug} na versão ${sourceRelease.version} (${publishedSha.slice(0, 7)})`,
+      100,
     );
   }
   checks.code = checks.code ?? "ok";
 
   /* 4. deploy conectado ao repositório da instalação, sem auto-deploy por Git */
   await mark("deploy_link", "running");
-  const linked = await deploy.linkRepository(repo.slug);
+  const linked = await deploy.linkRepository(provisionRepoSlug);
   if (!linked.ok) {
-    blocked.push(`Projeto de deploy não ligado a ${repo.slug}: ${linked.error ?? ""}`.trim());
+    blocked.push(
+      `Projeto de deploy não ligado a ${provisionRepoSlug}: ${linked.error ?? ""}`.trim(),
+    );
     await mark("deploy_link", "error", linked.error ?? "vínculo do repositório falhou");
     checks.configuration = "attention";
     return finish(null, null);
@@ -2512,8 +3240,8 @@ export async function runAutomatedProvision(input: {
     "deploy_link",
     "done",
     autoDeployOn.ok
-      ? `projeto ligado a ${repo.slug} · auto-deploy por Git ligado`
-      : `projeto ligado a ${repo.slug} · auto-deploy por Git não confirmado (${autoDeployOn.error ?? "sem detalhe"})`,
+      ? `projeto ligado a ${provisionRepoSlug} · auto-deploy por Git ligado`
+      : `projeto ligado a ${provisionRepoSlug} · auto-deploy por Git não confirmado (${autoDeployOn.error ?? "sem detalhe"})`,
   );
 
   /* 5. baseline do banco — roda DEPOIS de código, deploy conectado e variáveis:
@@ -2785,8 +3513,8 @@ export async function runAutomatedProvision(input: {
     const plan = buildDeployEnvPlan({
       appUrl: url.origin,
       supabaseUrl: installation.supabaseUrl ?? `https://${target.projectRef}.supabase.co`,
-      publishableKey: keys.publishableKey,
-      serviceRoleKey: keys.serviceRoleKey,
+      publishableKey: resolvedKeys.publishableKey,
+      serviceRoleKey: resolvedKeys.serviceRoleKey,
       projectRef: target.projectRef,
       secrets,
       officialMetaApp,
@@ -2878,12 +3606,21 @@ export async function runAutomatedProvision(input: {
       // Sem publicação nova (cota) ou com DNS/domínio ainda propagando, o 404 é
       // esperado: é pendência de acompanhamento, não bloqueio do provisionamento.
       const pendingPublish = redeployed.quotaExceeded === true || domainNote !== "";
+      // Domínio definitivo depende do DNS do dono do domínio, fora do alcance da
+      // automação. O ambiente segue aplicado e utilizável pela URL de deploy.
+      const dnsPending = url.source === "custom_domain";
       const message = `Frontend ainda nao respondeu em ${url.origin}: ${probe.detail}${
-        pendingPublish ? " — aguardando a publicação/DNS concluir" : ""
+        dnsPending
+          ? " — publique o DNS do subdomínio apontando para cname.vercel-dns.com e o endereço definitivo passa a responder"
+          : pendingPublish
+            ? " — aguardando a publicação/DNS concluir"
+            : ""
       }`;
-      if (pendingPublish) failures.push(message);
+      if (dnsPending) pendingNotes.push(message);
+      else if (pendingPublish) failures.push(message);
       else blocked.push(message);
     }
+
 
     await saveStageProgress(client, operation, {
       deployDone: true,
@@ -3329,24 +4066,17 @@ export async function runAutomatedUpdate(input: {
     return fail("BLOCKED", "a instalação não tem projeto de deploy configurado");
   }
 
-  /* 0. banco antes do código: o build novo depende do schema atualizado. */
-  await report(client, operation, "database", "running");
-  const delta = await applyDatabaseDelta({
-    client,
-    operation,
-    installation,
-    env,
-    ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
+  const target = resolveAutomationTarget(installation);
+  if (!target.ok) return fail("BLOCKED", target.reason, "database");
+  const management = createManagementClient({
+    token: (env["UNITOS_SUPABASE_MANAGEMENT_TOKEN"] ?? "").trim(),
+    projectRef: target.projectRef,
+    fetchImpl: input.fetchImpl,
   });
-  if (delta.state === "blocked" || delta.state === "error") {
-    return fail(delta.state === "blocked" ? "BLOCKED" : "FAIL", delta.detail, "database");
-  }
-  if (delta.state === "pending") {
-    // O watchdog retoma a MESMA operação e continua do checkpoint.
-    await report(client, operation, "database", "running", delta.detail);
-    return { result: "PENDING", reasons: [delta.detail] };
-  }
-  await report(client, operation, "database", "done", delta.detail, 100);
+  // Instalações antigas também passam a nascer/ficar sem confirmação de e-mail.
+  await applyInstallationAuthDefaults(management).catch(() => undefined);
+
+
 
   const masterRepo = (env["UNITOS_MASTER_REPO"] ?? "").trim() || null;
   const repo = resolveInstallationRepo({
@@ -3379,6 +4109,46 @@ export async function runAutomatedUpdate(input: {
     masterRepo,
     fetchImpl: input.fetchImpl,
   });
+
+  // Nenhum delta é aplicado antes de comprovar banco, GitHub e Vercel.
+  const updatePreflight = await preflightAccess({
+    management,
+    suppliedKeys: {
+      publishableKey: (env["UNITOS_SUPABASE_PUBLISHABLE_KEY"] ?? "").trim(),
+      serviceRoleKey: (env["UNITOS_SUPABASE_SERVICE_ROLE_KEY"] ?? "").trim(),
+    },
+    deploy,
+    code,
+    deployProject: project,
+  });
+  if (updatePreflight.terminal || updatePreflight.transient) {
+    return fail(
+      "BLOCKED",
+      updatePreflight.terminal ??
+        `${updatePreflight.transient ?? "serviço temporariamente indisponível"}. Tente novamente em alguns minutos.`,
+      updatePreflight.checks.find((check) => !check.ok)?.area === "database"
+        ? "database"
+        : "code",
+    );
+  }
+
+  /* Banco antes do código, mas somente depois do preflight completo. */
+  await report(client, operation, "database", "running");
+  const delta = await applyDatabaseDelta({
+    client,
+    operation,
+    installation,
+    env,
+    ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
+  });
+  if (delta.state === "blocked" || delta.state === "error") {
+    return fail(delta.state === "blocked" ? "BLOCKED" : "FAIL", delta.detail, "database");
+  }
+  if (delta.state === "pending") {
+    await report(client, operation, "database", "running", delta.detail);
+    return { result: "PENDING", reasons: [delta.detail] };
+  }
+  await report(client, operation, "database", "done", delta.detail, 100);
 
   const checkpoint = await readStageProgress(client, operation);
   let deploymentId = checkpoint.updateDeploymentId ?? null;
@@ -3460,8 +4230,13 @@ export async function runAutomatedUpdate(input: {
       },
     });
     if (!published.ok) {
-      return fail("FAIL", published.error ?? `não foi possível publicar em ${repo.slug}`);
+      const detail = withRepoWriteHint(
+        published.error ?? `não foi possível publicar em ${repo.slug}`,
+        repo.slug,
+      );
+      return fail(classifyAccessFailure(detail) === "permission" ? "BLOCKED" : "FAIL", detail);
     }
+
     if (published.partial) {
       const detail =
         published.note ??
@@ -3524,6 +4299,33 @@ export async function runAutomatedUpdate(input: {
     }
     await report(client, operation, "code", "done", "código publicado no repositório");
     await report(client, operation, "build", "done", `build disparado pelo Git (${cause})`);
+    // A validação final também roda aqui: sem isto a etapa ficava "pendente" e a
+    // operação era encerrada como incomplete_steps mesmo com tudo aplicado.
+    await report(client, operation, "validation", "running");
+    await hardenHelperTables(management);
+    const pushVerification = await management.query(prepareVerificationSql(verifySql).sql);
+    if (!pushVerification.ok) {
+      return fail(
+        "FAIL",
+        `a validação final não pôde ser executada: ${pushVerification.error ?? "falha"}`,
+        "validation",
+      );
+    }
+    const pushSummary = summarizeVerificationRows(pushVerification.rows);
+    if (!pushSummary.ok) {
+      return fail(
+        "FAIL",
+        pushSummary.reason ?? "a validação final encontrou inconsistências",
+        "validation",
+      );
+    }
+    await report(
+      client,
+      operation,
+      "validation",
+      "done",
+      `${pushSummary.total} verificações PASS`,
+    );
     await report(
       client,
       operation,
@@ -3531,6 +4333,7 @@ export async function runAutomatedUpdate(input: {
       "done",
       shortPush ? `${appliedByPush} (${shortPush})` : appliedByPush,
     );
+
     await finalizeOperation(client as never, operation as never, {
       ok: true,
       warnings: true,
@@ -3660,6 +4463,32 @@ export async function runAutomatedUpdate(input: {
   }
 
   await report(client, operation, "build", "done", url ? `publicado em ${url}` : "publicado");
+
+  await report(client, operation, "validation", "running");
+  await hardenHelperTables(management);
+  const finalVerification = await management.query(prepareVerificationSql(verifySql).sql);
+  if (!finalVerification.ok) {
+    return fail(
+      "FAIL",
+      `a validação final não pôde ser executada: ${finalVerification.error ?? "falha"}`,
+      "validation",
+    );
+  }
+  const verificationSummary = summarizeVerificationRows(finalVerification.rows);
+  if (!verificationSummary.ok) {
+    return fail(
+      "FAIL",
+      verificationSummary.reason ?? "a validação final encontrou inconsistências",
+      "validation",
+    );
+  }
+  await report(
+    client,
+    operation,
+    "validation",
+    "done",
+    `${verificationSummary.total} verificações PASS`,
+  );
   const shortSha = targetSha ? targetSha.slice(0, 7) : null;
   // A versão fixada é a do pacote realmente publicado, nunca o número atual do
   // MASTER: se o repositório estiver atrás, o painel precisa mostrar a verdade.

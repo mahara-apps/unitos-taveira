@@ -1,15 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Plus, RefreshCw, Search, Server } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Github, KeyRound, Loader2, Plus, RefreshCw, Search, Server, XCircle } from "lucide-react";
 
 import {
   createInstallationFn,
   getInstallationManagerAccessFn,
   getMasterVersionFn,
   listInstallationsFn,
+  propagateMasterGithubTokenFn,
+  PROPAGATE_GITHUB_TOKEN_CONFIRM_LABEL,
+  type GithubTokenPropagationItem,
   type InstallationRecord,
 } from "@/lib/installation/manager.functions";
 
@@ -110,6 +113,27 @@ function AdminInstallationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [propagateOpen, setPropagateOpen] = useState(false);
+  const [propagateConfirm, setPropagateConfirm] = useState("");
+  const [propagateResults, setPropagateResults] = useState<GithubTokenPropagationItem[] | null>(
+    null,
+  );
+  const goToCredentialsRef = useRef(false);
+
+  const propagateFn = useServerFn(propagateMasterGithubTokenFn);
+  const propagate = useMutation({
+    mutationFn: () => propagateFn({ data: { confirmLabel: propagateConfirm } }),
+    onSuccess: (out) => {
+      setPropagateResults(out.results);
+      if (out.failed === 0) {
+        toast.success(`Token do GitHub aplicado em ${out.updated} instalação(ões).`);
+      } else {
+        toast.warning(`Token aplicado em ${out.updated}; ${out.failed} falharam.`);
+      }
+      void qc.invalidateQueries({ queryKey: ["installations"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const create = useMutation({
     mutationFn: () => {
@@ -134,10 +158,12 @@ function AdminInstallationsPage() {
       setForm(EMPTY_FORM);
       setCreateOpen(false);
       void qc.invalidateQueries({ queryKey: ["installations"] });
+      const goCreds = goToCredentialsRef.current;
+      goToCredentialsRef.current = false;
       void navigate({
         to: "/admin/instalacoes/$id",
         params: { id: record.id },
-        search: { novo: true },
+        search: goCreds ? { novo: true, tab: "acessos" } : { novo: true },
       });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -202,9 +228,22 @@ function AdminInstallationsPage() {
             credenciais do destino.
           </p>
         </div>
-        <Button size="sm" className="shrink-0" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Nova instalação
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setPropagateOpen(true);
+              setPropagateConfirm("");
+              setPropagateResults(null);
+            }}
+          >
+            <Github className="mr-2 h-4 w-4" /> Aplicar token do GitHub
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Nova instalação
+          </Button>
+        </div>
       </header>
 
       {masterVersion.data?.masterPublished === false && (
@@ -374,10 +413,112 @@ function AdminInstallationsPage() {
             <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={() => create.mutate()} disabled={create.isPending}>
+            <Button
+              size="sm"
+              onClick={() => {
+                goToCredentialsRef.current = false;
+                create.mutate();
+              }}
+              disabled={create.isPending}
+            >
               {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Cadastrar
             </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                goToCredentialsRef.current = true;
+                create.mutate();
+              }}
+              disabled={create.isPending}
+            >
+              {create.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="mr-2 h-4 w-4" />
+              )}
+              Cadastrar e configurar acessos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Propagação do token do GitHub do MASTER para todas as instalações */}
+      <Dialog open={propagateOpen} onOpenChange={setPropagateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Aplicar token do GitHub nas instalações</DialogTitle>
+            <DialogDescription>
+              Copia o token do GitHub do MASTER (segredo do servidor) para o cofre cifrado de{" "}
+              <strong>todas as instalações</strong> cadastradas. Use quando o token da organização
+              é regenerado e as operações de código começam a falhar com acesso negado. O valor do
+              token nunca é exibido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+              <strong>Atenção.</strong> A substituição é imediata em todas as instalações. O token
+              precisa de <strong>Contents: Read and write</strong> nos repositórios de todas elas —
+              senão a próxima publicação de código falha com 403.
+            </div>
+
+            {propagateResults ? (
+              <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                {propagateResults.map((r) => (
+                  <li key={r.id} className="flex items-start gap-2">
+                    {r.ok ? (
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    ) : (
+                      <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-medium">{r.name}</span>
+                      {!r.ok && r.error ? (
+                        <span className="block text-destructive">{r.error}</span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  Para confirmar, digite{" "}
+                  <span className="font-mono font-semibold">
+                    {PROPAGATE_GITHUB_TOKEN_CONFIRM_LABEL}
+                  </span>
+                </Label>
+                <Input
+                  value={propagateConfirm}
+                  onChange={(e) => setPropagateConfirm(e.target.value)}
+                  autoComplete="off"
+                  placeholder={PROPAGATE_GITHUB_TOKEN_CONFIRM_LABEL}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setPropagateOpen(false)}>
+              {propagateResults ? "Fechar" : "Cancelar"}
+            </Button>
+            {!propagateResults && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => propagate.mutate()}
+                disabled={
+                  propagate.isPending ||
+                  propagateConfirm.trim().toLowerCase() !==
+                    PROPAGATE_GITHUB_TOKEN_CONFIRM_LABEL.toLowerCase()
+                }
+              >
+                {propagate.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Aplicar em todas
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

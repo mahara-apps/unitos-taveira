@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { amISuperAdmin, listBrandFeatures } from "@/lib/feature-flags.functions";
 
 /** Só chamamos server fns autenticadas quando existe sessão no browser. */
-function useHasSession(): boolean {
+export function useHasSession(): boolean {
   const [hasSession, setHasSession] = useState(false);
   useEffect(() => {
     let alive = true;

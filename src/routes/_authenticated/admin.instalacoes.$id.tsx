@@ -115,9 +115,18 @@ import { InstallationCredentialsCard } from "@/components/installations/installa
 import { CriticalConfirmDialog } from "@/components/ui/critical-confirm-dialog";
 import { CRITICAL_ACTIONS, type CriticalActionKey } from "@/lib/critical-actions";
 
+const TAB_VALUES = ["visao", "versoes", "saude", "acessos", "execucoes"] as const;
+type TabValue = (typeof TAB_VALUES)[number];
+
 export const Route = createFileRoute("/_authenticated/admin/instalacoes/$id")({
-  validateSearch: (search: Record<string, unknown>): { novo?: true } =>
-    search["novo"] === true || search["novo"] === "true" ? { novo: true } : {},
+  validateSearch: (search: Record<string, unknown>): { novo?: true; tab?: TabValue } => {
+    const result: { novo?: true; tab?: TabValue } = {};
+    if (search["novo"] === true || search["novo"] === "true") result.novo = true;
+    const t = search["tab"];
+    if (typeof t === "string" && (TAB_VALUES as readonly string[]).includes(t))
+      result.tab = t as TabValue;
+    return result;
+  },
   component: InstallationDetailPage,
   head: () => ({
     meta: [
@@ -192,7 +201,7 @@ function checkHint(id: string, state: string): string | null {
 
 function InstallationDetailPage() {
   const { id } = Route.useParams();
-  const { novo } = Route.useSearch();
+  const { novo, tab: tabParam } = Route.useSearch();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -232,7 +241,7 @@ function InstallationDetailPage() {
   const [updateOpen, setUpdateOpen] = useState(false);
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [opsPageRaw, setOpsPage] = useState(1);
-  const [tab, setTab] = useState("visao");
+  const [tab, setTab] = useState<TabValue>(tabParam ?? "visao");
   const resumePendingRef = useRef(false);
 
   const detail = useQuery({
@@ -940,7 +949,17 @@ function InstallationDetailPage() {
         </Card>
       )}
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          setTab(v as TabValue);
+          const nextSearch: { novo?: true; tab?: TabValue } = {};
+          if (novo) nextSearch.novo = true;
+          nextSearch.tab = v as TabValue;
+          void navigate({ to: "/admin/instalacoes/$id", params: { id }, search: nextSearch });
+        }}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="visao">Visão geral</TabsTrigger>
           <TabsTrigger value="versoes">Versões</TabsTrigger>

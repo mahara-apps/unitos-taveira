@@ -4930,6 +4930,8 @@ export type Database = {
           github_token_ciphertext: string | null
           installation_id: string
           supabase_management_token_ciphertext: string | null
+          supabase_publishable_key_ciphertext: string | null
+          supabase_service_role_key_ciphertext: string | null
           updated_at: string
           updated_by: string | null
           vercel_team_id: string | null
@@ -4941,6 +4943,8 @@ export type Database = {
           github_token_ciphertext?: string | null
           installation_id: string
           supabase_management_token_ciphertext?: string | null
+          supabase_publishable_key_ciphertext?: string | null
+          supabase_service_role_key_ciphertext?: string | null
           updated_at?: string
           updated_by?: string | null
           vercel_team_id?: string | null
@@ -4952,6 +4956,8 @@ export type Database = {
           github_token_ciphertext?: string | null
           installation_id?: string
           supabase_management_token_ciphertext?: string | null
+          supabase_publishable_key_ciphertext?: string | null
+          supabase_service_role_key_ciphertext?: string | null
           updated_at?: string
           updated_by?: string | null
           vercel_team_id?: string | null
@@ -8326,6 +8332,18 @@ export type Database = {
         Args: { _brand_id?: string }
         Returns: number
       }
+      create_message_thread: {
+        Args: {
+          _brand_id: string
+          _client_id?: string
+          _participant_ids?: string[]
+          _project_id?: string
+          _scope: string
+          _subject: string
+          _visibility?: string
+        }
+        Returns: string
+      }
       cron_secret: { Args: never; Returns: string }
       derive_post_stage: {
         Args: {
@@ -8603,6 +8621,40 @@ export type Database = {
           _user_id: string
         }
         Returns: number
+      }
+      start_installation_operation: {
+        Args: {
+          _actor_id: string
+          _installation_id: string
+          _kind: string
+          _run_token_expires_at?: string
+          _run_token_hash?: string
+          _steps: Json
+          _summary: string
+        }
+        Returns: {
+          actor_id: string | null
+          created_at: string
+          detail: Json
+          error_kind: string | null
+          finished_at: string | null
+          id: string
+          installation_id: string
+          kind: string
+          last_report_at: string | null
+          run_token_expires_at: string | null
+          run_token_hash: string | null
+          started_at: string
+          status: string
+          steps: Json
+          summary: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "installation_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       start_timer: {
         Args: { _brand_id: string; _task_id: string }

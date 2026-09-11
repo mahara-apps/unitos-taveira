@@ -32,7 +32,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE="$(cd "$HERE/../baseline-snapshot" && pwd)"
 MASTER_TOKENS='unitos-master.lovable.app|tkjbhttylouamqxnbfgv'
-RELEASE_VERSION="2026.09.0"
+RELEASE_VERSION="$(awk -F= '/^version=/{print $2; exit}' "$BASELINE/tools/delta_version.txt" | tr -d '[:space:]')"
+[ -n "$RELEASE_VERSION" ] || { printf 'Versão canônica ausente em delta_version.txt\n' >&2; exit 2; }
 
 # Canal OPCIONAL de progresso para o módulo MASTER de Instalações.
 # Sem UNITOS_MASTER_URL/UNITOS_RUN_TOKEN todas as funções são no-op.

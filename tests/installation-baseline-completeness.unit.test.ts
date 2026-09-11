@@ -68,7 +68,10 @@ describe("delta do baseline", () => {
     const all = Object.keys(migrationFiles)
       .map((p) => p.split("/").pop()!)
       .sort();
-    const start = "20260829121019_8a4f7bd3-bff7-464d-997c-d72f8676ebec.sql";
+    // O dump 001 foi tirado DEPOIS do desparticionamento de brain_events
+    // (20260829121019 e 20260829122439): o estado final das duas já está
+    // congelado nele, e reaplicá-las derrubava a tabela com CASCADE.
+    const start = "20260829124704_ed97a5cb-3e08-49ce-bc7a-88e12e0d9723.sql";
     const posteriores = all.filter((n) => n >= start);
     // Migrations exclusivas do MASTER (cron apontando para a URL do MASTER)
     // ficam de fora de propósito: a instalação recebe cron próprio em 020_cron.

@@ -25,6 +25,7 @@ export const CRITICAL_ACTION_KEYS = [
   "installation.resume",
   "installation.clear_credentials",
   "installation.rotate_secret",
+  "installation.propagate_github_token",
   // Exclusões com perda de dados
   "client.delete",
   "workspace.delete",
@@ -154,6 +155,14 @@ export const CRITICAL_ACTIONS: Record<CriticalActionKey, CriticalActionDefinitio
       "Gera uma nova chave e invalida a anterior. Integrações que usam a chave antiga param de funcionar.",
     irreversible: true,
     targetType: "installation",
+  },
+  "installation.propagate_github_token": {
+    key: "installation.propagate_github_token",
+    title: "Aplicar token do GitHub do MASTER nas instalações",
+    impact:
+      "Substitui o token do GitHub guardado em TODAS as instalações pelo token atual do MASTER. Operações de código nas instalações passam a usar o novo token imediatamente.",
+    irreversible: false,
+    targetType: "installation_credentials",
   },
   "client.delete": {
     key: "client.delete",

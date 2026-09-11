@@ -27,6 +27,8 @@ import { classifyOperationalUrl, type OperationalUrlKind } from "./readiness-con
  */
 export const AUTOMATION_CREDENTIAL_VARS = {
   supabaseManagement: ["UNITOS_SUPABASE_MANAGEMENT_TOKEN"],
+  supabasePublishable: ["UNITOS_SUPABASE_PUBLISHABLE_KEY"],
+  supabaseServiceRole: ["UNITOS_SUPABASE_SERVICE_ROLE_KEY"],
   vercel: ["UNITOS_VERCEL_TOKEN"],
   vercelTeam: ["UNITOS_VERCEL_TEAM_ID"],
   github: ["UNITOS_GITHUB_TOKEN"],

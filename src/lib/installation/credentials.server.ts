@@ -24,12 +24,16 @@ import {
 
 export type InstallationCredentialField =
   | "supabaseManagementToken"
+  | "supabasePublishableKey"
+  | "supabaseServiceRoleKey"
   | "vercelToken"
   | "vercelTeamId"
   | "githubToken";
 
 type Row = {
   supabase_management_token_ciphertext?: string | null;
+  supabase_publishable_key_ciphertext?: string | null;
+  supabase_service_role_key_ciphertext?: string | null;
   vercel_token_ciphertext?: string | null;
   vercel_team_id?: string | null;
   github_token_ciphertext?: string | null;
@@ -46,12 +50,16 @@ const TABLE = "installation_credentials";
 
 const CIPHER_COLUMN: Record<Exclude<InstallationCredentialField, "vercelTeamId">, keyof Row> = {
   supabaseManagementToken: "supabase_management_token_ciphertext",
+  supabasePublishableKey: "supabase_publishable_key_ciphertext",
+  supabaseServiceRoleKey: "supabase_service_role_key_ciphertext",
   vercelToken: "vercel_token_ciphertext",
   githubToken: "github_token_ciphertext",
 };
 
 export type InstallationCredentialsStatus = {
   supabaseManagementToken: { configured: boolean; masked: string | null };
+  supabasePublishableKey: { configured: boolean; masked: string | null };
+  supabaseServiceRoleKey: { configured: boolean; masked: string | null };
   vercelToken: { configured: boolean; masked: string | null };
   githubToken: { configured: boolean; masked: string | null };
   vercelTeamId: string | null;
@@ -62,7 +70,7 @@ async function readRow(client: Client, installationId: string): Promise<Row | nu
   const { data, error } = await client
     .from(TABLE)
     .select(
-      "supabase_management_token_ciphertext, vercel_token_ciphertext, vercel_team_id, github_token_ciphertext, generated_secrets_ciphertext, updated_at",
+      "supabase_management_token_ciphertext, supabase_publishable_key_ciphertext, supabase_service_role_key_ciphertext, vercel_token_ciphertext, vercel_team_id, github_token_ciphertext, generated_secrets_ciphertext, updated_at",
     )
     .eq("installation_id", installationId)
     .maybeSingle();
@@ -94,6 +102,8 @@ export async function getInstallationCredentialsStatus(
 
   return {
     supabaseManagementToken: await describe(row?.supabase_management_token_ciphertext),
+    supabasePublishableKey: await describe(row?.supabase_publishable_key_ciphertext),
+    supabaseServiceRoleKey: await describe(row?.supabase_service_role_key_ciphertext),
     vercelToken: await describe(row?.vercel_token_ciphertext),
     githubToken: await describe(row?.github_token_ciphertext),
     vercelTeamId: (row?.vercel_team_id ?? null) || null,
@@ -118,7 +128,13 @@ export async function saveInstallationCredentials(
     updated_at: new Date().toISOString(),
   };
 
-  for (const field of ["supabaseManagementToken", "vercelToken", "githubToken"] as const) {
+  for (const field of [
+    "supabaseManagementToken",
+    "supabasePublishableKey",
+    "supabaseServiceRoleKey",
+    "vercelToken",
+    "githubToken",
+  ] as const) {
     if (!(field in patch)) continue;
     const raw = (patch[field] ?? "").trim();
     payload[CIPHER_COLUMN[field] as string] = raw ? await encryptCredential(raw) : null;
@@ -130,6 +146,49 @@ export async function saveInstallationCredentials(
   const { error } = await client.from(TABLE).upsert(payload, { onConflict: "installation_id" });
   if (error) throw error;
 }
+
+/* ------------------------------------------- propagação do token do MASTER */
+
+export type GithubTokenPropagationResult = {
+  id: string;
+  name: string;
+  ok: boolean;
+  error?: string;
+};
+
+/**
+ * Aplica o token do GitHub do MASTER em lote: grava o MESMO valor cifrado em
+ * cada instalação (o cofre é o mesmo `BRAND_CREDENTIALS_SECRET` do MASTER).
+ * Uma falha individual não derruba o lote — o resultado aponta cada caso.
+ * O valor do token nunca entra no retorno nem em logs.
+ */
+export async function propagateGithubTokenToInstallations(input: {
+  client: Client;
+  actorId: string;
+  githubToken: string;
+  installations: { id: string; name: string }[];
+}): Promise<GithubTokenPropagationResult[]> {
+  const token = input.githubToken.trim();
+  if (!token) throw new Error("Token do GitHub do MASTER não configurado neste ambiente.");
+  const results: GithubTokenPropagationResult[] = [];
+  for (const installation of input.installations) {
+    try {
+      await saveInstallationCredentials(input.client, installation.id, input.actorId, {
+        githubToken: token,
+      });
+      results.push({ id: installation.id, name: installation.name, ok: true });
+    } catch (err) {
+      results.push({
+        id: installation.id,
+        name: installation.name,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err ?? "falha desconhecida"),
+      });
+    }
+  }
+  return results;
+}
+
 
 /* --------------------------------------------- secrets próprios persistidos */
 
@@ -358,6 +417,14 @@ export async function resolveInstallationEnv(
   await put(
     AUTOMATION_CREDENTIAL_VARS.supabaseManagement,
     row.supabase_management_token_ciphertext,
+  );
+  await put(
+    AUTOMATION_CREDENTIAL_VARS.supabasePublishable,
+    row.supabase_publishable_key_ciphertext,
+  );
+  await put(
+    AUTOMATION_CREDENTIAL_VARS.supabaseServiceRole,
+    row.supabase_service_role_key_ciphertext,
   );
   await put(AUTOMATION_CREDENTIAL_VARS.vercel, row.vercel_token_ciphertext);
   await put(AUTOMATION_CREDENTIAL_VARS.github, row.github_token_ciphertext);

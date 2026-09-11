@@ -75,7 +75,7 @@ function SetupPage() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
@@ -86,13 +86,31 @@ function SetupPage() {
         },
       },
     });
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       toast.error(error.message);
       return;
     }
+    // Instalações novas nascem sem confirmação de e-mail. Se o projeto ainda
+    // exigir confirmação, entramos direto com a senha em vez de deixar o
+    // primeiro acesso preso esperando um e-mail que não chega.
+    if (!data.session) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        setSubmitting(false);
+        toast.error(
+          "Super Admin criado, mas este projeto ainda exige confirmação de e-mail. Desative a confirmação de e-mail no Supabase e entre pela tela de login.",
+        );
+        return;
+      }
+    }
+    setSubmitting(false);
     toast.success("Super Admin criado. Workspace da instalação disponível.");
     navigate({ to: "/dashboard", replace: true });
+
   };
 
   if (checking) {

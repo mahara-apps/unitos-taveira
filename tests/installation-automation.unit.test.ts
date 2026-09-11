@@ -12,7 +12,9 @@ import {
 import {
   createDeployClient,
   createManagementClient,
+  classifyAccessFailure,
   generateInstallationSecret,
+  preflightAccess,
   runAutomatedProvision,
 } from "@/lib/installation/automation.server";
 
@@ -21,6 +23,12 @@ const MASTER_REF = "tkjbhttylouamqxnbfgv";
 /** Respostas mínimas do GitHub usadas pelo provisionamento (código publicado). */
 const githubResponse = (url: string): Response | null => {
   if (!url.includes("api.github.com")) return null;
+  if (url.endsWith("/repos/mahara-apps/unitos-master")) return Response.json({ is_template: true });
+  if (url.includes("/contents/supabase/baseline-snapshot/tools/delta_version.txt"))
+    return Response.json({
+      encoding: "base64",
+      content: Buffer.from("version=1.3.36\n", "utf8").toString("base64"),
+    });
   if (url.includes("/git/trees")) return Response.json({ tree: [] });
   if (url.includes("/git/ref/heads/")) return Response.json({ object: { sha: "sha_dest" } });
   if (url.includes("/commits/main")) return Response.json({ sha: "sha_master" });
@@ -542,6 +550,48 @@ describe("runAutomatedProvision", () => {
     expect(result.reasons.join(" ")).toContain("Frontend");
   });
 
+  it("domínio definitivo pendente gera aviso sem bloquear a instalação", async () => {
+    const { api } = fakeClient();
+    const fetchImpl = vi.fn(async (url: string) => {
+      const gh = githubResponse(url);
+      if (gh) return gh;
+      if (url.includes("/api-keys")) {
+        return Response.json([
+          { name: "anon", api_key: "k" },
+          { name: "service_role", api_key: "s" },
+        ]);
+      }
+      if (url.includes("/database/query")) return Response.json([{ schemas: 3, status: "PASS" }]);
+      if (url.includes("api.vercel.com/v9/projects")) {
+        return Response.json({ name: "x", targets: { production: { url: "x-abc.vercel.app" } } });
+      }
+      if (url.includes("/env")) return Response.json({ created: [] });
+      if (url.includes("v6/deployments")) {
+        return Response.json({ deployments: [{ uid: "d", name: "x" }] });
+      }
+      if (url.includes("v13/deployments")) return Response.json({ id: "d2" });
+      if (url === "https://app.cliente.com.br") return new Response("dns pendente", { status: 530 });
+      return new Response("{}", { status: 200 });
+    });
+
+    const result = await runProvision({
+      client: api,
+      operation: OP,
+      installation: { ...INSTALLATION, domain: "app.cliente.com.br" },
+      env: {
+        UNITOS_SUPABASE_MANAGEMENT_TOKEN: "t",
+        UNITOS_VERCEL_TOKEN: "v",
+        UNITOS_GITHUB_TOKEN: "g",
+      },
+      fetchImpl: fetchImpl as never,
+    });
+
+    expect(result.result).toBe("PASS");
+    expect(result.appUrl).toBe("https://app.cliente.com.br");
+    expect(result.urlSource).toBe("custom_domain");
+    expect(result.reasons).toEqual([]);
+  });
+
   it("BLOCKED quando o deploy não expõe URL e não há domínio", async () => {
     const { api } = fakeClient();
     const fetchImpl = vi.fn(async (url: string) => {
@@ -757,7 +807,6 @@ describe("clientes de gestão", () => {
     expect(result.error).not.toContain("permissão");
   });
 
-
   it("deploy client grava variáveis com upsert", async () => {
     const seen: string[] = [];
     const client = createDeployClient({
@@ -773,5 +822,189 @@ describe("clientes de gestão", () => {
     ]);
     expect(result.ok).toBe(true);
     expect(seen[0]).toContain("upsert=true");
+  });
+
+  it("descobre automaticamente a equipe dona do projeto de deploy", async () => {
+    const seen: string[] = [];
+    const client = createDeployClient({
+      token: "t",
+      project: "unitos-casa8",
+      fetchImpl: (async (url: string) => {
+        seen.push(url);
+        if (url.endsWith("/v9/projects/unitos-casa8")) {
+          return new Response('{"error":{"code":"forbidden"}}', { status: 403 });
+        }
+        if (url.includes("/v2/teams")) {
+          return Response.json({ teams: [{ id: "team_casa8" }] });
+        }
+        if (url.includes("teamId=team_casa8")) {
+          return Response.json({
+            id: "prj_casa8",
+            name: "unitos-casa8",
+            targets: { production: { url: "unitos-casa8.vercel.app" } },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      }) as never,
+    });
+
+    const result = await client.deploymentUrl();
+    expect(result).toEqual({
+      ok: true,
+      url: "https://unitos-casa8.vercel.app",
+      projectName: "unitos-casa8",
+    });
+    expect(seen).toContain("https://api.vercel.com/v2/teams?limit=100");
+    expect(seen.some((url) => url.includes("teamId=team_casa8"))).toBe(true);
+  });
+
+  it("explica quando o token não acessa o projeto em nenhuma equipe", async () => {
+    const client = createDeployClient({
+      token: "t",
+      project: "unitos-casa8",
+      fetchImpl: (async (url: string) => {
+        if (url.includes("/v2/teams")) return Response.json({ teams: [] });
+        return new Response('{"error":{"code":"forbidden"}}', { status: 403 });
+      }) as never,
+    });
+
+    const result = await client.deploymentUrl();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("nenhuma equipe visível");
+    expect(result.error).toContain("conta dona do projeto");
+  });
+
+  it("resolve de forma segura o nome canônico do projeto visível", async () => {
+    const seen: string[] = [];
+    const client = createDeployClient({
+      token: "t",
+      project: "unitos-casa8",
+      fetchImpl: (async (url: string) => {
+        seen.push(url);
+        if (url.endsWith("/v9/projects/unitos-casa8")) {
+          return new Response('{"error":{"code":"not_found"}}', { status: 404 });
+        }
+        if (url.includes("/v9/projects?limit=100")) {
+          return Response.json({ projects: [{ name: "unitos-casa-8" }, { name: "outro" }] });
+        }
+        if (url.endsWith("/v9/projects/unitos-casa-8")) {
+          return Response.json({
+            name: "unitos-casa-8",
+            targets: { production: { url: "unitos-casa-8.vercel.app" } },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      }) as never,
+    });
+
+    const result = await client.deploymentUrl();
+    expect(result).toEqual({
+      ok: true,
+      url: "https://unitos-casa-8.vercel.app",
+      projectName: "unitos-casa-8",
+    });
+    expect(seen).toContain("https://api.vercel.com/v9/projects/unitos-casa-8");
+  });
+
+  it("403 com invalidToken vira orientação de gerar novo token", async () => {
+    const client = createDeployClient({
+      token: "t",
+      project: "unitos-casa8",
+      fetchImpl: (async (url: string) => {
+        if (url.includes("/v2/teams")) return Response.json({ teams: [] });
+        return new Response(
+          '{"error":{"code":"forbidden","message":"Not authorized","invalidToken":true}}',
+          { status: 403 },
+        );
+      }) as never,
+    });
+
+    const result = await client.deploymentUrl();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("inválido, expirado ou foi revogado");
+    expect(result.error).not.toContain("nenhuma equipe visível");
+  });
+});
+
+describe("preflight de acessos antes de publicar", () => {
+  it("401/403 e limite de uso são permissão (terminal); 502/503/504 são temporários", () => {
+    expect(classifyAccessFailure("HTTP 403 ao consultar o projeto")).toBe("permission");
+    expect(classifyAccessFailure("HTTP 401 token inválido")).toBe("permission");
+    expect(classifyAccessFailure("API rate limit exceeded")).toBe("permission");
+    expect(classifyAccessFailure("HTTP 502 error code: 502")).toBe("transient");
+    expect(classifyAccessFailure("HTTP 503")).toBe("transient");
+    expect(classifyAccessFailure("HTTP 504")).toBe("transient");
+    expect(classifyAccessFailure("resposta inesperada")).toBe("other");
+  });
+
+  it("interrompe com a permissão exata que falta", async () => {
+    const report = await preflightAccess({
+      deploy: {
+        deploymentUrl: async () => ({ ok: false, error: "HTTP 403 ao consultar o projeto" }),
+      } as never,
+      code: {
+        permissions: async () => [
+          { area: "code", label: "Gravação no repositório", ok: false, detail: "HTTP 403" },
+        ],
+      } as never,
+      deployProject: "unitos-casa8",
+    });
+    expect(report.terminal).toContain("HTTP 403");
+    expect(report.transient).toBeNull();
+    expect(report.checks.some((check) => !check.ok)).toBe(true);
+  });
+
+  it("instabilidade momentânea não vira falta de permissão", async () => {
+    const report = await preflightAccess({
+      deploy: { deploymentUrl: async () => ({ ok: true, url: "https://x.vercel.app" }) } as never,
+      code: {
+        permissions: async () => [
+          { area: "code", label: "Leitura do MASTER", ok: false, detail: "HTTP 502" },
+        ],
+      } as never,
+    });
+    expect(report.terminal).toBeNull();
+    expect(report.transient).toContain("HTTP 502");
+  });
+
+  it("projeto de deploy ainda inexistente não bloqueia a instalação nova", async () => {
+    const report = await preflightAccess({
+      deploy: {
+        deploymentUrl: async () => ({ ok: false, error: "HTTP 404 projeto não encontrado" }),
+      } as never,
+    });
+    expect(report.terminal).toBeNull();
+    expect(report.transient).toBeNull();
+  });
+});
+
+describe("leitura das chaves do Supabase destino", () => {
+  it("cai para a rota legada quando reveal=true responde 403", async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("reveal=true")) return new Response("forbidden", { status: 403 });
+      if (url.includes("/api-keys/legacy"))
+        return Response.json({ anon_key: "anon_jwt", service_role_key: "service_jwt" });
+      return new Response("not found", { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const management = createManagementClient({ token: "sbp_x", projectRef: "abc", fetchImpl });
+    const keys = await management.keys();
+
+    expect(keys.ok).toBe(true);
+    expect(keys.publishableKey).toBe("anon_jwt");
+    expect(keys.serviceRoleKey).toBe("service_jwt");
+    expect(calls.some((u) => u.includes("reveal=true"))).toBe(true);
+  });
+
+  it("mantém o erro de permissão quando nenhuma rota entrega as chaves", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response("forbidden", { status: 403 }),
+    ) as unknown as typeof fetch;
+    const management = createManagementClient({ token: "sbp_x", projectRef: "abc", fetchImpl });
+    const keys = await management.keys();
+    expect(keys.ok).toBe(false);
+    expect(keys.error ?? "").toMatch(/permiss/i);
   });
 });

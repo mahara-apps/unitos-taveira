@@ -309,32 +309,31 @@ export const createThread = createServerFn({ method: "POST" })
     }
     const visibility = data.scope === "client" ? data.visibility : "internal";
 
-    const { data: created, error } = await supabase
-      .from("message_threads")
-      .insert({
-        brand_id: data.brandId,
-        scope: data.scope,
-        subject: data.subject,
-        visibility,
-        client_id: data.scope === "team_dm" ? null : (data.clientId ?? null),
-        project_id: data.scope === "project" ? (data.projectId ?? null) : null,
-        created_by: userId,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    const threadId = created.id as string;
-
-    await addParticipantsInternal(supabase, {
-      threadId,
-      brandId: data.brandId,
-      clientId: data.scope === "team_dm" ? null : (data.clientId ?? null),
-      userIds: Array.from(new Set([userId, ...data.participantIds])),
-      visibility,
-    });
+    // Criação atômica no banco: `create_message_thread` valida escopo com as
+    // mesmas fontes canônicas e insere conversa + participantes na MESMA
+    // transação. Insert direto com `.select()` é inviável: a policy de leitura
+    // é avaliada no RETURNING e a função STABLE `can_access_message_thread`
+    // ainda não vê a linha recém-criada (e `team_dm` teria impasse de
+    // primeiro participante).
+    const { data: threadId, error } = await callRpc<string | null>(
+      supabase,
+      "create_message_thread",
+      {
+        _brand_id: data.brandId,
+        _scope: data.scope,
+        _subject: data.subject,
+        _client_id: data.scope === "team_dm" ? null : (data.clientId ?? null),
+        _project_id: data.scope === "project" ? (data.projectId ?? null) : null,
+        _visibility: visibility,
+        _participant_ids: Array.from(new Set([userId, ...data.participantIds])),
+      },
+    );
+    if (error) throw new Error(error.message);
+    if (!threadId) throw new Error("Não foi possível criar a conversa");
 
     return { id: threadId };
   });
+
 
 /** Insere participantes validando vínculo (equipe do workspace ou contato do cliente). */
 async function addParticipantsInternal(

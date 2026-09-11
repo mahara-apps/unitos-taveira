@@ -16,14 +16,14 @@
  */
 
 /** Segundos sem heartbeat para considerar a operação retomável. */
-const STALE_SECONDS = 5;
+export const AUTOMATION_LEASE_SECONDS = 90;
 
 export async function resumeStaleAutomatedProvisions(limit = 3): Promise<{
   claimed: number;
   operations: string[];
 }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const cutoff = new Date(Date.now() - STALE_SECONDS * 1000).toISOString();
+  const cutoff = new Date(Date.now() - AUTOMATION_LEASE_SECONDS * 1000).toISOString();
 
   const { data: rows, error } = await supabaseAdmin
     .from("installation_operations")

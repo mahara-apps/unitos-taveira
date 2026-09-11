@@ -8,3 +8,27 @@
 - [x] Corrigir definitivamente contas sem perfil no primeiro acesso, com autorreparo, convites verificados e propagação MASTER 1.3.13.
 - [x] Validar o Supabase Access Token contra o projeto e as permissões necessárias antes de salvar/provisionar; propagar no MASTER 1.3.28.
 - [x] Acelerar a publicação no GitHub, reaproveitar a árvore do MASTER e tornar atualizações retomáveis; propagar no MASTER 1.3.30.
+- [x] Tornar instalações novas template-only, recuperar com segurança repositórios técnicos incompletos e propagar no MASTER.
+- [x] Remover a exigência de exclusão na recuperação GitHub: preservar README legado em backup arquivado, com rollback seguro.
+- [x] Eliminar também a exigência de renomear repositórios: preservar o legado intacto e criar/registrar automaticamente um destino operacional alternativo.
+- [x] Corrigir o vínculo com a Vercel após adoção do template: descobrir automaticamente a equipe dona do projeto e explicar acessos insuficientes.
+
+## 1.3.37 — Casa 8: acessos conferidos antes de publicar
+- Cópia do template apenas desatualizada passa a ser sincronizada (antes bloqueava).
+- Preflight de publicação/repositório: 401/403/limite = interrompe com a permissão exata; 502/503/504 = temporário.
+- Operações sem resposta são encerradas automaticamente (nada fica "em andamento").
+- "Testar acesso" informa OK ou a lista exata do que falta.
+
+## 1.3.40 — Instalador stage-gated e BYOK completo
+- [x] Aceitar chaves Supabase informadas manualmente quando o token não pode revelá-las.
+- [x] Validar Supabase, GitHub e Vercel antes de alterar banco ou publicar código.
+- [x] Abrir provisionamento, validação e atualização com lock atômico no banco.
+- [x] Exigir build concluído e relatório final aprovado antes de registrar a versão.
+- [x] Aumentar a lease e impedir sucesso com etapas pendentes.
+- [ ] Publicar o MASTER e executar novamente a Casa 8; bloqueado até autorização externa.
+
+## 1.3.42 — Nome canônico do projeto de publicação
+- [x] Reconhecer somente equivalência exata e única entre o nome cadastrado e projetos visíveis na Vercel.
+- [x] Corrigir automaticamente `unitos-casa8` para o nome real `unitos-casa-8` após validar o acesso.
+- [x] Reutilizar o nome confirmado em todas as etapas seguintes de publicação.
+- [ ] Publicar o MASTER e executar “Testar acesso” na Casa 8; depende da sessão do Super Admin.

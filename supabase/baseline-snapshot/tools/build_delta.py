@@ -21,7 +21,15 @@ OUT = os.path.join(ROOT, "baseline-snapshot", "007_delta_migrations.sql")
 MANIFEST = os.path.join(ROOT, "baseline-snapshot", "tools", "delta_manifest.txt")
 
 # Primeira migration APOS o corte do dump 001_initial_schema.sql.
-START_MIGRATION = "20260829121019_8a4f7bd3-bff7-464d-997c-d72f8676ebec.sql"
+#
+# ATENCAO: o dump 001 foi tirado depois das migrations 20260829121019 e
+# 20260829122439 (desparticionamento de public.brain_events). O estado final
+# das duas ja esta congelado no dump (tabela normal com PK simples, indices,
+# brain_events_prune, funcoes de particionamento removidas). Reaplicar aquele
+# DO $$ ... $$ derrubava public.brain_events com CASCADE e deixava statements
+# pendentes na fila de dependencias ("statements com dependencia nao
+# resolvida"), por isso o corte comeca DEPOIS delas.
+START_MIGRATION = "20260829124704_ed97a5cb-3e08-49ce-bc7a-88e12e0d9723.sql"
 
 HEAD = """-- =============================================================================
 -- 007_delta_migrations.sql — DELTA do baseline.

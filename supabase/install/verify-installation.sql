@@ -67,6 +67,21 @@ WITH checks AS (
                                WHERE n.nspname = 'public' AND p.proname = 'can_access_message_thread')
               THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
+  SELECT 134, 'módulo Mensagens: criação atômica de conversa (create_message_thread)',
+         (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname = 'create_message_thread')
+         || ' função / execute authenticated: '
+         || CASE WHEN EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                              WHERE n.nspname = 'public' AND p.proname = 'create_message_thread'
+                                AND has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+                 THEN 'sim' ELSE 'nao' END,
+         CASE WHEN EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                            WHERE n.nspname = 'public' AND p.proname = 'create_message_thread'
+                              AND p.prosecdef
+                              AND has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+              THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+
   SELECT 132, 'módulo Mensagens: tempo real (publicação supabase_realtime)',
          coalesce((SELECT string_agg(tablename, ', ' ORDER BY tablename) FROM pg_publication_tables
                    WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
@@ -261,11 +276,27 @@ WITH checks AS (
                             WHERE table_schema = 'public'
                               AND table_name = 'installations'
                               AND column_name = 'requires_own_supabase_token')
-              THEN 'coluna presente' ELSE 'coluna ausente' END,
+                   AND EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public'
+                                  AND table_name = 'installation_credentials'
+                                  AND column_name = 'supabase_publishable_key_ciphertext')
+                   AND EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public'
+                                  AND table_name = 'installation_credentials'
+                                  AND column_name = 'supabase_service_role_key_ciphertext')
+              THEN 'token e chaves cifradas presentes' ELSE 'estrutura BYOK incompleta' END,
          CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
                             WHERE table_schema = 'public'
                               AND table_name = 'installations'
                               AND column_name = 'requires_own_supabase_token')
+                   AND EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public'
+                                  AND table_name = 'installation_credentials'
+                                  AND column_name = 'supabase_publishable_key_ciphertext')
+                   AND EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_schema = 'public'
+                                  AND table_name = 'installation_credentials'
+                                  AND column_name = 'supabase_service_role_key_ciphertext')
               THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
 

@@ -252,11 +252,13 @@ export async function finalizeOperation(
   const steps = (persisted.length > 0 ? persisted : readSteps(op.steps)).map((s) =>
     s.state === "running" ? { ...s, state: report.ok ? ("done" as const) : ("error" as const) } : s,
   );
-  const finalSteps = report.ok ? steps.map((s) => ({ ...s, state: "done" as const })) : steps;
+  const incomplete = steps.filter((step) => step.state !== "done");
+  const acceptedSuccess = report.ok && steps.length > 0 && incomplete.length === 0;
+  const finalSteps = acceptedSuccess ? steps : steps;
 
   const summary = sanitize(report.summary) ?? op.summary;
   const outcome = {
-    ok: report.ok,
+    ok: acceptedSuccess,
     warnings: report.warnings ?? false,
     version: (report.version ?? "").trim() || null,
   };
@@ -265,9 +267,11 @@ export async function finalizeOperation(
     .from("installation_operations")
     .update({
       steps: finalSteps,
-      status: report.ok ? "success" : "failed",
+      status: acceptedSuccess ? "success" : "failed",
       summary,
-      error_kind: report.ok ? null : (sanitize(report.errorKind) ?? "operation_failed"),
+      error_kind: acceptedSuccess
+        ? null
+        : (sanitize(report.errorKind) ?? (report.ok ? "incomplete_steps" : "operation_failed")),
       detail: {
         ...((fresh?.detail ?? op.detail ?? {}) as Record<string, unknown>),
         executed: true,
@@ -306,9 +310,13 @@ export async function finalizeOperation(
     health_checks: checks,
     health_checked_at: nowIso,
     active_operation_id: null,
-    last_error: report.ok ? null : (summary ?? "Falha registrada na operação."),
+    last_error: acceptedSuccess
+      ? null
+      : report.ok
+        ? `A operação tentou concluir sem evidência em todas as etapas: ${incomplete.map((step) => step.label).join(", ") || "etapas ausentes"}.`
+        : (summary ?? "Falha registrada na operação."),
     ...(kind !== "validate" && outcome.version ? { current_version: outcome.version } : {}),
-    ...(kind !== "validate" && report.ok ? { last_provisioned_at: nowIso } : {}),
+    ...(kind !== "validate" && acceptedSuccess ? { last_provisioned_at: nowIso } : {}),
     ...(kind === "validate" ? { last_validated_at: nowIso } : {}),
   };
 
