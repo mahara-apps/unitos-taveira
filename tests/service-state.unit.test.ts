@@ -47,4 +47,16 @@ describe("estado operacional do ambiente", () => {
     expect(sql).toContain("'cliente d''água'");
     expect(sql).toContain("service_state = 'suspended'");
   });
+
+  it("ativação só remove manutenção e preserva suspensão administrativa", () => {
+    const sql = buildServiceStateSql({
+      state: "active",
+      message: null,
+      untilIso: null,
+      actor: null,
+      onlyIfMaintenance: true,
+    });
+    expect(sql).toContain("service_state = 'active'");
+    expect(sql).toContain("where service_state = 'maintenance'");
+  });
 });

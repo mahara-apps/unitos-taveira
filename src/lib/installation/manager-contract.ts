@@ -21,7 +21,7 @@ import { MASTER_FORBIDDEN_TOKENS } from "./bootstrap-contract";
  * Subir a cada correção de banco/código propagável: é o que habilita o botão
  * "Atualizar" (que agora também aplica o delta de banco na instalação).
  */
-export const MASTER_RELEASE_VERSION = "1.3.55";
+export const MASTER_RELEASE_VERSION = "1.3.56";
 
 /* ------------------------------------------------------------------ MASTER */
 

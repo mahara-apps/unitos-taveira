@@ -57,6 +57,7 @@ export async function resumeStaleAutomatedProvisions(limit = 3): Promise<{
     // Cada instalação pode ter credenciais próprias (banco/deploy/repositório
     // do cliente): a retomada precisa usar as MESMAS credenciais do início.
     const { resolveInstallationEnv } = await import("./credentials.server");
+    const { setRemoteInstallationServiceState } = await import("./service-state.server");
     const env = await resolveInstallationEnv(supabaseAdmin as never, row.id as string);
     const args = {
       client: supabaseAdmin as never,
@@ -78,7 +79,15 @@ export async function resumeStaleAutomatedProvisions(limit = 3): Promise<{
     };
     try {
       if (kind === "update") {
-        await runAutomatedUpdate(args);
+        const outcome = await runAutomatedUpdate(args);
+        if (outcome.result !== "PENDING") {
+          await setRemoteInstallationServiceState({
+            env,
+            projectRef: (row.supabase_project_ref ?? null) as string | null,
+            state: "active",
+            actor: null,
+          });
+        }
       } else if (kind === "validate") {
         await runAutomatedValidate(args);
       } else {
@@ -91,6 +100,14 @@ export async function resumeStaleAutomatedProvisions(limit = 3): Promise<{
         summary: `FAIL: ${message}`,
         errorKind: "unexpected_error",
       });
+      if (kind === "update") {
+        await setRemoteInstallationServiceState({
+          env,
+          projectRef: (row.supabase_project_ref ?? null) as string | null,
+          state: "active",
+          actor: null,
+        });
+      }
     }
     operations.push((op as { id: string }).id);
   }
