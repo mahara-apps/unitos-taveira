@@ -49,6 +49,98 @@ export type TaskComment = {
   created_at: string;
 };
 
+type BaseTaskRow = Omit<
+  TaskRow,
+  | "assignee_name"
+  | "assignee_avatar"
+  | "client_name"
+  | "project_name"
+  | "comments_count"
+  | "time_spent_seconds"
+  | "subtasks_total"
+  | "subtasks_done"
+>;
+
+async function enrichTaskRows(
+  supabase: { from: (table: string) => any },
+  tasks: BaseTaskRow[],
+): Promise<TaskRow[]> {
+  if (tasks.length === 0) return [];
+
+  const userIds = Array.from(new Set(tasks.map((task) => task.assignee_id).filter(Boolean) as string[]));
+  const clientIds = Array.from(new Set(tasks.map((task) => task.client_id).filter(Boolean) as string[]));
+  const projectIds = Array.from(new Set(tasks.map((task) => task.project_id).filter(Boolean) as string[]));
+  const taskIds = tasks.map((task) => task.id);
+
+  const [profilesRes, clientsRes, projectsRes, commentsRes, timeRes, subtasksRes] =
+    await Promise.all([
+      userIds.length
+        ? supabase.from("user_profiles").select("id, full_name, avatar_url").in("id", userIds)
+        : Promise.resolve({ data: [], error: null }),
+      clientIds.length
+        ? supabase.from("clients").select("id, name").in("id", clientIds)
+        : Promise.resolve({ data: [], error: null }),
+      projectIds.length
+        ? supabase.from("projects").select("id, name").in("id", projectIds)
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from("task_comments").select("task_id").in("task_id", taskIds),
+      supabase.from("task_time_entries").select("task_id, seconds, minutes").in("task_id", taskIds),
+      supabase.from("task_subtasks").select("task_id, done").in("task_id", taskIds),
+    ]);
+
+  for (const result of [profilesRes, clientsRes, projectsRes, commentsRes, timeRes, subtasksRes]) {
+    if (result.error) throw result.error;
+  }
+
+  const profileMap = new Map(
+    ((profilesRes.data ?? []) as Array<{ id: string; full_name: string | null; avatar_url: string | null }>).map(
+      (profile) => [profile.id, profile],
+    ),
+  );
+  const clientMap = new Map(
+    ((clientsRes.data ?? []) as Array<{ id: string; name: string }>).map((client) => [client.id, client.name]),
+  );
+  const projectMap = new Map(
+    ((projectsRes.data ?? []) as Array<{ id: string; name: string }>).map((project) => [project.id, project.name]),
+  );
+  const commentCounts = new Map<string, number>();
+  for (const comment of (commentsRes.data ?? []) as Array<{ task_id: string }>) {
+    commentCounts.set(comment.task_id, (commentCounts.get(comment.task_id) ?? 0) + 1);
+  }
+  const timeSeconds = new Map<string, number>();
+  for (const entry of (timeRes.data ?? []) as Array<{
+    task_id: string;
+    seconds: number | null;
+    minutes: number | null;
+  }>) {
+    const seconds = entry.seconds ?? (entry.minutes ?? 0) * 60;
+    timeSeconds.set(entry.task_id, (timeSeconds.get(entry.task_id) ?? 0) + seconds);
+  }
+  const subtaskTotals = new Map<string, number>();
+  const subtaskDone = new Map<string, number>();
+  for (const subtask of (subtasksRes.data ?? []) as Array<{ task_id: string; done: boolean }>) {
+    subtaskTotals.set(subtask.task_id, (subtaskTotals.get(subtask.task_id) ?? 0) + 1);
+    if (subtask.done) subtaskDone.set(subtask.task_id, (subtaskDone.get(subtask.task_id) ?? 0) + 1);
+  }
+
+  return tasks.map((task) => {
+    const profile = task.assignee_id ? profileMap.get(task.assignee_id) : null;
+    return {
+      ...task,
+      status: task.status as TaskStatus,
+      priority: task.priority as TaskPriority,
+      assignee_name: profile?.full_name ?? null,
+      assignee_avatar: profile?.avatar_url ?? null,
+      client_name: task.client_id ? (clientMap.get(task.client_id) ?? null) : null,
+      project_name: task.project_id ? (projectMap.get(task.project_id) ?? null) : null,
+      comments_count: commentCounts.get(task.id) ?? 0,
+      time_spent_seconds: timeSeconds.get(task.id) ?? 0,
+      subtasks_total: subtaskTotals.get(task.id) ?? 0,
+      subtasks_done: subtaskDone.get(task.id) ?? 0,
+    };
+  });
+}
+
 export const listTasksFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
@@ -76,108 +168,32 @@ export const listTasksFn = createServerFn({ method: "GET" })
     else if (archive === "archived") q = q.not("archived_at", "is", null);
     const { data: rows, error } = await q;
     if (error) throw error;
-    const tasks = rows ?? [];
-    if (tasks.length === 0) return [];
+    return enrichTaskRows(context.supabase as never, (rows ?? []) as BaseTaskRow[]);
+  });
 
-    const userIds = Array.from(
-      new Set(tasks.map((t) => t.assignee_id).filter(Boolean) as string[]),
-    );
-    const clientIds = Array.from(
-      new Set(tasks.map((t) => t.client_id).filter(Boolean) as string[]),
-    );
-    const projectIds = Array.from(
-      new Set(tasks.map((t) => t.project_id).filter(Boolean) as string[]),
-    );
+export const getTaskFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ taskId: z.string().uuid(), brandId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }): Promise<TaskRow> => {
+    const scope = await assertTaskScope(context.supabase as never, context.userId, data.taskId);
+    if (scope.brand_id !== data.brandId) throw new Error("Tarefa não encontrada neste workspace.");
 
-    const [profilesRes, clientsRes, projectsRes, commentsRes, timeRes, subtasksRes] =
-      await Promise.all([
-        userIds.length
-          ? context.supabase
-              .from("user_profiles")
-              .select("id, full_name, avatar_url")
-              .in("id", userIds)
-          : Promise.resolve({ data: [], error: null } as never),
-        clientIds.length
-          ? context.supabase.from("clients").select("id, name").in("id", clientIds)
-          : Promise.resolve({ data: [], error: null } as never),
-        projectIds.length
-          ? context.supabase.from("projects").select("id, name").in("id", projectIds)
-          : Promise.resolve({ data: [], error: null } as never),
-        context.supabase
-          .from("task_comments")
-          .select("task_id")
-          .in(
-            "task_id",
-            tasks.map((t) => t.id),
-          ),
-        context.supabase
-          .from("task_time_entries")
-          .select("task_id, seconds, minutes")
-          .in(
-            "task_id",
-            tasks.map((t) => t.id),
-          ),
-        context.supabase
-          .from("task_subtasks")
-          .select("task_id, done")
-          .in(
-            "task_id",
-            tasks.map((t) => t.id),
-          ),
-      ]);
+    const { data: row, error } = await context.supabase
+      .from("tasks")
+      .select(
+        "id, brand_id, client_id, project_id, post_id, title, description, status, priority, assignee_id, due_at, start_date, status_id, done, done_at, archived_at, created_by, created_at, updated_at",
+      )
+      .eq("id", data.taskId)
+      .eq("brand_id", data.brandId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Tarefa não encontrada ou sem acesso.");
 
-    const profMap = new Map(
-      (
-        (profilesRes.data ?? []) as Array<{
-          id: string;
-          full_name: string | null;
-          avatar_url: string | null;
-        }>
-      ).map((p) => [p.id, p]),
-    );
-    const clientMap = new Map(
-      ((clientsRes.data ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
-    );
-    const projectMap = new Map(
-      ((projectsRes.data ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]),
-    );
-    const commentCounts = new Map<string, number>();
-    for (const c of (commentsRes.data ?? []) as Array<{ task_id: string }>) {
-      commentCounts.set(c.task_id, (commentCounts.get(c.task_id) ?? 0) + 1);
-    }
-    const timeSeconds = new Map<string, number>();
-    for (const e of (timeRes.data ?? []) as Array<{
-      task_id: string;
-      seconds: number | null;
-      minutes: number | null;
-    }>) {
-      const secs = e.seconds ?? (e.minutes ?? 0) * 60;
-      timeSeconds.set(e.task_id, (timeSeconds.get(e.task_id) ?? 0) + secs);
-    }
-
-    const subTotal = new Map<string, number>();
-    const subDone = new Map<string, number>();
-    for (const st of (subtasksRes.data ?? []) as Array<{ task_id: string; done: boolean }>) {
-      subTotal.set(st.task_id, (subTotal.get(st.task_id) ?? 0) + 1);
-      if (st.done) subDone.set(st.task_id, (subDone.get(st.task_id) ?? 0) + 1);
-    }
-
-    return tasks.map((t) => {
-      const p = t.assignee_id ? profMap.get(t.assignee_id) : null;
-      return {
-        ...t,
-        status: t.status as TaskStatus,
-        priority: t.priority as TaskPriority,
-        assignee_name: p?.full_name ?? null,
-        assignee_avatar: p?.avatar_url ?? null,
-        client_name: t.client_id ? (clientMap.get(t.client_id) ?? null) : null,
-        project_name: t.project_id ? (projectMap.get(t.project_id) ?? null) : null,
-        comments_count: commentCounts.get(t.id) ?? 0,
-        time_spent_seconds: timeSeconds.get(t.id) ?? 0,
-        subtasks_total: subTotal.get(t.id) ?? 0,
-        subtasks_done: subDone.get(t.id) ?? 0,
-      } as TaskRow;
-    });
+    const [task] = await enrichTaskRows(context.supabase as never, [row as BaseTaskRow]);
+    if (!task) throw new Error("Tarefa não encontrada ou sem acesso.");
+    return task;
   });
 
 export type TaskProjectOption = {

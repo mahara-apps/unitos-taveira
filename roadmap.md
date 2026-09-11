@@ -9,6 +9,7 @@
 - [ ] Concluir a atualização 1.3.56 da Taveira; bloqueada pela hospedagem, que recusou publicação via REST e exige Git.
 - [x] Corrigir exclusão de clientes com pipelines, adicionar três confirmações e sincronizar a correção no MASTER.
 - [x] Tornar atualizações Git-first, ignorar deployments REST bloqueados e sincronizar o MASTER 1.3.58.
+- [x] Corrigir o modal de tarefa que fica carregando quando o item está fora do filtro atual; sincronizar e propagar o MASTER.
 - [x] Publicar o MASTER 1.3.7 e atualizar a Taveira, com validação final.
 - [x] Tornar a ação de atualização inequívoca e proteger o reprovisionamento na tela.
 - [x] Concluir Lixeira de conteúdos/pipelines com retenção de 30 dias e propagação MASTER.

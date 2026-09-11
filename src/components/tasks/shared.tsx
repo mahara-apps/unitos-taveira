@@ -84,10 +84,10 @@ import {
   deleteSubtaskFn,
   deleteTaskCommentFn,
   deleteTaskFn,
+  getTaskFn,
   listProjectsFn,
   listSubtasksFn,
   listTaskCommentsFn,
-  listTasksFn,
   updateSubtaskFn,
   updateTaskFn,
   TASK_PRIORITIES,
@@ -639,7 +639,15 @@ export function TaskDrawer({
   const setArchived = useServerFn(setTaskArchivedFn);
   const listAssignees = useServerFn(listBrandAssigneesFn);
 
-  const task = allTasks.find((t) => t.id === taskId) ?? null;
+  const listedTask = allTasks.find((candidate) => candidate.id === taskId) ?? null;
+  const getTask = useServerFn(getTaskFn);
+  const taskQ = useQuery({
+    queryKey: ["task-detail", brandId, taskId],
+    queryFn: () => getTask({ data: { brandId, taskId } }),
+    enabled: !listedTask,
+    retry: false,
+  });
+  const task = listedTask ?? taskQ.data ?? null;
   const idx = allTasks.findIndex((t) => t.id === taskId);
   const prev = idx > 0 ? allTasks[idx - 1] : null;
   const next = idx >= 0 && idx < allTasks.length - 1 ? allTasks[idx + 1] : null;
@@ -647,11 +655,13 @@ export function TaskDrawer({
   const commentsQ = useQuery({
     queryKey: ["task-comments", taskId],
     queryFn: () => listComments({ data: { taskId } }),
+    enabled: !!task,
   });
   const membersQ = useQuery({
     queryKey: ["brand-assignees", brandId],
     queryFn: () => listAssignees({ data: { brandId } }),
     staleTime: 60_000,
+    enabled: !!task,
   });
 
   const [draft, setDraft] = useState<{ title?: string; description?: string | null }>({});
@@ -660,11 +670,15 @@ export function TaskDrawer({
   }, [task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [comment, setComment] = useState("");
+  const refreshTask = () => {
+    qc.invalidateQueries({ queryKey: ["task-detail", brandId, taskId] });
+    onChanged();
+  };
 
   const patchMutation = useMutation({
     mutationFn: (payload: { taskId: string; patch: Record<string, unknown> }) =>
       update({ data: payload as never }),
-    onSuccess: () => onChanged(),
+    onSuccess: refreshTask,
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -676,7 +690,7 @@ export function TaskDrawer({
     onSuccess: () => {
       setComment("");
       qc.invalidateQueries({ queryKey: ["task-comments", taskId] });
-      onChanged();
+      refreshTask();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -690,7 +704,7 @@ export function TaskDrawer({
     mutationFn: (archived: boolean) => setArchived({ data: { taskId, archived } }),
     onSuccess: (_r, archived) => {
       toast.success(archived ? "Tarefa arquivada" : "Tarefa restaurada");
-      onChanged();
+      refreshTask();
       if (archived) onClose();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -845,7 +859,20 @@ export function TaskDrawer({
         ) : null
       }
     >
-      {!task ? (
+      {!task && taskQ.isError ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <AlertTriangle className="h-6 w-6 text-destructive" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Não foi possível abrir esta tarefa</p>
+            <p className="text-xs text-muted-foreground">
+              Ela pode ter sido excluída ou estar fora do seu acesso neste workspace.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+      ) : !task ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
         </div>
