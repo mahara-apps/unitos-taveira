@@ -42,6 +42,8 @@ export const CRITICAL_ACTION_KEYS = [
   "user.revoke_master",
   "member.remove",
   "member.reset_password",
+  "invite.resend",
+  "invite.email_update",
   "invite.revoke",
   "portal_access.revoke",
 ] as const;
@@ -268,6 +270,20 @@ export const CRITICAL_ACTIONS: Record<CriticalActionKey, CriticalActionDefinitio
     title: "Revogar convite",
     impact: "O link enviado deixa de funcionar e a pessoa não consegue mais entrar por ele.",
     irreversible: true,
+    targetType: "invite",
+  },
+  "invite.resend": {
+    key: "invite.resend",
+    title: "Reenviar convite",
+    impact: "Invalida o link anterior, renova a validade e envia um novo convite.",
+    irreversible: false,
+    targetType: "invite",
+  },
+  "invite.email_update": {
+    key: "invite.email_update",
+    title: "Alterar e-mail do convite",
+    impact: "Troca o destinatário, invalida o link anterior e envia um novo convite.",
+    irreversible: false,
     targetType: "invite",
   },
   "portal_access.revoke": {

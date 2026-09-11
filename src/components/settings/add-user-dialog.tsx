@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmailTagsInput } from "@/components/ui/email-tags-input";
+
 import { listAccessProfiles } from "@/lib/access-profiles.functions";
 import { addPerson, inviteBrandMembers } from "@/lib/team.functions";
 import { useAccessRole } from "@/hooks/use-access-role";
@@ -57,6 +59,7 @@ export function AddUserDialog({
   const profiles = profilesQ.data?.profiles ?? [];
 
   const [tab, setTab] = useState<"invite" | "create">("invite");
+  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<BrandRole>("user");
@@ -66,6 +69,7 @@ export function AddUserDialog({
 
   useEffect(() => {
     if (open) return;
+    setInviteEmails([]);
     setEmail("");
     setFullName("");
     setRole("user");
@@ -73,6 +77,7 @@ export function AddUserDialog({
     setTempPassword(null);
     setTab("invite");
   }, [open]);
+
 
   useEffect(() => {
     if (profileId || profiles.length === 0) return;
@@ -88,18 +93,18 @@ export function AddUserDialog({
   };
 
   const submitInvite = async () => {
-    if (!emailOk) return toast.error("Informe um e-mail válido.");
+    if (inviteEmails.length === 0) return toast.error("Adicione ao menos um e-mail.");
     setBusy(true);
     try {
       await invite({
         data: {
           brandId,
-          emails: [email.trim().toLowerCase()],
+          emails: inviteEmails,
           role,
           accessProfileId: profileId,
         },
       });
-      toast.success("Convite enviado.");
+      toast.success(inviteEmails.length > 1 ? "Convites enviados." : "Convite enviado.");
       refresh();
       onOpenChange(false);
     } catch (e) {
@@ -108,6 +113,7 @@ export function AddUserDialog({
       setBusy(false);
     }
   };
+
 
   const submitCreate = async () => {
     if (!emailOk) return toast.error("Informe um e-mail válido.");
@@ -137,19 +143,9 @@ export function AddUserDialog({
     }
   };
 
-  const commonFields = (
+  const roleFields = (
     <>
-      <div className="grid gap-2">
-        <Label htmlFor="add-user-email">E-mail</Label>
-        <Input
-          id="add-user-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="pessoa@agencia.com.br"
-          autoComplete="off"
-        />
-      </div>
+
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label>Papel no workspace</Label>
@@ -228,14 +224,25 @@ export function AddUserDialog({
           value="invite"
           className="flex-1 space-y-4 overflow-y-auto px-6 py-5 data-[state=inactive]:hidden"
         >
-          {commonFields}
+          <div className="grid gap-2">
+            <Label htmlFor="add-user-emails">E-mails</Label>
+            <EmailTagsInput
+              id="add-user-emails"
+              value={inviteEmails}
+              onChange={setInviteEmails}
+              placeholder="pessoa@agencia.com.br"
+              hint="Enter, vírgula ou espaço para adicionar. Você pode convidar várias pessoas de uma vez."
+              disabled={busy}
+            />
+          </div>
+          {roleFields}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={submitInvite} disabled={busy || !emailOk}>
+            <Button onClick={submitInvite} disabled={busy || inviteEmails.length === 0}>
               {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              Enviar convite
+              Enviar convite{inviteEmails.length > 1 ? "s" : ""}
             </Button>
           </div>
         </TabsContent>
@@ -253,7 +260,19 @@ export function AddUserDialog({
               placeholder="Nome do colaborador"
             />
           </div>
-          {commonFields}
+          <div className="grid gap-2">
+            <Label htmlFor="add-user-email">E-mail</Label>
+            <Input
+              id="add-user-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="pessoa@agencia.com.br"
+              autoComplete="off"
+            />
+          </div>
+          {roleFields}
+
           {tempPassword ? (
             <div className="space-y-2 rounded-lg border border-border/60 bg-muted/30 p-3">
               <div className="flex items-center gap-2 text-sm font-medium">

@@ -83,10 +83,15 @@ export const listBrandAssigneesFn = createServerFn({ method: "GET" })
       }>;
     const { data: profiles } = await context.supabase
       .from("user_profiles")
-      .select("id, full_name, email, avatar_url")
+      .select("id, full_name, email, avatar_url, is_super_admin")
       .in("id", ids);
-    const profMap = new Map((profiles ?? []).map((p) => [p.id as string, p]));
+    const profMap = new Map(
+      (profiles ?? [])
+        .filter((profile) => profile.is_super_admin !== true)
+        .map((p) => [p.id as string, p]),
+    );
     return (members ?? [])
+      .filter((member) => profMap.has(member.user_id as string))
       .map((m) => {
         const p = profMap.get(m.user_id as string);
         return {

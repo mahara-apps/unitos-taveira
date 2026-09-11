@@ -20,8 +20,9 @@ declare global {
 
 export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
+  const normalizedError = normalizeLovableError(error);
   window.__lovableEvents?.captureException?.(
-    error,
+    normalizedError,
     {
       source: "react_error_boundary",
       route: window.location.pathname,
@@ -33,4 +34,16 @@ export function reportLovableError(error: unknown, context: Record<string, unkno
       severity: "error",
     },
   );
+}
+
+export function normalizeLovableError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (error === undefined) return new Error("Unknown client error: undefined was thrown");
+  if (error === null) return new Error("Unknown client error: null was thrown");
+  if (typeof error === "string") return new Error(error);
+  try {
+    return new Error(`Unknown client error: ${JSON.stringify(error)}`);
+  } catch {
+    return new Error("Unknown client error: non-serializable value was thrown");
+  }
 }

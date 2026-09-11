@@ -66,6 +66,17 @@ const PROVIDERS: ProviderDef[] = [
   },
 ];
 
+function emailSendErrorMessage(error?: string) {
+  if (error === "credencial_invalida") return "A chave da API do Resend foi recusada.";
+  if (error === "dominio_remetente_nao_verificado")
+    return "O domínio do remetente ainda não foi verificado no Resend.";
+  if (error === "conta_resend_em_modo_teste")
+    return "O Resend está em modo de teste e só permite enviar para o e-mail da própria conta.";
+  if (error === "resend_sem_permissao_de_envio")
+    return "A chave não possui permissão para enviar e-mails no Resend.";
+  return error ? `Não enviado: ${error}` : "Não enviado";
+}
+
 export function MessagingCenter({
   brandId,
   channels,
@@ -513,7 +524,7 @@ function TestProviderDialog({
         toast.success("Mensagem de teste enviada");
         onOpenChange(false);
       } else {
-        toast.error(r.error ? `Não enviado: ${r.error}` : "Não enviado");
+        toast.error(provider.channel === "email" ? emailSendErrorMessage(r.error) : r.error ? `Não enviado: ${r.error}` : "Não enviado");
       }
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Falha no envio"),

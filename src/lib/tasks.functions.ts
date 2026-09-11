@@ -513,6 +513,12 @@ export const addTaskCommentFn = createServerFn({ method: "POST" })
       .eq("id", data.taskId)
       .single();
     if (tErr) throw tErr;
+    const { filterMentionableUserIds } = await import("@/lib/mention-notify.server");
+    const mentions = await filterMentionableUserIds(context.supabase, {
+      brandId: task!.brand_id as string,
+      authorId: context.userId,
+      mentions: data.mentions ?? [],
+    });
     const { data: inserted, error } = await context.supabase
       .from("task_comments")
       .insert({
@@ -520,13 +526,12 @@ export const addTaskCommentFn = createServerFn({ method: "POST" })
         brand_id: task!.brand_id as string,
         author_id: context.userId,
         body: data.body,
-        mentions: data.mentions ?? [],
+        mentions,
       })
       .select("id")
       .single();
     if (error) throw error;
 
-    const mentions = data.mentions ?? [];
     if (mentions.length > 0) {
       const { notifyMentionsSafe } = await import("@/lib/mention-notify.server");
       await notifyMentionsSafe(context.supabase, {

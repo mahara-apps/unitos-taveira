@@ -31,17 +31,24 @@ export const listProjectParticipantsFn = createServerFn({ method: "GET" })
     if (list.length === 0) return [];
     const { data: profs } = await context.supabase
       .from("user_profiles")
-      .select("id, full_name, avatar_url")
+      .select("id, full_name, avatar_url, is_super_admin")
       .in(
         "id",
         list.map((r) => r.user_id),
       );
     const map = new Map(
       (
-        (profs ?? []) as Array<{ id: string; full_name: string | null; avatar_url: string | null }>
-      ).map((p) => [p.id, p]),
+        (profs ?? []) as Array<{
+          id: string;
+          full_name: string | null;
+          avatar_url: string | null;
+          is_super_admin: boolean | null;
+        }>
+      )
+        .filter((profile) => profile.is_super_admin !== true)
+        .map((p) => [p.id, p]),
     );
-    return list.map((r) => ({
+    return list.filter((row) => map.has(row.user_id)).map((r) => ({
       id: r.id,
       project_id: r.project_id,
       user_id: r.user_id,

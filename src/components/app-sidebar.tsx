@@ -289,7 +289,7 @@ export function AppSidebar() {
             {active ? (
               <span
                 aria-hidden
-                className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-lime group-data-[collapsible=icon]:hidden"
+                className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden"
               />
             ) : null}
             <item.icon
@@ -307,7 +307,7 @@ export function AppSidebar() {
             <CountBadge count={count} />
             <RailDot show={collapsed && count > 0} />
             {item.badge === "beta" ? (
-              <span className="ml-auto inline-flex items-center rounded-md bg-brand-lime/15 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-brand-lime-foreground group-data-[collapsible=icon]:hidden dark:text-brand-lime">
+              <span className="ml-auto inline-flex items-center rounded-md bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-primary group-data-[collapsible=icon]:hidden dark:text-primary">
                 beta
               </span>
             ) : null}

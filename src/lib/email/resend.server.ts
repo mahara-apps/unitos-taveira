@@ -80,8 +80,25 @@ export function sanitizeProviderError(status: number, body: string): string {
     .replace(/\b(sk|rk)_[A-Za-z0-9_-]{6,}/g, "[redacted]")
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "[redacted]")
     .slice(0, 160);
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return "credencial_invalida";
+  }
+  if (status === 403) {
+    const normalized = msg.toLowerCase();
+    if (
+      normalized.includes("domain") &&
+      (normalized.includes("not verified") || normalized.includes("verify"))
+    ) {
+      return "dominio_remetente_nao_verificado";
+    }
+    if (
+      normalized.includes("testing emails") ||
+      normalized.includes("your own email") ||
+      normalized.includes("only send")
+    ) {
+      return "conta_resend_em_modo_teste";
+    }
+    return "resend_sem_permissao_de_envio";
   }
   return `provider_${status}: ${safe}`;
 }

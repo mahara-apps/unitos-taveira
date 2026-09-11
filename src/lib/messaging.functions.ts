@@ -438,6 +438,12 @@ export const sendMessage = createServerFn({ method: "POST" })
 
     const role = await resolveAuthorityRole(supabase, userId, thread.brand_id as string);
     const authorKind: ThreadParticipantRole = role === "client" ? "portal_client" : "team";
+    const { filterMentionableUserIds } = await import("@/lib/mention-notify.server");
+    const mentions = await filterMentionableUserIds(supabase, {
+      brandId: thread.brand_id as string,
+      authorId: userId,
+      mentions: data.mentions,
+    });
 
     const links = normalizeLinks(data.links);
     const { data: created, error } = await supabase
@@ -448,7 +454,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         author_kind: authorKind,
         body: data.body,
         links,
-        mentions: data.mentions,
+        mentions,
       })
       .select("id")
       .single();
@@ -469,7 +475,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       authorId: userId,
       authorKind,
       messageId: created.id as string,
-      mentions: data.mentions,
+      mentions,
     });
 
     return { id: created.id as string };
@@ -611,6 +617,15 @@ export const listThreadCandidates = createServerFn({ method: "GET" })
       }
 
       const profiles = await loadProfiles(supabase as never, [...teamIds, ...contactIds]);
+      const { data: masterProfiles } = await supabase
+        .from("user_profiles")
+        .select("id,is_super_admin")
+        .in("id", [...teamIds, ...contactIds]);
+      const hiddenIds = new Set(
+        (masterProfiles ?? [])
+          .filter((profile) => profile.is_super_admin === true)
+          .map((profile) => profile.id as string),
+      );
       const shape = (id: string) => {
         const p = profiles.get(id);
         return {
@@ -622,8 +637,14 @@ export const listThreadCandidates = createServerFn({ method: "GET" })
       };
 
       return {
-        team: teamIds.map(shape).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
-        clientContacts: contactIds.map(shape).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+        team: teamIds
+          .filter((id) => !hiddenIds.has(id) && profiles.has(id))
+          .map(shape)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+        clientContacts: contactIds
+          .filter((id) => !hiddenIds.has(id) && profiles.has(id))
+          .map(shape)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
       };
     },
   );

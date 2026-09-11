@@ -87,6 +87,12 @@ export const addWorkCommentFn = createServerFn({ method: "POST" })
       .parse(i),
   )
   .handler(async ({ data, context }) => {
+    const { filterMentionableUserIds } = await import("@/lib/mention-notify.server");
+    const mentions = await filterMentionableUserIds(context.supabase, {
+      brandId: data.brandId,
+      authorId: context.userId,
+      mentions: data.mentions ?? [],
+    });
     const { data: inserted, error } = await context.supabase
       .from("work_comments")
       .insert({
@@ -95,13 +101,12 @@ export const addWorkCommentFn = createServerFn({ method: "POST" })
         job_id: data.jobId ?? null,
         author_id: context.userId,
         body: data.body,
-        mentions: data.mentions ?? [],
+        mentions,
       } as never)
       .select("id")
       .single();
     if (error) throw error;
 
-    const mentions = data.mentions ?? [];
     if (mentions.length > 0) {
       const { notifyMentionsSafe } = await import("@/lib/mention-notify.server");
       const href = data.jobId

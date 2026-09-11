@@ -1,36 +1,25 @@
-import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
-import { Boxes, Info, Palette, Plug, Server, ShieldAlert } from "lucide-react";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Boxes, Info, Palette, Plug, RefreshCw, Server, ShieldAlert } from "lucide-react";
 
-import { amISuperAdmin } from "@/lib/feature-flags.functions";
+import { useIsSuperAdmin } from "@/hooks/use-feature-access";
 import { useActiveContextOptional } from "@/hooks/use-active-context";
 import { useBrandName } from "@/hooks/use-brand-name";
 import { usePageHeader } from "@/hooks/use-page-header";
+import { AppLoading } from "@/components/app-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveAdminAccessState } from "@/lib/admin-access-state";
 import { cn } from "@/lib/utils";
 
 /**
  * Administração do ambiente — área exclusiva de Super Admin dentro do próprio
  * cliente/marca. O bloqueio real está no servidor: cada server function da área
- * revalida Super Admin; este `beforeLoad` é só UX.
+ * revalida Super Admin; este gate no componente é apenas UX e não lança redirects
+ * durante o estado pendente do roteador.
  */
 export const Route = createFileRoute("/_authenticated/admin")({
-  beforeLoad: async () => {
-    // O token de sessão só é anexado no cliente; durante SSR/prerender a
-    // chamada protegida falharia com 401. O bloqueio real é no servidor.
-    if (typeof window === "undefined") return;
-    // FAIL-CLOSED: qualquer falha na verificação nega o acesso. Um erro de
-    // rede/401 transitório NÃO pode liberar a área de Super Admin.
-    let isSuperAdmin = false;
-    try {
-      ({ isSuperAdmin } = await amISuperAdmin());
-    } catch {
-      isSuperAdmin = false;
-    }
-    if (!isSuperAdmin) throw redirect({ to: "/dashboard" });
-  },
-
   component: AdminLayout,
 });
 
@@ -44,8 +33,15 @@ const TABS = [
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
   const { brandId } = useActiveContextOptional();
   const brandName = useBrandName(brandId);
+  const superAdminQuery = useIsSuperAdmin();
+  const accessState = resolveAdminAccessState({
+    isPending: superAdminQuery.isPending,
+    isError: superAdminQuery.isError,
+    isSuperAdmin: superAdminQuery.data?.isSuperAdmin,
+  });
 
   usePageHeader(
     {
@@ -54,6 +50,39 @@ function AdminLayout() {
     },
     [brandName],
   );
+
+  useEffect(() => {
+    if (accessState !== "denied") return;
+    void navigate({ to: "/dashboard", replace: true });
+  }, [accessState, navigate]);
+
+  if (accessState === "loading" || accessState === "denied") {
+    return <AppLoading label={accessState === "denied" ? "Redirecionando…" : "Validando acesso…"} />;
+  }
+
+  if (accessState === "error") {
+    return (
+      <div className="mx-auto w-full max-w-xl p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Não foi possível validar seu acesso</CardTitle>
+            <CardDescription>
+              Sua sessão pode ter sido atualizada. Tente novamente sem recarregar toda a página.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button onClick={() => void superAdminQuery.refetch()}>
+              <RefreshCw className="h-4 w-4" />
+              Tentar novamente
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/dashboard">Voltar ao painel</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!brandId) {
     return (

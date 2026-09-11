@@ -84,16 +84,21 @@ export const listBrandTeam = createServerFn({ method: "GET" })
       full_name: string | null;
       email: string | null;
       avatar_url: string | null;
+      is_super_admin: boolean | null;
     }> = [];
     if (userIds.length > 0) {
       const { data: profs } = await supabase
         .from("user_profiles")
-        .select("id, full_name, email, avatar_url")
+        .select("id, full_name, email, avatar_url, is_super_admin")
         .in("id", userIds);
       profiles = (profs ?? []) as typeof profiles;
     }
+    const visibleMembers = members.filter((m) => {
+      const profile = profiles.find((p) => p.id === m.user_id);
+      return profile && profile.is_super_admin !== true;
+    });
     return {
-      members: members.map((m) => {
+      members: visibleMembers.map((m) => {
         const p = profiles.find((x) => x.id === m.user_id);
         return {
           user_id: m.user_id,
@@ -268,6 +273,20 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
     for (const email of data.emails) {
       const token = randomToken();
 
+      // Autoridade canônica do papel concedido (espelha can_invite_brand_role).
+      // Falha aqui é erro de autoridade, não silencioso rebaixamento para USER.
+      try {
+        await assertCanGrantBrandRole(supabase, userId, data.brandId, data.role, email);
+      } catch (e) {
+        results.push({
+          email,
+          status: "error",
+          error: e instanceof Error ? e.message : "role_authority_invalid",
+        });
+        continue;
+      }
+
+
       // 1. Check if an auth user already exists for this email; if not, provision one
       //    with a random temporary password and force a password change on first login.
       let provisioned = false;
@@ -330,6 +349,24 @@ export const inviteBrandMembers = createServerFn({ method: "POST" })
         results.push({ email, status: "error", error: inviteErr.message });
         continue;
       }
+
+      // Conta recém-provisionada: o trigger `handle_new_user` cria a membership
+      // padrão como USER no primeiro workspace. Como a pessoa entra direto com a
+      // senha provisória (sem abrir o link do convite), o papel escolhido tem de
+      // ser aplicado agora — a autoridade já foi validada acima.
+      if (provisioned && createdUserId) {
+        const { error: bmErr } = await supabaseAdmin.from("brand_members").upsert(
+          {
+            brand_id: data.brandId,
+            user_id: createdUserId,
+            role: data.role,
+            permissions: data.permissions,
+          },
+          { onConflict: "brand_id,user_id" },
+        );
+        if (bmErr) console.error("[invite] falha ao aplicar papel na membership", bmErr);
+      }
+
       // URL canônica da instalação ATUAL (host da requisição) — nunca link relativo
       // nem domínio herdado de env de outra instalação.
       const { tryInstallationAbsoluteUrl } = await import("@/lib/installation-url.server");
@@ -448,6 +485,7 @@ export const revokeBrandInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RevokeInviteInput.parse(input))
   .handler(async ({ data, context }) => {
+    await assertBrandAdmin(context.supabase, context.userId, data.brandId);
     const { data: invite, error: inviteError } = await context.supabase
       .from("brand_invites")
       .select("id,email")
@@ -473,6 +511,137 @@ export const revokeBrandInvite = createServerFn({ method: "POST" })
       .is("accepted_at", null);
     if (error) throw error;
     return { ok: true };
+  });
+
+const ResendInviteInput = z.object({
+  brandId: z.string().uuid(),
+  inviteId: z.string().uuid(),
+  email: z.string().trim().toLowerCase().email().optional(),
+});
+
+/** Renova o link de um convite pendente e, opcionalmente, troca seu destinatário. */
+export const resendBrandInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ResendInviteInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertBrandAdmin(supabase, userId, data.brandId);
+
+    const { data: invite, error: inviteError } = await supabase
+      .from("brand_invites")
+      .select("id,email,role,accepted_at,revoked_at,temp_password_sent")
+      .eq("id", data.inviteId)
+      .eq("brand_id", data.brandId)
+      .maybeSingle();
+    if (inviteError) throw inviteError;
+    if (!invite) throw new Error("Convite não encontrado.");
+    if (invite.accepted_at || invite.revoked_at) {
+      throw new Error("Somente convites pendentes podem ser reenviados.");
+    }
+
+    const previousEmail = String(invite.email).trim().toLowerCase();
+    const nextEmail = data.email ?? previousEmail;
+    await assertCanGrantBrandRole(
+      supabase,
+      userId,
+      data.brandId,
+      invite.role as (typeof ASSIGNABLE)[number],
+      nextEmail,
+    );
+
+    const { data: duplicate } = await supabase
+      .from("brand_invites")
+      .select("id")
+      .eq("brand_id", data.brandId)
+      .ilike("email", nextEmail)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .neq("id", data.inviteId)
+      .maybeSingle();
+    if (duplicate) throw new Error("Já existe um convite pendente para este e-mail.");
+
+    const { data: brand } = await supabase
+      .from("brands")
+      .select("name, nome_fantasia")
+      .eq("id", data.brandId)
+      .single();
+    const { data: inviterProfile } = await supabase
+      .from("user_profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    const brandName = (brand?.nome_fantasia || brand?.name || "").trim();
+    if (!brandName) throw new Error("brand_sem_nome");
+
+    const token = randomToken();
+    const expiresAt = new Date(Date.now() + 14 * 86_400_000).toISOString();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let tempPassword: string | undefined;
+
+    if (nextEmail !== previousEmail && invite.temp_password_sent) {
+      throw new Error(
+        "Este convite já criou uma conta. Revogue-o e crie um novo convite para trocar o e-mail.",
+      );
+    }
+    if (invite.temp_password_sent) {
+      const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+      if (usersError) throw usersError;
+      const oldUser = users.users.find(
+        (candidate) => (candidate.email ?? "").toLowerCase() === previousEmail,
+      );
+      if (!oldUser) throw new Error("A conta provisória deste convite não foi encontrada.");
+      tempPassword = randomPassword(16);
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(oldUser.id, {
+        password: tempPassword,
+      });
+      if (authError) throw authError;
+      const { error: profileError } = await supabaseAdmin
+        .from("user_profiles")
+        .update({ requires_password_change: true })
+        .eq("id", oldUser.id);
+      if (profileError) throw profileError;
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("brand_invites")
+      .update({ email: nextEmail, token, expires_at: expiresAt })
+      .eq("id", data.inviteId)
+      .eq("brand_id", data.brandId)
+      .is("accepted_at", null)
+      .is("revoked_at", null);
+    if (updateError) throw updateError;
+
+    const { tryInstallationAbsoluteUrl } = await import("@/lib/installation-url.server");
+    const link = await tryInstallationAbsoluteUrl(supabase, data.brandId, `/invite/${token}`);
+    if (!link) throw new Error("Não foi possível determinar a URL desta instalação.");
+    const sent = await sendInviteEmail({
+      supabase: supabase as unknown as SupabaseLike,
+      brandId: data.brandId,
+      to: nextEmail,
+      brandName,
+      inviterName: inviterProfile?.full_name || "Alguém do time",
+      acceptUrl: link,
+      inviteRole: String(invite.role),
+      actorUserId: userId,
+      ...(tempPassword ? { tempPassword } : {}),
+    });
+    if (!sent.sent) throw new Error(sent.error || "Não foi possível enviar o convite.");
+    const { logCriticalAction } = await import("@/lib/critical-audit.server");
+    await logCriticalAction(supabase as never, {
+      action: nextEmail === previousEmail ? "invite.resend" : "invite.email_update",
+      actorId: userId,
+      targetId: data.inviteId,
+      targetLabel: nextEmail,
+      brandId: data.brandId,
+      impact: {
+        emailChanged: nextEmail !== previousEmail,
+        expiresAt,
+      },
+    });
+    return { ok: true, email: nextEmail, expiresAt, token };
   });
 
 const RevokePortalInput = z.object({ brandId: z.string().uuid(), tokenId: z.string().uuid() });

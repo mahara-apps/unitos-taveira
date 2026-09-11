@@ -1,5 +1,10 @@
 # Roadmap
 
+- [x] Adicionar reenvio/edição de convites e ocultar o Super Admin global de listas e menções; sincronizar MASTER.
+- [x] Corrigir conclusão prematura do deploy por Git e reconciliar a versão registrada da Casa 8.
+- [ ] Publicar o MASTER 1.3.53 com o diagnóstico correto de domínio/modo de teste/permissão no Resend.
+- [x] Corrigir a corrida de redirecionamento em `/admin` que causava `Uncaught undefined`; sincronizar MASTER 1.3.54.
+- [ ] Corrigir seleção de deployment duplicado da Casa 8, reconciliar a versão comprovada e sincronizar MASTER 1.3.55.
 - [x] Publicar o MASTER 1.3.7 e atualizar a Taveira, com validação final.
 - [x] Tornar a ação de atualização inequívoca e proteger o reprovisionamento na tela.
 - [x] Concluir Lixeira de conteúdos/pipelines com retenção de 30 dias e propagação MASTER.

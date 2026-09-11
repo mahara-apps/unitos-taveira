@@ -170,6 +170,67 @@ describe("atualização de código da instalação", () => {
     });
   });
 
+  it("localiza o deployment de produção pelo commit exato do push", async () => {
+    const { impl } = fakeFetch([
+      {
+        match: /v6\/deployments/,
+        body: {
+          deployments: [
+            { uid: "dpl_old", readyState: "READY", meta: { githubCommitSha: "old" } },
+            {
+              uid: "dpl_git",
+              readyState: "BUILDING",
+              url: "unitos-casa-8.vercel.app",
+              meta: { githubCommitSha: "abc123" },
+            },
+          ],
+        },
+      },
+    ]);
+    const client = createDeployClient({ token: "t", project: "unitos-casa-8", fetchImpl: impl });
+    await expect(client.findProductionDeployment("ABC123")).resolves.toMatchObject({
+      ok: true,
+      deploymentId: "dpl_git",
+      state: "BUILDING",
+      url: "https://unitos-casa-8.vercel.app",
+    });
+  });
+
+  it("não confunde outro deployment com o commit recém-enviado", async () => {
+    const { impl } = fakeFetch([
+      {
+        match: /v6\/deployments/,
+        body: {
+          deployments: [
+            { uid: "dpl_old", readyState: "READY", meta: { githubCommitSha: "old" } },
+          ],
+        },
+      },
+    ]);
+    const client = createDeployClient({ token: "t", project: "unitos-casa-8", fetchImpl: impl });
+    await expect(client.findProductionDeployment("new")).resolves.toEqual({ ok: true });
+  });
+
+  it.each([
+    [
+      { uid: "dpl_api", readyState: "BLOCKED", createdAt: 20, meta: { githubCommitSha: "same" } },
+      { uid: "dpl_git", readyState: "READY", createdAt: 10, meta: { githubCommitSha: "same" } },
+    ],
+    [
+      { uid: "dpl_git", readyState: "READY", createdAt: 10, meta: { githubCommitSha: "same" } },
+      { uid: "dpl_api", readyState: "BLOCKED", createdAt: 20, meta: { githubCommitSha: "same" } },
+    ],
+  ])("prioriza o deployment READY quando o mesmo commit também tem um BLOCKED", async (...deployments) => {
+    const { impl } = fakeFetch([{ match: /v6\/deployments/, body: { deployments } }]);
+    const client = createDeployClient({ token: "t", project: "unitos-casa-8", fetchImpl: impl });
+
+    await expect(client.findProductionDeployment("same")).resolves.toMatchObject({
+      ok: true,
+      deploymentId: "dpl_git",
+      state: "READY",
+    });
+  });
+
   it("o checkpoint de atualização usa campos não sensíveis e reutilizáveis", () => {
     const detail = {
       automated: true,
@@ -177,12 +238,14 @@ describe("atualização de código da instalação", () => {
         updateDeploymentId: "dpl_1",
         updateDeploymentSource: "git" as const,
         updateDeploymentRef: "main",
+        updateGitPushCommit: "push123",
       },
     };
     expect(detail.stageProgress).toEqual({
       updateDeploymentId: "dpl_1",
       updateDeploymentSource: "git",
       updateDeploymentRef: "main",
+      updateGitPushCommit: "push123",
     });
     expect(JSON.stringify(detail)).not.toMatch(/token|secret|password/i);
   });

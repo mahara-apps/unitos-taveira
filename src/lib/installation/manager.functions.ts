@@ -96,6 +96,7 @@ export type OperationDetail = {
     updateDeploymentId?: string;
     updateDeploymentSource?: "git" | "rebuild";
     updateDeploymentRef?: string;
+    updateGitPushCommit?: string;
   };
 };
 

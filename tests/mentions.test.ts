@@ -21,7 +21,11 @@ describe("resolveMentions", () => {
   });
 });
 
-function clientWithMembers(members: string[], inserted: unknown[]) {
+function clientWithMembers(
+  members: string[],
+  inserted: unknown[],
+  superAdmins: string[] = [],
+) {
   return {
     from: (table: string) => {
       if (table === "brand_members") {
@@ -32,6 +36,16 @@ function clientWithMembers(members: string[], inserted: unknown[]) {
                 data: ids.filter((i) => members.includes(i)).map((user_id) => ({ user_id })),
                 error: null,
               }),
+            }),
+          }),
+        };
+      }
+      if (table === "user_profiles") {
+        return {
+          select: () => ({
+            in: (_c: string, ids: string[]) => ({
+              data: ids.map((id) => ({ id, is_super_admin: superAdmins.includes(id) })),
+              error: null,
             }),
           }),
         };
@@ -73,6 +87,16 @@ describe("notifyMentions", () => {
     const client = clientWithMembers(["u1"], inserted);
     expect(await notifyMentions(client, { ...base, mentions: ["u1"] })).toBe(0);
     expect(inserted).toHaveLength(0);
+  });
+
+  it("nunca notifica o Super Admin global, mesmo com ID enviado manualmente", async () => {
+    const inserted: unknown[] = [];
+    const client = clientWithMembers(["u2", "master"], inserted, ["master"]);
+    expect(
+      await notifyMentions(client, { ...base, mentions: ["u2", "master"] }),
+    ).toBe(1);
+    const rows = inserted[0] as Array<{ user_id: string }>;
+    expect(rows.map((row) => row.user_id)).toEqual(["u2"]);
   });
 });
 

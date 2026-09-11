@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { listBrandTeam, revokeBrandInvite } from "@/lib/team.functions";
+import { listBrandTeam, resendBrandInvite, revokeBrandInvite } from "@/lib/team.functions";
 import {
   listTeamMembersFn,
   removeTeamMemberFn,
@@ -35,6 +35,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import {
   MoreHorizontal,
@@ -50,6 +60,7 @@ import {
   PowerOff,
   Trash2,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { usePageHeader } from "@/hooks/use-page-header";
 import { AddMemberDrawer } from "@/components/settings/add-member-drawer";
@@ -427,9 +438,12 @@ function InviteRow({
 }) {
   const qc = useQueryClient();
   const revoke = useServerFn(revokeBrandInvite);
+  const resend = useServerFn(resendBrandInvite);
   const link =
     typeof window !== "undefined" ? `${window.location.origin}/invite/${invite.token}` : "";
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [email, setEmail] = useState(invite.email);
   const revokeMut = useMutation({
     mutationFn: () =>
       revoke({ data: { brandId, inviteId: invite.id, confirmLabel: invite.email } }),
@@ -439,6 +453,16 @@ function InviteRow({
       qc.invalidateQueries({ queryKey: ["brand-team", brandId] });
     },
     onError: (e: Error) => toast.error("Não foi possível revogar", { description: e.message }),
+  });
+  const resendMut = useMutation({
+    mutationFn: (nextEmail?: string) =>
+      resend({ data: { brandId, inviteId: invite.id, ...(nextEmail ? { email: nextEmail } : {}) } }),
+    onSuccess: () => {
+      setEditOpen(false);
+      toast.success("Convite reenviado com um novo link.");
+      qc.invalidateQueries({ queryKey: ["brand-team", brandId] });
+    },
+    onError: (e: Error) => toast.error("Não foi possível reenviar", { description: e.message }),
   });
   const isExpired = new Date(invite.expires_at).getTime() < Date.now();
   const isRevoked = Boolean(invite.revoked_at);
@@ -462,6 +486,35 @@ function InviteRow({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isRevoked || resendMut.isPending}
+          onClick={() => resendMut.mutate(undefined)}
+        >
+          {resendMut.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Reenviar
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          disabled={isRevoked || invite.temp_password_sent}
+          onClick={() => {
+            setEmail(invite.email);
+            setEditOpen(true);
+          }}
+          title={
+            invite.temp_password_sent
+              ? "Revogue e convide novamente para trocar o e-mail desta conta"
+              : "Editar e-mail e reenviar"
+          }
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -498,6 +551,40 @@ function InviteRow({
           confirmText={invite.email}
           onConfirm={() => revokeMut.mutate()}
         />
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar e-mail do convite</DialogTitle>
+              <DialogDescription>
+                O link anterior será invalidado e um novo convite será enviado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor={`invite-email-${invite.id}`}>E-mail</Label>
+              <Input
+                id={`invite-email-${invite.id}`}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={resendMut.isPending || !email.trim()}
+                onClick={() => resendMut.mutate(email.trim().toLowerCase())}
+              >
+                {resendMut.isPending ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                Salvar e reenviar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </li>
   );

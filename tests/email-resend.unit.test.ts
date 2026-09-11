@@ -182,10 +182,16 @@ describe("sanitizeProviderError", () => {
     expect(out).toContain("[redacted]");
   });
 
-  it("401/403 viram credencial_invalida", async () => {
+  it("distingue chave inválida, domínio não verificado e falta de permissão", async () => {
     const { sanitizeProviderError } = await mod();
     expect(sanitizeProviderError(401, "unauthorized")).toBe("credencial_invalida");
-    expect(sanitizeProviderError(403, "forbidden")).toBe("credencial_invalida");
+    expect(
+      sanitizeProviderError(403, '{"message":"The casa8agencia.com domain is not verified"}'),
+    ).toBe("dominio_remetente_nao_verificado");
+    expect(
+      sanitizeProviderError(403, '{"message":"You can only send testing emails to your own email address"}'),
+    ).toBe("conta_resend_em_modo_teste");
+    expect(sanitizeProviderError(403, "forbidden")).toBe("resend_sem_permissao_de_envio");
   });
 });
 

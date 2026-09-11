@@ -90,6 +90,10 @@ export const listTeamMembersFn = createServerFn({ method: "POST" })
       )
       .in("id", ids);
     const profiles = (profs ?? []) as unknown as ProfileRow[];
+    const visibleMembers = members.filter((member) => {
+      const profile = profiles.find((candidate) => candidate.id === member.user_id);
+      return profile && profile.is_super_admin !== true;
+    });
 
     // E-mail e último acesso só existem em auth.users — leitura pontual por id.
     const auth = await Promise.all(
@@ -109,7 +113,7 @@ export const listTeamMembersFn = createServerFn({ method: "POST" })
 
     return {
       myRole,
-      members: members.map((m) => {
+      members: visibleMembers.map((m) => {
         const p = profiles.find((x) => x.id === m.user_id);
         const a = auth.find((x) => x.id === m.user_id);
         const isActive = m.is_active !== false;
@@ -127,7 +131,7 @@ export const listTeamMembersFn = createServerFn({ method: "POST" })
           deactivatedAt: m.deactivated_at,
           lastSignInAt: a?.lastSignInAt ?? null,
           pendingFirstAccess,
-          isSuperAdmin: Boolean(p?.is_super_admin),
+          isSuperAdmin: false,
           status: !isActive ? "inactive" : pendingFirstAccess ? "pending" : "active",
         } satisfies TeamMember;
       }),
