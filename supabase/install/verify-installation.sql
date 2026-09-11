@@ -82,6 +82,25 @@ WITH checks AS (
               THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
 
+  SELECT 135, 'clientes: cascata pode remover o último pipeline',
+         CASE WHEN EXISTS (
+           SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public'
+             AND p.proname = 'protect_pipeline_delete'
+             AND p.prosrc LIKE '%IF NOT EXISTS (%'
+             AND p.prosrc LIKE '%FROM public.clients%'
+         ) THEN 'proteção compatível com cascata' ELSE 'função desatualizada' END,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public'
+             AND p.proname = 'protect_pipeline_delete'
+             AND p.prosrc LIKE '%IF NOT EXISTS (%'
+             AND p.prosrc LIKE '%FROM public.clients%'
+             AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+             AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
+         ) THEN 'PASS' ELSE 'FAIL' END
+  UNION ALL
+
   SELECT 132, 'módulo Mensagens: tempo real (publicação supabase_realtime)',
          coalesce((SELECT string_agg(tablename, ', ' ORDER BY tablename) FROM pg_publication_tables
                    WHERE pubname = 'supabase_realtime' AND schemaname = 'public'

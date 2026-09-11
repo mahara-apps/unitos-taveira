@@ -164,6 +164,13 @@ function CustomersIndexPage() {
   const [editing, setEditing] = useState<ClientRow | null>(null);
   const [toDelete, setToDelete] = useState<ClientRow | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteFinalWarningOpen, setDeleteFinalWarningOpen] = useState(false);
+
+  const resetDeleteFlow = () => {
+    setToDelete(null);
+    setDeleteConfirmName("");
+    setDeleteFinalWarningOpen(false);
+  };
 
   const clientsQ = useQuery({
     queryKey: ["clients", brandId],
@@ -302,9 +309,16 @@ function CustomersIndexPage() {
     onSuccess: () => {
       toast.success("Cliente excluído");
       qc.invalidateQueries({ queryKey: ["clients", brandId] });
-      setToDelete(null);
+      resetDeleteFlow();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setDeleteFinalWarningOpen(false);
+      toast.error(
+        e.message.includes("cannot_delete_last_pipeline")
+          ? "Não foi possível concluir a exclusão. Atualize a página e tente novamente."
+          : e.message,
+      );
+    },
   });
 
   if (!brandId) {
@@ -668,12 +682,9 @@ function CustomersIndexPage() {
       />
 
       <AlertDialog
-        open={!!toDelete}
+        open={!!toDelete && !deleteFinalWarningOpen}
         onOpenChange={(v) => {
-          if (!v) {
-            setToDelete(null);
-            setDeleteConfirmName("");
-          }
+          if (!v && !deleteFinalWarningOpen) resetDeleteFlow();
         }}
       >
         <AlertDialogContent>
@@ -712,7 +723,7 @@ function CustomersIndexPage() {
               onClick={(e) => {
                 e.preventDefault();
                 if (toDelete && deleteConfirmName.trim() === toDelete.name.trim()) {
-                  deleteMut.mutate({ clientId: toDelete.id, confirmLabel: deleteConfirmName });
+                  setDeleteFinalWarningOpen(true);
                 }
               }}
               disabled={
@@ -722,8 +733,39 @@ function CustomersIndexPage() {
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteFinalWarningOpen}
+        onOpenChange={(open) => {
+          if (!open && !deleteMut.isPending) setDeleteFinalWarningOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Último aviso: excluir {toDelete?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta é a terceira e última confirmação. Ao continuar, o cliente e todos os dados
+              vinculados serão apagados permanentemente e não poderão ser recuperados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMut.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (!toDelete || deleteMut.isPending) return;
+                deleteMut.mutate({ clientId: toDelete.id, confirmLabel: deleteConfirmName });
+              }}
+              disabled={!toDelete || deleteMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               {deleteMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Excluir permanentemente
+              Sim, excluir permanentemente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

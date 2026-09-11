@@ -21,7 +21,7 @@ import { MASTER_FORBIDDEN_TOKENS } from "./bootstrap-contract";
  * Subir a cada correção de banco/código propagável: é o que habilita o botão
  * "Atualizar" (que agora também aplica o delta de banco na instalação).
  */
-export const MASTER_RELEASE_VERSION = "1.3.56";
+export const MASTER_RELEASE_VERSION = "1.3.58";
 
 /* ------------------------------------------------------------------ MASTER */
 
@@ -398,7 +398,7 @@ export const UPDATE_STEPS = [
   {
     id: "code",
     label: "Novo deployment do código do MASTER",
-    script: "vercel: POST /v13/deployments",
+    script: "github: push na branch de produção",
   },
   { id: "build", label: "Build e publicação", script: "vercel: GET /v13/deployments/{id}" },
   {

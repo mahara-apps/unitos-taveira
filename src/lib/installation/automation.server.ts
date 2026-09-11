@@ -2447,6 +2447,7 @@ export function createDeployClient(input: {
             state?: string;
              createdAt?: number;
             url?: string;
+            source?: string;
             meta?: { githubCommitSha?: string };
             gitSource?: { sha?: string };
           }>;
@@ -2463,7 +2464,11 @@ export function createDeployClient(input: {
              const actual = (candidate.meta?.githubCommitSha ?? candidate.gitSource?.sha ?? "")
                .trim()
                .toLowerCase();
-             return actual === expected;
+              // Um deployment criado pela REST API também pode carregar o SHA
+              // do Git. A atualização deve acompanhar somente o deployment que
+              // a integração Git criou a partir do push; caso contrário uma
+              // tentativa REST bloqueada pode ser confundida com o build real.
+              return actual === expected && candidate.source?.toLowerCase() === "git";
            })
            .sort((left, right) => {
              const byState = statePriority(left) - statePriority(right);
@@ -4219,9 +4224,14 @@ export async function runAutomatedUpdate(input: {
   await report(client, operation, "database", "done", delta.detail, 100);
 
   const checkpoint = await readStageProgress(client, operation);
-  let deploymentId = checkpoint.updateDeploymentId ?? null;
-  let deploymentSource = checkpoint.updateDeploymentSource;
-  let deploymentRef = checkpoint.updateDeploymentRef;
+  // Checkpoints antigos podem apontar para uma tentativa REST recusada. Só um
+  // deployment associado ao commit de push Git pode ser retomado.
+  let deploymentId = checkpoint.updateGitPushCommit ? (checkpoint.updateDeploymentId ?? null) : null;
+  let deploymentSource: "git" | "rebuild" | undefined = checkpoint.updateGitPushCommit
+    ? "git"
+    : undefined;
+  let deploymentRef = checkpoint.updateGitPushCommit ?? checkpoint.updateDeploymentRef;
+  let gitPushCommit = checkpoint.updateGitPushCommit ?? null;
 
   // Retomada: se o código desta MESMA operação já foi publicado, o alvo é o
   // commit do checkpoint. Nunca revalidar "MASTER publicado" aqui — o pacote já
@@ -4320,6 +4330,20 @@ export async function runAutomatedUpdate(input: {
       codeRepo: repo.slug,
       codeBlobs: {},
     });
+    // Quando houve alteração, publishSnapshot já avançou a branch e esse é o
+    // commit que deve disparar/identificar o build Git. Se nada mudou, o helper
+    // abaixo cria um commit vazio para produzir um novo webhook inequívoco.
+    if ((changedFiles ?? 0) > 0 && buildRef) {
+      gitPushCommit = buildRef;
+      deploymentSource = "git";
+      deploymentRef = buildRef;
+      await saveStageProgress(client, operation, {
+        updateGitPushCommit: buildRef,
+        updateDeploymentSource: "git",
+        updateDeploymentRef: buildRef,
+        updateDeploymentId: null,
+      });
+    }
   }
 
   /**
@@ -4334,7 +4358,7 @@ export async function runAutomatedUpdate(input: {
     await deploy.setAutoDeploy(true);
     // Um commit vazio produz um SHA inequívoco para localizar o build criado
     // pelo webhook Git. O checkpoint evita novos nudges em cada retomada.
-    let pushedCommit = checkpoint.updateGitPushCommit ?? null;
+    let pushedCommit = gitPushCommit;
     if (!pushedCommit) {
       const nudge = await code.nudgeDeploy("chore(unitos): republicar versao autorizada");
       if (!nudge.ok || !nudge.commitSha) {
@@ -4349,6 +4373,9 @@ export async function runAutomatedUpdate(input: {
       deploymentRef = pushedCommit;
       await saveStageProgress(client, operation, {
         updateGitPushCommit: pushedCommit,
+        updateDeploymentSource: "git",
+        updateDeploymentRef: pushedCommit,
+        updateDeploymentId: null,
       });
     }
     const appliedByPush = publishedRelease ?? MASTER_RELEASE_VERSION;
@@ -4374,30 +4401,30 @@ export async function runAutomatedUpdate(input: {
     const deadline = Date.now() + (input.waitMs ?? 45_000);
     let pushState = "QUEUED";
     let pushUrl: string | null = null;
-     let pushRefusedReason: string | null = null;
+    let pushRefusedReason: string | null = null;
     while (Date.now() < deadline) {
       const status = await deploy.deploymentState(deploymentId);
       if (status.ok) {
         pushState = status.state ?? pushState;
         pushUrl = status.url ?? pushUrl;
-         if (status.refused) {
-           pushRefusedReason = status.reason ?? `a hospedagem recusou a publicação (${pushState})`;
-         }
-         if (pushRefusedReason || pushState === "ERROR" || pushState === "CANCELED") break;
+        if (status.refused) {
+          pushRefusedReason = status.reason ?? `a hospedagem recusou a publicação (${pushState})`;
+        }
+        if (pushRefusedReason || pushState === "ERROR" || pushState === "CANCELED") break;
         if (pushState === "READY") break;
       }
       await saveStageProgress(client, operation, { updateDeploymentId: deploymentId });
       await sleep(3_000);
     }
-     if (pushRefusedReason) {
-       return fail(
-         "FAIL",
-         `o build disparado pelo Git foi recusado pela hospedagem: ${pushRefusedReason}`,
-         "build",
-       );
-     }
-     if (pushState === "ERROR" || pushState === "CANCELED") {
-       return fail("FAIL", `o build disparado pelo Git terminou em ${pushState}`, "build");
+    if (pushRefusedReason) {
+      return fail(
+        "FAIL",
+        `o build disparado pelo Git foi recusado pela hospedagem: ${pushRefusedReason}`,
+        "build",
+      );
+    }
+    if (pushState === "ERROR" || pushState === "CANCELED") {
+      return fail("FAIL", `o build disparado pelo Git terminou em ${pushState}`, "build");
     }
     if (pushState !== "READY") {
       const startedAt = Date.parse(
@@ -4477,196 +4504,5 @@ export async function runAutomatedUpdate(input: {
     }).catch(() => undefined);
     return { result: "PASS", reasons: [] };
   };
-
-  if (!deploymentId) {
-    await report(client, operation, "code", "running");
-    // O build usa o commit do repositório DA INSTALAÇÃO (o snapshot recém
-    // publicado), nunca o SHA do MASTER — ele não existe no outro repositório.
-    const created = await deploy.deployLatestCode({ sha: buildRef });
-    if (!created.ok || !created.deploymentId) {
-      if (created.quotaExceeded || created.gitSourceUnavailable) {
-        const cause = created.quotaExceeded
-          ? "cota diária de deployments por API da Vercel esgotada"
-          : "a Vercel não resolveu o repositório pela API";
-        return finishByGitPush(cause);
-      }
-      return fail("FAIL", created.error ?? "não foi possível disparar o deployment");
-    }
-    deploymentId = created.deploymentId;
-    deploymentSource = created.source;
-    deploymentRef = created.ref;
-    await saveStageProgress(client, operation, {
-      updateDeploymentId: deploymentId,
-      updateDeploymentSource: deploymentSource,
-      updateDeploymentRef: deploymentRef,
-    });
-  }
-
-  if (deploymentSource === "rebuild") {
-    await report(
-      client,
-      operation,
-      "code",
-      "done",
-      "projeto de deploy sem repositório ligado — apenas rebuild do último snapshot",
-    );
-    await report(client, operation, "build", "done", "rebuild disparado");
-    await report(client, operation, "version", "done", "versão não avançada");
-    await finalizeOperation(client as never, operation as never, {
-      ok: true,
-      warnings: true,
-      version: null,
-      summary:
-        "Rebuild disparado, mas o projeto de deploy não está ligado a um repositório: o código novo do MASTER não é aplicado assim. Ligue o projeto ao repositório e repita a atualização.",
-    }).catch(() => undefined);
-    return { result: "PENDING", reasons: ["deploy sem repositório ligado"] };
-  }
-
-  await report(
-    client,
-    operation,
-    "code",
-    "done",
-    `deployment criado a partir de ${deploymentRef ?? "produção"}`,
-  );
-
-  await report(client, operation, "build", "running");
-  const sleep = input.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const deadline = Date.now() + (input.waitMs ?? 45_000);
-  let state = "QUEUED";
-  let url: string | null = null;
-  let refusedReason: string | null = null;
-  while (Date.now() < deadline) {
-    const status = await deploy.deploymentState(deploymentId);
-    if (status.ok) {
-      state = status.state ?? state;
-      url = status.url ?? url;
-      if (status.refused) {
-        refusedReason = status.reason ?? `a hospedagem recusou a publicação (${state})`;
-        break;
-      }
-      if (state === "READY") break;
-      if (state === "ERROR" || state === "CANCELED") break;
-    }
-    // Mantém a lease viva durante builds longos: UI e cron não podem iniciar
-    // outro runner nem criar deployments redundantes enquanto este responde.
-    await saveStageProgress(client, operation, { updateDeploymentId: deploymentId });
-    await sleep(3_000);
-  }
-
-  if (refusedReason) {
-    // Estado TERMINAL: esperar mais nunca vira READY (ex.: a conta só aceita
-    // publicação disparada pelo Git em produção). Antes disso a operação ficava
-    // presa em "build em andamento (BLOCKED)" e o watchdog a retomava sem fim.
-    const onlyGit = /not allowed in production|only git deployments/i.test(refusedReason);
-    const cause = onlyGit
-      ? "a hospedagem só aceita publicação disparada pelo Git em produção"
-      : `a hospedagem recusou a publicação (${refusedReason})`;
-    // Limpa o deployment recusado do checkpoint: a retomada não deve voltar a
-    // consultá-lo.
-    await saveStageProgress(client, operation, { updateDeploymentId: null });
-    return finishByGitPush(cause);
-  }
-
-  if (state === "ERROR" || state === "CANCELED") {
-    return fail("FAIL", `o build terminou em ${state}`, "build");
-  }
-
-  if (state !== "READY") {
-    // Teto absoluto: sem conclusão em BUILD_MAX_MINUTES a operação encerra com
-    // motivo claro, em vez de ser retomada indefinidamente pelo watchdog.
-    const startedAt = Date.parse(
-      ((operation as unknown as { started_at?: string | null; created_at?: string | null })
-        .started_at ??
-        (operation as unknown as { created_at?: string | null }).created_at ??
-        "") as string,
-    );
-    const elapsedMin = Number.isFinite(startedAt) ? (Date.now() - startedAt) / 60_000 : 0;
-    if (elapsedMin >= BUILD_MAX_MINUTES) {
-      await saveStageProgress(client, operation, { updateDeploymentId: null });
-      return fail(
-        "FAIL",
-        `a publicação não concluiu em ${BUILD_MAX_MINUTES} minutos (último estado: ${state}). Confira a hospedagem e autorize a atualização novamente.`,
-        "build",
-      );
-    }
-    // Não encerra prematuramente. O cron/watchdog retomará a MESMA operação e
-    // consultará o MESMO deployment persistido até READY ou erro terminal.
-    await report(client, operation, "build", "running", `build em andamento (${state})`);
-    await saveStageProgress(client, operation, { updateDeploymentId: deploymentId });
-    return { result: "PENDING", reasons: [`build em ${state}`] };
-  }
-
-  await report(client, operation, "build", "done", url ? `publicado em ${url}` : "publicado");
-
-  await report(client, operation, "validation", "running");
-  await hardenHelperTables(management);
-  const finalVerification = await management.query(prepareVerificationSql(verifySql).sql);
-  if (!finalVerification.ok) {
-    return fail(
-      "FAIL",
-      `a validação final não pôde ser executada: ${finalVerification.error ?? "falha"}`,
-      "validation",
-    );
-  }
-  const verificationSummary = summarizeVerificationRows(finalVerification.rows);
-  if (!verificationSummary.ok) {
-    return fail(
-      "FAIL",
-      verificationSummary.reason ?? "a validação final encontrou inconsistências",
-      "validation",
-    );
-  }
-  await report(
-    client,
-    operation,
-    "validation",
-    "done",
-    `${verificationSummary.total} verificações PASS`,
-  );
-  const shortSha = targetSha ? targetSha.slice(0, 7) : null;
-  // A versão fixada é a do pacote realmente publicado, nunca o número atual do
-  // MASTER: se o repositório estiver atrás, o painel precisa mostrar a verdade.
-  const appliedRelease = publishedRelease ?? MASTER_RELEASE_VERSION;
-  const nothingNew = changedFiles === 0;
-  await report(
-    client,
-    operation,
-    "version",
-    "done",
-    shortSha ? `${appliedRelease} (${shortSha})` : appliedRelease,
-  );
-
-  // Fixa a versão publicada: a instalação passa a ficar parada neste ponto do
-  // código até uma nova autorização.
-  if (targetSha) {
-    await (
-      client.from("installations") as unknown as {
-        update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
-      }
-    )
-      .update({
-        pinned_commit_sha: targetSha,
-        pinned_release: appliedRelease,
-        pinned_at: new Date().toISOString(),
-      })
-      .eq("id", installation.id)
-      .then(
-        () => undefined,
-        () => undefined,
-      );
-  }
-
-  await finalizeOperation(client as never, operation as never, {
-    ok: true,
-    ...(nothingNew ? { warnings: true } : {}),
-    version: appliedRelease,
-    summary: nothingNew
-      ? `Nada novo para enviar: a instalação já está no código do MASTER (${appliedRelease}${shortSha ? ` · ${shortSha}` : ""}). O banco foi conferido.`
-      : shortSha
-        ? `Atualização aplicada: código do MASTER (${appliedRelease} · ${shortSha}) publicado na instalação.`
-        : `Atualização aplicada: código do MASTER (${appliedRelease}) publicado na instalação.`,
-  }).catch(() => undefined);
-
-  return { result: "PASS", reasons: [] };
+  return finishByGitPush("atualização enviada ao repositório");
 }

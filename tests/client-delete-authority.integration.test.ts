@@ -28,6 +28,22 @@ async function clientExists(clientId: string): Promise<boolean> {
   return !!data;
 }
 
+async function addPipeline(clientId: string, name: string, isDefault = false): Promise<string> {
+  const inserted = await admin
+    .from("content_pipelines")
+    .insert({
+      brand_id: fx!.brandId,
+      client_id: clientId,
+      name,
+      slug: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`,
+      is_default: isDefault,
+    })
+    .select("id")
+    .single();
+  if (inserted.error) throw new Error(inserted.error.message);
+  return inserted.data.id as string;
+}
+
 beforeAll(async () => {
   fx = await seed();
   userAdmin = await createUser("cladmin");
@@ -86,5 +102,30 @@ describe("RLS de DELETE em clients — somente administradores", () => {
     const { error } = await fx!.userOwner.client.from("clients").delete().eq("id", id);
     expect(error).toBeNull();
     expect(await clientExists(id)).toBe(false);
+  });
+
+  it("Admin exclui cliente com um pipeline pela cascata", async () => {
+    const id = await makeClient(`QA Cascade One ${Date.now().toString(36)}`);
+    await addPipeline(id, "Pipeline único", true);
+    const { error } = await userAdmin!.client.from("clients").delete().eq("id", id);
+    expect(error).toBeNull();
+    expect(await clientExists(id)).toBe(false);
+  });
+
+  it("Admin exclui cliente com múltiplos pipelines pela cascata", async () => {
+    const id = await makeClient(`QA Cascade Many ${Date.now().toString(36)}`);
+    await addPipeline(id, "Pipeline padrão", true);
+    await addPipeline(id, "Pipeline alternativo");
+    const { error } = await userAdmin!.client.from("clients").delete().eq("id", id);
+    expect(error).toBeNull();
+    expect(await clientExists(id)).toBe(false);
+  });
+
+  it("continua bloqueando a exclusão isolada do último pipeline", async () => {
+    const id = await makeClient(`QA Last Pipeline ${Date.now().toString(36)}`);
+    const pipelineId = await addPipeline(id, "Último pipeline", true);
+    const removed = await userAdmin!.client.from("content_pipelines").delete().eq("id", pipelineId);
+    expect(removed.error?.message).toContain("cannot_delete_last_pipeline");
+    await admin.from("clients").delete().eq("id", id);
   });
 });

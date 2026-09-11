@@ -372,7 +372,12 @@ export const deleteClient = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .eq("brand_id", data.brandId)
       .select("id");
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes("cannot_delete_last_pipeline")) {
+        throw new Error("Não foi possível excluir o cliente e seus conteúdos. Tente novamente.");
+      }
+      throw error;
+    }
     // Sem "sucesso silencioso" quando a RLS não afetou nenhuma linha.
     if (!removed || removed.length === 0) {
       throw new Error("Forbidden: cliente fora do seu escopo");
