@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { MessageSquare, Send, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MentionTextarea, resolveMentions } from "@/components/ui/mention-textarea";
+import { cleanMentionText, MentionTextarea } from "@/components/ui/mention-textarea";
 import { MentionText } from "@/components/ui/mention-text";
 import { PanelEmptyState } from "@/components/ui/panel-empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,17 +21,11 @@ import {
 } from "@/lib/work-comments.functions";
 import { addTaskCommentFn, deleteTaskCommentFn, listTaskCommentsFn } from "@/lib/tasks.functions";
 import { listBrandAssigneesFn } from "@/lib/content.functions";
-import { APP_TIMEZONE } from "@/lib/timezone";
+import { formatDateTimeBr } from "@/lib/timezone";
 import { displayName, initialsOf } from "@/lib/identity";
 
 function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    timeZone: APP_TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTimeBr(iso);
 }
 
 type Entry = {
@@ -77,6 +71,7 @@ export function CommentThread({
 }: Props) {
   const qc = useQueryClient();
   const [body, setBody] = useState("");
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
 
   const listWork = useServerFn(listWorkCommentsFn);
   const addWork = useServerFn(addWorkCommentFn);
@@ -117,14 +112,16 @@ export function CommentThread({
 
   const addMut = useMutation({
     mutationFn: async (text: string) => {
-      const mentions = resolveMentions(text, people);
-      if (isTask) return addTask({ data: { taskId: taskId!, body: text, mentions } });
+      const mentions = mentionIds;
+      const cleanText = cleanMentionText(text);
+      if (isTask) return addTask({ data: { taskId: taskId!, body: cleanText, mentions } });
       return addWork({
-        data: { brandId, projectId: projectId!, jobId: jobId ?? null, body: text, mentions },
+        data: { brandId, projectId: projectId!, jobId: jobId ?? null, body: cleanText, mentions },
       });
     },
     onSuccess: () => {
       setBody("");
+      setMentionIds([]);
       qc.invalidateQueries({ queryKey });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -203,7 +200,10 @@ export function CommentThread({
       <div className="border-t border-border/60 p-3">
         <MentionTextarea
           value={body}
-          onChange={setBody}
+          onChange={(next, mentions) => {
+            setBody(next);
+            setMentionIds(mentions);
+          }}
           people={people}
           placeholder={placeholder}
           rows={2}

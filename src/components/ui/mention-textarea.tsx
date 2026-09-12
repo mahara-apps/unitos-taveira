@@ -1,16 +1,18 @@
 /**
  * Textarea com menções `@`.
  *
- * A fonte de verdade continua sendo o TEXTO, mas a pessoa escolhida é gravada
- * num token estável `@[Nome](uuid)`. Assim homônimos nunca são confundidos e
- * apagar o trecho remove a menção (sem IDs órfãos). Comentários antigos com
- * `@Nome` puro seguem sendo reconhecidos.
+ * O texto visível contém somente `@Nome`. A identidade escolhida fica separada
+ * no estado do compositor, evitando expor IDs no campo, nas prévias ou no banco.
+ * Tokens antigos `@[Nome](uuid)` continuam sendo reconhecidos e saneados.
  */
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { displayName, initialsOf } from "@/lib/identity";
+import { cleanMentionText, MENTION_TOKEN_RE } from "@/lib/mentions";
+
+export { cleanMentionText, MENTION_TOKEN_RE } from "@/lib/mentions";
 
 export type MentionPerson = {
   id: string;
@@ -18,10 +20,6 @@ export type MentionPerson = {
   email?: string | null;
   avatar_url?: string | null;
 };
-
-/** `@[Nome](uuid)` */
-export const MENTION_TOKEN_RE =
-  /@\[[^\]\n]+\]\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)/i;
 
 const TOKEN_GLOBAL = new RegExp(MENTION_TOKEN_RE.source, "gi");
 
@@ -71,7 +69,7 @@ function activeQuery(text: string, caret: number): { start: number; query: strin
 
 type Props = {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, mentionIds: string[]) => void;
   people: MentionPerson[];
   placeholder?: string;
   rows?: number;
@@ -92,6 +90,7 @@ export function MentionTextarea({
   disabled,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const selectionsRef = useRef<Array<{ id: string; label: string }>>([]);
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [highlight, setHighlight] = useState(0);
 
@@ -115,16 +114,40 @@ export function MentionTextarea({
     setHighlight(0);
   }
 
+  function activeMentionIds(text: string) {
+    const remainingByLabel = new Map<string, number>();
+    for (const selection of selectionsRef.current) {
+      const key = selection.label.toLocaleLowerCase("pt-BR");
+      if (remainingByLabel.has(key)) continue;
+      const escaped = selection.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matches = text.match(new RegExp(`@${escaped}(?=$|[\\s.,;:!?\\)])`, "giu"));
+      remainingByLabel.set(key, matches?.length ?? 0);
+    }
+
+    const active: Array<{ id: string; label: string }> = [];
+    for (const selection of selectionsRef.current) {
+      const key = selection.label.toLocaleLowerCase("pt-BR");
+      const remaining = remainingByLabel.get(key) ?? 0;
+      if (remaining <= 0) continue;
+      active.push(selection);
+      remainingByLabel.set(key, remaining - 1);
+    }
+    selectionsRef.current = active;
+    return Array.from(new Set(active.map((selection) => selection.id)));
+  }
+
   function pick(person: MentionPerson) {
     if (!trigger) return;
     const el = ref.current;
     const caret = el?.selectionStart ?? value.length;
-    const token = `@[${personLabel(person)}](${person.id})`;
-    const next = `${value.slice(0, trigger.start)}${token} ${value.slice(caret)}`;
-    onChange(next);
+    const label = personLabel(person);
+    const mention = `@${label}`;
+    const next = `${value.slice(0, trigger.start)}${mention} ${value.slice(caret)}`;
+    selectionsRef.current = [...selectionsRef.current, { id: person.id, label }];
+    onChange(next, activeMentionIds(next));
     setTrigger(null);
     requestAnimationFrame(() => {
-      const pos = trigger.start + token.length + 1;
+      const pos = trigger.start + mention.length + 1;
       el?.focus();
       el?.setSelectionRange(pos, pos);
     });
@@ -170,8 +193,9 @@ export function MentionTextarea({
         placeholder={placeholder}
         className={cn("resize-none text-sm", className)}
         onChange={(e) => {
-          onChange(e.target.value);
-          sync(e.target.value, e.target.selectionStart ?? e.target.value.length);
+          const next = cleanMentionText(e.target.value);
+          onChange(next, activeMentionIds(next));
+          sync(next, e.target.selectionStart ?? next.length);
         }}
         onClick={(e) => sync(value, e.currentTarget.selectionStart ?? value.length)}
         onKeyUp={(e) => {

@@ -3826,6 +3826,34 @@ export function classifyVerificationCheck(checkName: string): string {
   return "database";
 }
 
+/** Mapeia o resultado do verify para o cartão exato do núcleo da instalação. */
+export function classifyVerificationHealthCheck(checkName: string): HealthCheckId {
+  const name = checkName.toLowerCase();
+  if (name.startsWith("isolamento") || name.startsWith("installation.app_url"))
+    return "configuration";
+  if (name.startsWith("storage:")) return "storage";
+  if (name.startsWith("cron:") || name.startsWith("vault:") || name.includes("brain_stats_mv"))
+    return "cron";
+  if (name.startsWith("seeds:") || name.startsWith("mensagens: recurso")) return "seeds";
+  if (
+    name.startsWith("rls ") ||
+    name.includes("policies") ||
+    name.includes("triggers") ||
+    name.startsWith("trigger ")
+  )
+    return "rls";
+  if (
+    name.startsWith("schema:") ||
+    name.startsWith("módulo ") ||
+    name.startsWith("clientes:") ||
+    name.startsWith("briefing:") ||
+    name.startsWith("conteúdo:") ||
+    name.startsWith("auditoria:")
+  )
+    return "schema";
+  return "database";
+}
+
 type VerificationRow = { status: string; check_name: string; observed: string | null };
 
 function normalizeVerificationRows(rows: readonly unknown[]): VerificationRow[] {
@@ -3897,32 +3925,29 @@ export async function runAutomatedValidate(input: {
 
   const failedByStep = new Map<string, string[]>();
   const totalByStep = new Map<string, number>();
+  const failedHealth = new Set<HealthCheckId>();
+  const measuredHealth = new Set<HealthCheckId>();
   for (const row of rows) {
     const step = classifyVerificationCheck(row.check_name);
+    const healthId = classifyVerificationHealthCheck(row.check_name);
     totalByStep.set(step, (totalByStep.get(step) ?? 0) + 1);
+    measuredHealth.add(healthId);
     if (row.status === "FAIL") {
       const list = failedByStep.get(step) ?? [];
       list.push(row.check_name);
       failedByStep.set(step, list);
+      failedHealth.add(healthId);
     }
   }
 
   const checks: Partial<Record<HealthCheckId, CheckState>> = {};
-  const checkByStep: Record<string, HealthCheckId> = {
-    isolation: "configuration",
-    database: "database",
-    rls: "database",
-    storage: "storage",
-    cron: "cron",
-  };
+  for (const healthId of measuredHealth) {
+    checks[healthId] = failedHealth.has(healthId) ? "error" : "ok";
+  }
 
   for (const id of stepIds) {
     const failed = failedByStep.get(id) ?? [];
     const total = totalByStep.get(id) ?? 0;
-    const healthId = checkByStep[id];
-    if (healthId && checks[healthId] !== "error") {
-      checks[healthId] = failed.length > 0 ? "error" : "ok";
-    }
     await report(
       client,
       operation,

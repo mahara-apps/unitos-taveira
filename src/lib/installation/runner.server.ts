@@ -122,6 +122,9 @@ export async function probeInstallationHealth(input: {
     code: stored.code,
 
     database: stored.database,
+    schema: stored.schema,
+    rls: stored.rls,
+    seeds: stored.seeds,
     storage: stored.storage,
     cron: stored.cron,
     frontend,

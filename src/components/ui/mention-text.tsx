@@ -2,12 +2,11 @@
  * Renderiza o corpo de um comentário destacando as menções e transformando
  * URLs colados (Drive, Figma…) em links clicáveis.
  *
- * Menções novas vêm no token estável `@[Nome](uuid)`; comentários antigos
- * gravados como `@Nome` continuam sendo destacados por compatibilidade.
+ * Menções são exibidas como `@Nome`; tokens técnicos antigos são saneados.
  */
 import type { ReactNode } from "react";
 import type { MentionPerson } from "@/components/ui/mention-textarea";
-import { MENTION_TOKEN_RE } from "@/components/ui/mention-textarea";
+import { cleanMentionText, MENTION_TOKEN_RE } from "@/lib/mentions";
 
 /** Quebra um trecho de texto puro em nós, linkificando http(s):// e www. */
 function linkify(text: string, keyPrefix: string): ReactNode[] {
@@ -41,6 +40,7 @@ function Chip({ label }: { label: string }) {
 }
 
 export function MentionText({ text, people }: { text: string; people?: MentionPerson[] }) {
+  const visibleText = cleanMentionText(text);
   const names = (people ?? [])
     .map((p) => p.name.trim())
     .filter(Boolean)
@@ -52,15 +52,15 @@ export function MentionText({ text, people }: { text: string; people?: MentionPe
 
   const out: ReactNode[] = [];
   let last = 0;
-  for (const m of text.matchAll(re)) {
+  for (const m of visibleText.matchAll(re)) {
     const idx = m.index ?? 0;
-    if (idx > last) out.push(...linkify(text.slice(last, idx), `t${last}`));
+    if (idx > last) out.push(...linkify(visibleText.slice(last, idx), `t${last}`));
     const token = m[0];
     const named = /^@\[([^\]]+)\]\(([0-9a-f-]{36})\)$/i.exec(token);
     out.push(<Chip key={`${idx}-${token}`} label={named ? `@${named[1]}` : token} />);
     last = idx + token.length;
   }
-  if (last < text.length) out.push(...linkify(text.slice(last), `t${last}`));
+  if (last < visibleText.length) out.push(...linkify(visibleText.slice(last), `t${last}`));
 
   return <>{out}</>;
 }

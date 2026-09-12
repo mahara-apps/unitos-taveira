@@ -21,7 +21,7 @@ import { MASTER_FORBIDDEN_TOKENS } from "./bootstrap-contract";
  * Subir a cada correção de banco/código propagável: é o que habilita o botão
  * "Atualizar" (que agora também aplica o delta de banco na instalação).
  */
-export const MASTER_RELEASE_VERSION = "1.3.59";
+export const MASTER_RELEASE_VERSION = "1.3.68";
 
 /* ------------------------------------------------------------------ MASTER */
 
@@ -551,6 +551,9 @@ export const HEALTH_CHECKS = [
   { id: "code", label: "Código publicado" },
 
   { id: "database", label: "Banco" },
+  { id: "schema", label: "Schema" },
+  { id: "rls", label: "RLS" },
+  { id: "seeds", label: "Seeds" },
   { id: "storage", label: "Storage" },
   { id: "cron", label: "Cron" },
   { id: "frontend", label: "Frontend" },
@@ -590,6 +593,9 @@ export const INFRA_HEALTH_CHECK_IDS = [
   "connectivity",
   "supabase",
   "database",
+  "schema",
+  "rls",
+  "seeds",
   "storage",
   "cron",
   "frontend",

@@ -8,6 +8,7 @@ import {
 } from "@/lib/publication-status-tokens";
 import { SOCIAL_NETWORKS, classifySocialNetwork } from "@/lib/calendar-tokens";
 import type { PublicationItem } from "@/lib/calendar-board.functions";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 /**
  * Card de PUBLICAÇÃO do calendário.
@@ -160,12 +161,7 @@ export function PublicationRow({
         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="tabular-nums">
             {showDay && item.when
-              ? new Date(item.when).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
+              ? formatDateTimeBr(item.when)
               : timeLabel(item.when)}
           </span>
           <span aria-hidden>·</span>

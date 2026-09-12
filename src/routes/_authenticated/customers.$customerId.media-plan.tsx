@@ -1,36 +1,16 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
   CheckCircle2,
-  GripVertical,
   Link2,
   Loader2,
   Plus,
   Rocket,
   Share2,
-  Trash2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,27 +32,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { DashboardPageShell } from "@/components/ui/dashboard-primitives";
 import { usePageHeader } from "@/hooks/use-page-header";
 import { useActiveContext } from "@/hooks/use-active-context";
-import { cn } from "@/lib/utils";
 import {
   createMediaPlan,
   deleteMediaPlan,
-  deleteMediaPlanItem,
   getMediaPlan,
   issueMediaPlanShareToken,
   listMediaPlans,
-  reorderMediaPlanItems,
   revokeMediaPlanShareToken,
   updateMediaPlan,
-  upsertMediaPlanItem,
   type MediaPlan,
-  type MediaPlanItem,
 } from "@/lib/media-plans.functions";
 import { PlanStrategyPanel } from "@/components/media-plans/plan-strategy-panel";
+import { MediaPlanEditor } from "@/components/media-plans/media-plan-editor";
 import { ensureFeatureEnabled } from "@/lib/feature-flags.gate";
 
 type MediaPlanSearch = {
@@ -90,6 +64,22 @@ const searchSchema = z
   .catch({});
 
 export const Route = createFileRoute("/_authenticated/customers/$customerId/media-plan")({
+  head: () => ({
+    meta: [
+      { title: "Plano de mídia | Unitos" },
+      {
+        name: "description",
+        content: "Planeje investimentos, canais, públicos e metas de mídia paga por etapa do funil.",
+      },
+      { property: "og:title", content: "Plano de mídia | Unitos" },
+      {
+        property: "og:description",
+        content: "Planeje investimentos, canais, públicos e metas de mídia paga por etapa do funil.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   beforeLoad: () => ensureFeatureEnabled("midia_paga"),
   validateSearch: (raw: Record<string, unknown>): MediaPlanSearch => searchSchema.parse(raw),
   component: MediaPlanPage,
@@ -133,45 +123,6 @@ function MediaPlanRouteError({ error, reset }: { error?: Error; reset?: () => vo
     </DashboardPageShell>
   );
 }
-
-const STAGE_LABEL: Record<string, string> = { topo: "Topo", meio: "Meio", fundo: "Fundo" };
-const STAGE_TONE: Record<string, string> = {
-  topo: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  meio: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  fundo: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-};
-const CAMPAIGN_TYPES = [
-  "Awareness",
-  "Tráfego",
-  "Engajamento",
-  "Conversão",
-  "Leads",
-  "Vendas",
-  "Alcance",
-  "Retargeting",
-  "Instalação de app",
-];
-const CHANNEL_OPTIONS = [
-  "Meta Ads",
-  "Instagram",
-  "Facebook",
-  "Google Ads",
-  "YouTube",
-  "TikTok Ads",
-  "LinkedIn Ads",
-  "Pinterest",
-  "Twitter/X Ads",
-  "Programática",
-  "E-mail",
-  "Influenciadores",
-];
-
-const currency = (n: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(n) ? n : 0);
 
 function MediaPlanPage() {
   const { customerId } = Route.useParams();
@@ -376,7 +327,7 @@ function MediaPlanPage() {
       ) : (
         <div className="space-y-4">
           <PlanStrategyPanel plan={planQ.data.plan} items={planQ.data.items} />
-          <PlanEditor
+          <MediaPlanEditor
             plan={planQ.data.plan}
             items={planQ.data.items}
             searchStage={search.stage}
@@ -541,460 +492,6 @@ function CreatePlanDialog({
   );
 }
 
-/* -------------------------------- Editor -------------------------------- */
-
-function PlanEditor({
-  plan,
-  items,
-  searchStage,
-  searchChannel,
-  onSearch,
-  onUpdatePlan,
-  onDeletePlan,
-}: {
-  plan: MediaPlan;
-  items: MediaPlanItem[];
-  searchStage: "topo" | "meio" | "fundo" | undefined;
-  searchChannel: string | undefined;
-  onSearch: (patch: { stage?: "topo" | "meio" | "fundo"; channel?: string }) => void;
-  onUpdatePlan: (patch: { monthly_budget?: number; title?: string }) => void;
-  onDeletePlan: () => void;
-}) {
-  const qc = useQueryClient();
-  const upsertFn = useServerFn(upsertMediaPlanItem);
-  const deleteFn = useServerFn(deleteMediaPlanItem);
-  const reorderFn = useServerFn(reorderMediaPlanItems);
-
-  type UpsertItem = {
-    id?: string;
-    position?: number;
-    product_service?: string | null;
-    campaign_type?: string | null;
-    funnel_stage?: "topo" | "meio" | "fundo" | null;
-    objective?: string | null;
-    main_kpi?: string | null;
-    channel?: string | null;
-    audience?: string | null;
-    budget_pct?: number;
-    keywords?: string[];
-    benchmark?: string | null;
-    other_refs?: string | null;
-  };
-  const upsertMut = useMutation({
-    mutationFn: (payload: { item: UpsertItem }) =>
-      upsertFn({ data: { planId: plan.id, item: payload.item } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["media-plan", plan.id] }),
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Erro ao salvar linha"),
-  });
-  const deleteMut = useMutation({
-    mutationFn: (itemId: string) => deleteFn({ data: { itemId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["media-plan", plan.id] }),
-  });
-  const reorderMut = useMutation({
-    mutationFn: (orderedIds: string[]) => reorderFn({ data: { planId: plan.id, orderedIds } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["media-plan", plan.id] }),
-  });
-
-  const [localItems, setLocalItems] = useState<MediaPlanItem[]>(items);
-  useEffect(() => setLocalItems(items), [items]);
-
-  const totalPct = useMemo(
-    () => localItems.reduce((s, i) => s + (Number(i.budget_pct) || 0), 0),
-    [localItems],
-  );
-  const totalAmount = useMemo(
-    () => localItems.reduce((s, i) => s + (Number(i.budget_amount) || 0), 0),
-    [localItems],
-  );
-
-  const channelsInUse = useMemo(
-    () => Array.from(new Set(localItems.map((i) => i.channel).filter(Boolean))) as string[],
-    [localItems],
-  );
-
-  const filtered = localItems.filter(
-    (i) =>
-      (!searchStage || i.funnel_stage === searchStage) &&
-      (!searchChannel || i.channel === searchChannel),
-  );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const onDragEnd = (e: DragEndEvent) => {
-    if (!e.over || e.active.id === e.over.id) return;
-    const oldIdx = localItems.findIndex((i) => i.id === e.active.id);
-    const newIdx = localItems.findIndex((i) => i.id === e.over!.id);
-    if (oldIdx < 0 || newIdx < 0) return;
-    const next = arrayMove(localItems, oldIdx, newIdx);
-    setLocalItems(next);
-    reorderMut.mutate(next.map((n) => n.id));
-  };
-
-  const addRow = () =>
-    upsertMut.mutate({
-      item: {
-        product_service: "",
-        campaign_type: null,
-        funnel_stage: null,
-        objective: "",
-        main_kpi: "",
-        channel: null,
-        audience: "",
-        budget_pct: 0,
-        keywords: [],
-        benchmark: "",
-        other_refs: "",
-      },
-    });
-
-  const [editingBudget, setEditingBudget] = useState(false);
-  const [budgetDraft, setBudgetDraft] = useState<string>(String(plan.monthly_budget));
-  useEffect(() => setBudgetDraft(String(plan.monthly_budget)), [plan.monthly_budget]);
-
-  const overBudget = totalPct > 100;
-  const nearBudget = totalPct >= 95 && totalPct <= 100;
-
-  return (
-    <div className="space-y-4">
-      {/* Allocation bar */}
-      <div className="rounded-2xl border border-border/60 bg-card p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Orçamento mensal
-            </div>
-            {editingBudget ? (
-              <div className="mt-1 flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={0}
-                  autoFocus
-                  className="h-9 w-40"
-                  value={budgetDraft}
-                  onChange={(e) => setBudgetDraft(e.target.value)}
-                />
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const v = Number(budgetDraft) || 0;
-                    onUpdatePlan({ monthly_budget: v });
-                    setEditingBudget(false);
-                  }}
-                >
-                  Salvar
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditingBudget(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="mt-0.5 text-2xl font-semibold tracking-tight hover:underline"
-                onClick={() => setEditingBudget(true)}
-              >
-                {currency(plan.monthly_budget)}
-              </button>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Alocado
-            </div>
-            <div
-              className={cn(
-                "text-2xl font-semibold tracking-tight",
-                overBudget && "text-rose-500",
-                nearBudget && "text-amber-500",
-                !overBudget && !nearBudget && "text-emerald-500",
-              )}
-            >
-              {currency(totalAmount)}{" "}
-              <span className="text-sm font-normal text-muted-foreground">
-                · {totalPct.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn(
-              "h-full transition-all",
-              overBudget ? "bg-rose-500" : nearBudget ? "bg-amber-500" : "bg-emerald-500",
-            )}
-            style={{ width: `${Math.min(100, totalPct)}%` }}
-          />
-        </div>
-        {overBudget && (
-          <div className="mt-2 text-xs text-rose-500">
-            Alocação acima de 100% ({totalPct.toFixed(1)}%). Ajuste as porcentagens para fechar a
-            distribuição.
-          </div>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={searchStage ?? ""}
-          onChange={(e) => onSearch({ stage: (e.target.value || undefined) as never })}
-          className="h-9 rounded-md border border-border/60 bg-background px-2 text-sm"
-        >
-          <option value="">Todas etapas</option>
-          <option value="topo">Topo do funil</option>
-          <option value="meio">Meio do funil</option>
-          <option value="fundo">Fundo do funil</option>
-        </select>
-        <select
-          value={searchChannel ?? ""}
-          onChange={(e) => onSearch({ channel: e.target.value || undefined })}
-          className="h-9 rounded-md border border-border/60 bg-background px-2 text-sm"
-        >
-          <option value="">Todos canais</option>
-          {channelsInUse.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        {(searchStage || searchChannel) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onSearch({ stage: undefined, channel: undefined })}
-          >
-            <X className="mr-1 h-3.5 w-3.5" /> Limpar
-          </Button>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9"
-            onClick={addRow}
-            disabled={upsertMut.isPending}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Adicionar linha
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-9 text-rose-500 hover:text-rose-500"
-            onClick={onDeletePlan}
-          >
-            <Trash2 className="mr-2 h-4 w-4" /> Excluir plano
-          </Button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-border/60 bg-card">
-        <div className="min-w-[1400px]">
-          <div className="grid grid-cols-[28px_1.4fr_1fr_0.9fr_1.4fr_1fr_1fr_1.2fr_100px_120px_1.2fr_1fr_1fr_32px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <span />
-            <span>Produto/Serviço</span>
-            <span>Tipo de campanha</span>
-            <span>Etapa</span>
-            <span>Objetivo</span>
-            <span>KPI</span>
-            <span>Canal</span>
-            <span>Público</span>
-            <span className="text-right">%</span>
-            <span className="text-right">R$</span>
-            <span>Palavras-chave</span>
-            <span>Benchmark</span>
-            <span>Outras refs</span>
-            <span />
-          </div>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={filtered.map((i) => i.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {filtered.length === 0 ? (
-                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Nenhum item{searchStage || searchChannel ? " para os filtros aplicados" : ""}.
-                </div>
-              ) : (
-                filtered.map((item) => (
-                  <EditableRow
-                    key={item.id}
-                    item={item}
-                    monthlyBudget={plan.monthly_budget}
-                    onChange={(patch) => upsertMut.mutate({ item: { id: item.id, ...patch } })}
-                    onDelete={() => deleteMut.mutate(item.id)}
-                  />
-                ))
-              )}
-            </SortableContext>
-          </DndContext>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EditableRow({
-  item,
-  monthlyBudget,
-  onChange,
-  onDelete,
-}: {
-  item: MediaPlanItem;
-  monthlyBudget: number;
-  onChange: (patch: Partial<MediaPlanItem>) => void;
-  onDelete: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id,
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-  };
-
-  const [local, setLocal] = useState(item);
-  useEffect(() => setLocal(item), [item]);
-
-  const debouncedRef = useRef<number | null>(null);
-  const change = <K extends keyof MediaPlanItem>(key: K, value: MediaPlanItem[K]) => {
-    setLocal((prev) => ({ ...prev, [key]: value }));
-    if (debouncedRef.current) window.clearTimeout(debouncedRef.current);
-    debouncedRef.current = window.setTimeout(() => {
-      onChange({ [key]: value } as Partial<MediaPlanItem>);
-    }, 450);
-  };
-
-  const previewAmount = ((Number(monthlyBudget) || 0) * (Number(local.budget_pct) || 0)) / 100;
-
-  const kwText = (local.keywords ?? []).join(", ");
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="grid grid-cols-[28px_1.4fr_1fr_0.9fr_1.4fr_1fr_1fr_1.2fr_100px_120px_1.2fr_1fr_1fr_32px] items-center gap-2 border-b border-border/40 px-3 py-2 text-sm hover:bg-muted/20"
-    >
-      <button
-        type="button"
-        className="cursor-grab text-muted-foreground hover:text-foreground"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <Input
-        className="h-8"
-        value={local.product_service ?? ""}
-        onChange={(e) => change("product_service", e.target.value)}
-        placeholder="Produto ou serviço"
-      />
-      <select
-        value={local.campaign_type ?? ""}
-        onChange={(e) => change("campaign_type", (e.target.value || null) as never)}
-        className="h-8 rounded-md border border-border/60 bg-background px-2 text-sm"
-      >
-        <option value="">—</option>
-        {CAMPAIGN_TYPES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-      <select
-        value={local.funnel_stage ?? ""}
-        onChange={(e) => change("funnel_stage", (e.target.value || null) as never)}
-        className="h-8 rounded-md border border-border/60 bg-background px-2 text-sm"
-      >
-        <option value="">—</option>
-        <option value="topo">Topo</option>
-        <option value="meio">Meio</option>
-        <option value="fundo">Fundo</option>
-      </select>
-      <Input
-        className="h-8"
-        value={local.objective ?? ""}
-        onChange={(e) => change("objective", e.target.value)}
-        placeholder="Objetivo"
-      />
-      <Input
-        className="h-8"
-        value={local.main_kpi ?? ""}
-        onChange={(e) => change("main_kpi", e.target.value)}
-        placeholder="Ex.: CPL < R$ 20"
-      />
-      <select
-        value={local.channel ?? ""}
-        onChange={(e) => change("channel", (e.target.value || null) as never)}
-        className="h-8 rounded-md border border-border/60 bg-background px-2 text-sm"
-      >
-        <option value="">—</option>
-        {CHANNEL_OPTIONS.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-      <Input
-        className="h-8"
-        value={local.audience ?? ""}
-        onChange={(e) => change("audience", e.target.value)}
-        placeholder="Público"
-      />
-      <Input
-        type="number"
-        className="h-8 text-right"
-        value={local.budget_pct ?? 0}
-        min={0}
-        max={100}
-        step={0.5}
-        onChange={(e) => change("budget_pct", Number(e.target.value) || 0)}
-      />
-      <div className="text-right text-sm tabular-nums text-muted-foreground">
-        {currency(previewAmount)}
-      </div>
-      <Input
-        className="h-8"
-        value={kwText}
-        onChange={(e) =>
-          change(
-            "keywords",
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          )
-        }
-        placeholder="palavra1, palavra2"
-      />
-      <Input
-        className="h-8"
-        value={local.benchmark ?? ""}
-        onChange={(e) => change("benchmark", e.target.value)}
-        placeholder="CTR 1,2%"
-      />
-      <Input
-        className="h-8"
-        value={local.other_refs ?? ""}
-        onChange={(e) => change("other_refs", e.target.value)}
-        placeholder="Links/refs"
-      />
-      <button
-        type="button"
-        onClick={onDelete}
-        className="text-muted-foreground hover:text-rose-500"
-        title="Excluir linha"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 /* --------------------------------- Share -------------------------------- */
 
 function ShareDialog({
@@ -1104,8 +601,3 @@ function ShareDialog({
   );
 }
 
-// keep imports referenced
-void STAGE_LABEL;
-void STAGE_TONE;
-void Badge;
-void Textarea;

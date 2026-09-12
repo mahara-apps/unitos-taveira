@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatDateBr, formatDateTimeBr } from "@/lib/timezone";
 import { initialsOf } from "@/lib/identity";
 import { grantableBrandRoles } from "@/lib/access-guard";
 import type { BrandRole } from "@/lib/team-admin.functions";
@@ -98,6 +99,6 @@ export function StatusBadge({ status, label }: { status: StatusKind; label?: str
 }
 
 export const fmtDate = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+  iso ? formatDateBr(iso) : "—";
 export const fmtDateTime = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+  iso ? formatDateTimeBr(iso) : "—";

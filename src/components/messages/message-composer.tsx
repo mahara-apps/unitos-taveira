@@ -7,8 +7,8 @@ import { Link2, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  cleanMentionText,
   MentionTextarea,
-  resolveMentions,
   type MentionPerson,
 } from "@/components/ui/mention-textarea";
 import { LINK_SOURCE_LABEL, detectLinkSource, normalizeLinkUrl } from "@/lib/link-source";
@@ -33,6 +33,7 @@ export function MessageComposer({
   className?: string;
 }) {
   const [body, setBody] = useState("");
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [links, setLinks] = useState<MessageLink[]>([]);
   const [linkDraft, setLinkDraft] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
@@ -60,8 +61,9 @@ export function MessageComposer({
   const canSend = !!body.trim() && !sending && !disabled;
   const submit = () => {
     if (!canSend) return;
-    onSend({ body: body.trim(), links, mentions: resolveMentions(body, people) });
+    onSend({ body: cleanMentionText(body).trim(), links, mentions: mentionIds });
     setBody("");
+    setMentionIds([]);
     setLinks([]);
     setLinkDraft("");
     setLinkOpen(false);
@@ -121,7 +123,10 @@ export function MessageComposer({
 
       <MentionTextarea
         value={body}
-        onChange={setBody}
+        onChange={(next, mentions) => {
+          setBody(next);
+          setMentionIds(mentions);
+        }}
         people={people}
         placeholder={placeholder}
         disabled={disabled}

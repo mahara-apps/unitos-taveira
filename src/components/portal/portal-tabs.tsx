@@ -40,6 +40,7 @@ import { PortalFiles } from "./portal-files";
 import { PortalBrand } from "./portal-brand";
 import { PLAN_PENDING_CLIENT_STATUS } from "@/lib/monthly-plan-client.types";
 import { EmptyState, ErrorState, ListSkeleton, formatDate } from "./portal-shared";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 /* ---------------------------------- HOME ---------------------------------- */
 
@@ -303,13 +304,7 @@ export function HomeTab() {
                   meta={
                     <>
                       <span>
-                        {new Date(p.scheduled_at as string).toLocaleString("pt-BR", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatDateTimeBr(p.scheduled_at)}
                       </span>
                       {(p.channels ?? []).length > 0 ? (
                         <span className="inline-flex items-center gap-1.5">

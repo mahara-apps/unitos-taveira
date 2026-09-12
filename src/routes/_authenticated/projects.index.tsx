@@ -66,7 +66,7 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import { listClients } from "@/lib/workspace.functions";
 import { listBrandTeam } from "@/lib/team.functions";
 import { PanelEmptyState } from "@/components/ui/panel-empty";
-import { KpiCard } from "@/components/ui/kpi-card";
+import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 import { DashboardPageShell, DashboardPanelSurface } from "@/components/ui/dashboard-primitives";
 import { createProject, listProjects, type ProjectStats } from "@/lib/projects.functions";
 import { NewFromTemplateDialog } from "@/components/projects/new-from-template-dialog";
@@ -103,6 +103,16 @@ const projectsSearchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/projects/")({
   validateSearch: projectsSearchSchema,
+  head: () => ({
+    meta: [
+      { title: "Projetos | Unitos" },
+      { name: "description", content: "Gerencie projetos, pautas e o progresso das publicações." },
+      { property: "og:title", content: "Projetos | Unitos" },
+      { property: "og:description", content: "Gerencie projetos, pautas e o progresso das publicações." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: ProjectsIndexPage,
 });
 
@@ -602,44 +612,44 @@ function ProjectsIndexPage() {
   return (
     <DashboardPageShell>
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
-          tone="neutral"
+      <PageKpiGrid columns={4}>
+        <PageKpi
+          status="info"
           icon={<Layers className="h-4 w-4" />}
           label="Projetos"
           value={kpiValue(kpis.count)}
-          sub={hasProjectData ? `${kpis.active} em andamento` : "Carregando..."}
+          description={hasProjectData ? `${kpis.active} em andamento` : "Carregando..."}
         />
-        <KpiCard
-          tone="sky"
+        <PageKpi
+          status="info"
           icon={<TrendingUp className="h-4 w-4" />}
           label="Publicações"
           value={kpiValue(kpis.total)}
-          sub="Total no escopo"
+          description="Total no escopo"
         />
-        <KpiCard
-          tone="emerald"
+        <PageKpi
+          status="warning"
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Aprovadas"
           value={kpiValue(kpis.approved)}
-          sub={
+          description={
             hasProjectData
               ? `${kpis.total > 0 ? Math.round((kpis.approved / kpis.total) * 100) : 0}% do total`
               : "—"
           }
         />
-        <KpiCard
-          tone="pink"
+        <PageKpi
+          status="success"
           icon={<Send className="h-4 w-4" />}
           label="Publicadas"
           value={kpiValue(kpis.published)}
-          sub={
+          description={
             hasProjectData
               ? `${kpis.total > 0 ? Math.round((kpis.published / kpis.total) * 100) : 0}% do total`
               : "—"
           }
         />
-      </div>
+      </PageKpiGrid>
 
       {/* Filtros */}
       <DashboardPanelSurface className="space-y-3 px-4 py-3">
@@ -900,7 +910,7 @@ function ProjectsIndexPage() {
             </div>
           ) : null}
           {view === "cards" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div
                   key={i}
@@ -930,7 +940,7 @@ function ProjectsIndexPage() {
           />
         </DashboardPanelSurface>
       ) : view === "cards" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {rows.map((p) => {
             const stats: ProjectStats = projectsQ.data?.stats?.[p.id] ?? {
               total: 0,
@@ -966,7 +976,10 @@ function ProjectsIndexPage() {
                 }
                 periodLabel={period}
                 published={stats.published}
+                approved={stats.approved}
+                pending={stats.pending}
                 total={stats.total || 0}
+                ownerName={team.find((m) => m.user_id === p.owner_id)?.full_name ?? null}
                 onOpen={() => navigate({ to: "/projects/$projectId", params: { projectId: p.id } })}
               />
             );
@@ -1033,7 +1046,8 @@ function ProjectsIndexPage() {
                 const client = clients.find((c) => c.id === p.client_id);
                 const meta = STATUS_META[p.status] ?? STATUS_META.active;
                 const total = stats.total || 0;
-                const pct = total > 0 ? Math.round((stats.published / total) * 100) : 0;
+                const completed = Math.min(total, stats.approved + stats.published);
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
                 return (
                   <TableRow
                     key={p.id}
@@ -1096,7 +1110,7 @@ function ProjectsIndexPage() {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                           <span>
-                            {stats.published}/{total} publicadas
+                            {completed}/{total} peças concluídas
                           </span>
                           <span className="font-medium text-foreground">{pct}%</span>
                         </div>

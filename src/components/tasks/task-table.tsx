@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatDateBr } from "@/lib/timezone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -535,7 +536,7 @@ function DueCell({ task }: { task: TaskRow }) {
   const d = new Date(task.due_at);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
-  const short = format(d, "d MMM", { locale: ptBR });
+  const short = formatDateBr(d);
   return (
     <div className="leading-tight">
       <div
@@ -876,7 +877,7 @@ function TaskTableRow({
 
         {columns.created && (
           <td className="hidden px-3 py-2 align-top text-xs text-muted-foreground xl:table-cell">
-            {format(new Date(task.created_at), "d/MM/yyyy", { locale: ptBR })}
+            {formatDateBr(task.created_at)}
           </td>
         )}
 

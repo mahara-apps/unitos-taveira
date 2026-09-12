@@ -35,6 +35,7 @@ import {
 } from "@/lib/schedule-approval.functions";
 import { useAccessRole } from "@/hooks/use-access-role";
 import { PUBLICATION_STATUS, formatLabel } from "@/lib/publication-status-tokens";
+import { fromLocalInputValue, toLocalInputValue } from "@/lib/post-schedule-display";
 
 const SCHEDULE_LABEL: Record<string, string> = {
   proposed: "Sugerida pela IA",
@@ -46,9 +47,7 @@ const SCHEDULE_LABEL: Record<string, string> = {
 
 /** "2026-09-03T19:00" para o input datetime-local, em hora local do usuário. */
 function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return toLocalInputValue(iso);
 }
 
 export function ScheduleApprovalPanel({
@@ -179,15 +178,15 @@ export function ScheduleApprovalPanel({
 
   const saveSlot = async () => {
     if (!editing) return;
-    const at = new Date(editing.value);
-    if (Number.isNaN(at.getTime())) {
+    const proposedAt = fromLocalInputValue(editing.value);
+    if (!proposedAt) {
       toast.error("Data inválida");
       return;
     }
     setBusy(true);
     try {
       await updateSlot({
-        data: { brandId, clientId, postId: editing.postId, proposedAt: at.toISOString() },
+        data: { brandId, clientId, postId: editing.postId, proposedAt },
       });
       toast.success("Nova data proposta salva.");
       setEditing(null);

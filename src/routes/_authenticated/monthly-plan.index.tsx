@@ -8,6 +8,22 @@ import { MonthlyPlanView } from "@/components/monthly-plan/monthly-plan-view";
 const SearchSchema = z.object({ planId: z.string().uuid().optional() });
 
 export const Route = createFileRoute("/_authenticated/monthly-plan/")({
+  head: () => ({
+    meta: [
+      { title: "Pautas mensais | Unitos" },
+      {
+        name: "description",
+        content: "Planeje, gere e acompanhe as pautas mensais dos clientes no Unitos.",
+      },
+      { property: "og:title", content: "Pautas mensais | Unitos" },
+      {
+        property: "og:description",
+        content: "Planeje, gere e acompanhe as pautas mensais dos clientes no Unitos.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   validateSearch: (s: Record<string, unknown>) => SearchSchema.parse(s),
   component: MonthlyPlanIndexPage,
 });

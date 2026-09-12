@@ -51,9 +51,10 @@ import {
   type DocumentBriefingSummary,
 } from "@/lib/documents-ai.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short" });
+  return formatDateTimeBr(iso);
 }
 
 function fmtSize(n: number | null): string {

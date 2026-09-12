@@ -7,25 +7,26 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
 import type { AgentJobRow } from "@/lib/agents.functions";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 function statusBadge(status: string) {
   if (status === "succeeded")
     return (
       <Badge tone="emerald" className="gap-1">
-        <CheckCircle2 className="h-3 w-3" /> Succeeded
+        <CheckCircle2 className="h-3 w-3" /> Concluído
       </Badge>
     );
   if (status === "failed")
     return (
       <Badge tone="red" className="gap-1">
-        <XCircle className="h-3 w-3" /> Failed
+        <XCircle className="h-3 w-3" /> Falhou
       </Badge>
     );
   if (status === "running")
     return (
       <Badge tone="amber" className="gap-1">
         <Loader2 className="h-3 w-3 animate-spin" />
-        <span className="animate-pulse">Running</span>
+        <span className="animate-pulse">Em execução</span>
       </Badge>
     );
   return (
@@ -52,7 +53,7 @@ export function JobsTable({ jobs }: { jobs: AgentJobRow[] }) {
     <div className="overflow-hidden rounded-lg border">
       <div className="grid grid-cols-[minmax(0,1fr)_120px_100px_130px_28px] items-center gap-3 border-b bg-muted/40 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         <span>Pipeline / Agente</span>
-        <span>Trigger</span>
+        <span>Gatilho</span>
         <span>Duração</span>
         <span>Status</span>
         <span />
@@ -76,8 +77,8 @@ export function JobsTable({ jobs }: { jobs: AgentJobRow[] }) {
             <AccordionContent className="px-4 pb-4">
               <div className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
                 <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                  <span>console</span>
-                  <span>{new Date(j.created_at).toLocaleString("pt-BR")}</span>
+                   <span>registro</span>
+                   <span>{formatDateTimeBr(j.created_at)}</span>
                 </div>
                 <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs leading-relaxed text-emerald-400">
                   {JSON.stringify(

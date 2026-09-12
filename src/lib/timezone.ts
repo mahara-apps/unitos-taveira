@@ -154,7 +154,27 @@ const dateTimeBrFormatter = new Intl.DateTimeFormat("pt-BR", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  second: "2-digit",
   hour12: false,
+});
+
+const timeBrFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: APP_TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+const weekdayBrFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: APP_TIMEZONE,
+  weekday: "long",
+});
+
+const monthYearBrFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: APP_TIMEZONE,
+  month: "long",
+  year: "numeric",
 });
 
 const dateBrFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -164,12 +184,20 @@ const dateBrFormatter = new Intl.DateTimeFormat("pt-BR", {
   year: "numeric",
 });
 
-/** `03/09/2026 16:42` no fuso de Brasília. Nunca usa o fuso do host. */
+/** `03/09/2026 16:42:18` no fuso de Brasília. Nunca usa o fuso do host. */
 export function formatDateTimeBr(value: string | number | Date | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return dateTimeBrFormatter.format(d).replace(",", "");
+}
+
+/** `16:42:18` no fuso de Brasília. */
+export function formatTimeBr(value: string | number | Date | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return timeBrFormatter.format(d);
 }
 
 /** `03/09/2026` no fuso de Brasília. */
@@ -178,4 +206,25 @@ export function formatDateBr(value: string | number | Date | null | undefined): 
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return dateBrFormatter.format(d);
+}
+
+
+/** Formata uma data civil `AAAA-MM-DD` sem convertê-la de fuso. */
+export function formatDateOnlyBr(value: string | null | undefined): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return formatDateBr(value);
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+/** Nome completo do dia da semana no fuso oficial. */
+export function formatWeekdayBr(value: string | number | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? "—" : weekdayBrFormatter.format(d);
+}
+
+/** Nome do mês e ano em PT-BR, no fuso oficial. */
+export function formatMonthYearBr(value: string | number | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? "—" : monthYearBrFormatter.format(d);
 }

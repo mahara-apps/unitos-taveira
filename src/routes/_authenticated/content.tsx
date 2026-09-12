@@ -75,6 +75,22 @@ import type { StageSort, SortBy } from "@/components/content/content-board";
 
 export const Route = createFileRoute("/_authenticated/content")({
   beforeLoad: () => ensureFeatureEnabled("blog_post"),
+  head: () => ({
+    meta: [
+      { title: "Conteúdo — Unitos" },
+      {
+        name: "description",
+        content: "Organize, revise e agende a produção de conteúdo do workspace.",
+      },
+      { property: "og:title", content: "Conteúdo — Unitos" },
+      {
+        property: "og:description",
+        content: "Organize, revise e agende a produção de conteúdo do workspace.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   validateSearch: (s: Record<string, unknown>) =>
     z
       .object({
@@ -364,7 +380,7 @@ function ContentReady({
   });
 
   return (
-    <DashboardPageShell className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col space-y-0">
+    <DashboardPageShell className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col space-y-0 bg-muted/20">
       {effectivePipelineId ? (
         <Suspense fallback={<BoardSkeleton />}>
           <BoardView
@@ -521,7 +537,7 @@ function BoardView({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
       <ContentToolbar
         filters={filters}
         onFiltersChange={setFilters}

@@ -1,4 +1,4 @@
-import { APP_TIMEZONE, zonedTimeToUtc } from "@/lib/timezone";
+import { formatDateTimeBr, zonedParts, zonedTimeToUtc } from "@/lib/timezone";
 
 /**
  * Fonte ÚNICA de exibição de agenda de uma peça.
@@ -96,56 +96,26 @@ function normalizeStatus(raw: string | null | undefined): ScheduleState {
   return SCHEDULE_STATES.has(k as ScheduleState) ? (k as ScheduleState) : "none";
 }
 
-/** dd/MM · HH:mm no fuso oficial. */
+/** DD/MM/AAAA · HH:MM:SS no fuso oficial. */
 export function scheduleDateTimeLabel(iso: string | null | undefined): string {
-  if (!iso) return "Sem data";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Sem data";
-  const day = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: APP_TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-  }).format(d);
-  const time = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: APP_TIMEZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-  return `${day} · ${time}`;
+  const label = formatDateTimeBr(iso);
+  return label === "—" ? "Sem data" : label.replace(" ", " · ");
 }
 
-/** dd/MM/yyyy HH:mm no fuso oficial (tooltips e detalhe). */
+/** DD/MM/AAAA HH:MM:SS no fuso oficial (tooltips e detalhe). */
 export function scheduleFullLabel(iso: string | null | undefined): string {
-  if (!iso) return "Sem data";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Sem data";
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: APP_TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
+  const label = formatDateTimeBr(iso);
+  return label === "—" ? "Sem data" : label;
 }
 
-/** `yyyy-MM-ddTHH:mm` no fuso oficial — valor de `<input type=datetime-local>`. */
+/** `yyyy-MM-ddTHH:mm:ss` no fuso oficial — valor de `<input type=datetime-local>`. */
 export function toLocalInputValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: APP_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const hour = get("hour") === "24" ? "00" : get("hour");
-  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+  const parts = zonedParts(d);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}`;
 }
 
 export function scheduleDisplay(post: ScheduleDisplayInput): ScheduleDisplay {
@@ -193,7 +163,7 @@ export function hasProposalTrack(post: ScheduleDisplayInput): boolean {
  */
 export function fromLocalInputValue(value: string | null | undefined): string | null {
   if (!value) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value.trim());
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(value.trim());
   if (!m) return null;
   const d = zonedTimeToUtc(
     Number(m[1]),
@@ -201,7 +171,7 @@ export function fromLocalInputValue(value: string | null | undefined): string | 
     Number(m[3]),
     Number(m[4]),
     Number(m[5]),
-    0,
+    Number(m[6] ?? 0),
     0,
   );
   return Number.isNaN(d.getTime()) ? null : d.toISOString();

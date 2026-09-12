@@ -67,7 +67,7 @@ export function CopyQueueBar({
   if (failed > 0) parts.push(`${failed} com falha`);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
       {failed > 0 ? (
         <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       ) : running > 0 ? (
@@ -75,11 +75,11 @@ export function CopyQueueBar({
       ) : (
         <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       )}
-      <span className="text-xs font-medium">
+      <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
         {total} peça{total > 1 ? "s" : ""} sem legenda
-        <span className="ml-1 font-normal text-muted-foreground">({parts.join(" · ")})</span>
+        <span className="ml-1 font-normal text-amber-700/80 dark:text-amber-300/80">({parts.join(" · ")})</span>
       </span>
-      <span className="hidden text-[11px] text-muted-foreground sm:inline">
+      <span className="hidden text-[11px] text-amber-700/70 dark:text-amber-300/70 sm:inline">
         A escrita continua sozinha em segundo plano.
       </span>
       <Button

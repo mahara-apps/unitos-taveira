@@ -109,7 +109,7 @@ export function ContentToolbar({
     onFiltersChange({ ...filters, [k]: v });
 
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-background px-1 pb-3">
       <Popover>
         <PopoverTrigger asChild>
           <Button size="sm" variant="outline" className="h-8 gap-1.5 px-2.5 text-xs">
@@ -253,7 +253,7 @@ export function ContentToolbar({
       ) : null}
 
       <div className="ml-auto flex items-center gap-3">
-        <span className="text-[11px] tabular-nums text-muted-foreground">
+        <span className="text-xs font-medium tabular-nums text-muted-foreground">
           {filtered}
           <span className="text-muted-foreground/60"> / {total}</span>
         </span>
@@ -262,7 +262,7 @@ export function ContentToolbar({
           size="sm"
           value={view}
           onValueChange={(v) => v && onViewChange(v as ViewMode)}
-          className="rounded-md border border-border/60 bg-background/60"
+          className="rounded-lg bg-muted p-0.5"
         >
           <ToggleGroupItem value="kanban" aria-label="Visão Kanban" className="h-8 px-2">
             <LayoutGrid className="h-4 w-4" />

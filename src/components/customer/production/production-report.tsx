@@ -15,6 +15,7 @@ import {
 import { DashboardPanelSurface } from "@/components/ui/dashboard-primitives";
 import { PLAN_CHANNEL_LABEL, PLAN_CHANNELS, type PlanChannel } from "@/lib/monthly-plan-fields";
 import { listProductionReportFn, type ProductionRow } from "@/lib/production-report.functions";
+import { formatDateBr } from "@/lib/timezone";
 
 type PeriodKey = "current" | "previous" | "last3" | "year";
 
@@ -70,7 +71,7 @@ export function periodRange(period: PeriodKey, now = new Date()) {
 
 function formatDate(v: string | null) {
   if (!v) return "—";
-  return new Date(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return formatDateBr(v);
 }
 
 type Props = {

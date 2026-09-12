@@ -169,9 +169,11 @@ WITH checks AS (
          (SELECT count(*)::text FROM public.agent_prompts),
          CASE WHEN (SELECT count(*) FROM public.agent_prompts) >= 9 THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
-  SELECT 41, 'seeds: feature_catalog (esperado >= 14)',
+  SELECT 41, 'seeds: feature_catalog (esperado >= 15 e automations desligado)',
          (SELECT count(*)::text FROM public.feature_catalog),
-         CASE WHEN (SELECT count(*) FROM public.feature_catalog) >= 14 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN (SELECT count(*) FROM public.feature_catalog) >= 15
+                    AND EXISTS (SELECT 1 FROM public.feature_catalog WHERE key = 'automations' AND default_enabled = false)
+              THEN 'PASS' ELSE 'FAIL' END
   UNION ALL
   SELECT 42, 'seeds: brain_retention_config (esperado >= 7)',
          (SELECT count(*)::text FROM public.brain_retention_config),
@@ -412,7 +414,8 @@ WITH checks AS (
                'installation_meta_app','message_thread_participants','message_threads',
                'messages','portal_notification_prefs','post_client_comments','post_copy_queue_state',
                'client_ad_accounts','project_participants','user_login_events','work_comments',
-               'work_links','work_statuses'
+                'work_links','work_statuses','client_automation_attempts',
+                'client_automation_dates','client_automation_dispatches','client_automation_rules'
              ]) AS t
              WHERE to_regclass('public.' || t) IS NULL
            ) faltando
@@ -426,7 +429,8 @@ WITH checks AS (
              'installation_meta_app','message_thread_participants','message_threads',
              'messages','portal_notification_prefs','post_client_comments','post_copy_queue_state',
              'client_ad_accounts','project_participants','user_login_events','work_comments',
-             'work_links','work_statuses'
+              'work_links','work_statuses','client_automation_attempts',
+              'client_automation_dates','client_automation_dispatches','client_automation_rules'
            ]) AS t
            WHERE to_regclass('public.' || t) IS NULL
          ) THEN 'PASS' ELSE 'FAIL' END

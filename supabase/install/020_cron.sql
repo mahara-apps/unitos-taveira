@@ -27,7 +27,8 @@ DECLARE
     jsonb_build_array('brain-social-metrics-sync', '23 4 * * *',   '/api/public/hooks/social-metrics-sync'),
     jsonb_build_array('ai-models-health-daily',    '20 3 * * *',   '/api/public/hooks/ai-models-health'),
     jsonb_build_array('briefing-import-worker',    '* * * * *',    '/api/public/cron/import-worker'),
-    jsonb_build_array('briefing-import-reaper',    '*/2 * * * *',  '/api/public/cron/import-reaper')
+    jsonb_build_array('briefing-import-reaper',    '*/2 * * * *',  '/api/public/cron/import-reaper'),
+    jsonb_build_array('whatsapp-automations',      '* * * * *',    '/api/public/cron/whatsapp-automations')
     -- Legendas: sem job fixo. O trigger post_copy_queue_notify avisa na hora e,
     -- se preciso, agenda 'post-content-drain' (*/5) só enquanto houver fila.
   );

@@ -5,6 +5,7 @@
  * do índice único parcial de `notifications` via `insertNotificationsDeduped`.
  */
 import { insertNotificationsDeduped, notificationDedupeKey } from "@/lib/notifications-dedupe";
+import { cleanMentionText } from "@/lib/mentions";
 
 type AnyClient = { from: (table: string) => unknown };
 
@@ -84,8 +85,9 @@ export async function notifyMentions(
   const mentionable = await filterMentionableUserIds(supabase, input);
   if (mentionable.length === 0) return 0;
 
+  const cleanBody = cleanMentionText(input.body);
   const snippet =
-    input.body.length > MAX_BODY ? `${input.body.slice(0, MAX_BODY - 1)}…` : input.body;
+    cleanBody.length > MAX_BODY ? `${cleanBody.slice(0, MAX_BODY - 1)}…` : cleanBody;
 
   return insertNotificationsDeduped(
     supabase as never,

@@ -73,6 +73,17 @@
   --color-stage-published: var(--stage-published);
   --color-brand-lime: var(--brand-lime);
   --color-brand-lime-foreground: var(--brand-lime-foreground);
+  --color-funnel-top: var(--funnel-top);
+  --color-funnel-middle: var(--funnel-middle);
+  --color-funnel-bottom: var(--funnel-bottom);
+  --color-content-briefing: var(--content-briefing);
+  --color-content-idea: var(--content-idea);
+  --color-content-production: var(--content-production);
+  --color-content-design: var(--content-design);
+  --color-content-review: var(--content-review);
+  --color-content-approved: var(--content-approved);
+  --color-content-scheduled: var(--content-scheduled);
+  --color-content-published: var(--content-published);
   /* Status de publicação (calendário) — COR = STATUS */
   --color-pub-draft: var(--pub-draft);
   --color-pub-reserved: var(--pub-reserved);
@@ -132,6 +143,17 @@
   --stage-published: oklch(0.65 0.22 340);
   --brand-lime: oklch(0.92 0.24 125);
   --brand-lime-foreground: oklch(0.35 0.12 130);
+  --funnel-top: oklch(0.685 0.169 237.323); /* #0ea5e9 */
+  --funnel-middle: oklch(0.606 0.25 292.717); /* #8b5cf6 */
+  --funnel-bottom: oklch(0.596 0.145 163.225); /* #16a34a */
+  --content-briefing: #64748b;
+  --content-idea: #64748b;
+  --content-production: #0ea5e9;
+  --content-design: #8b5cf6;
+  --content-review: #e0a011;
+  --content-approved: #16a34a;
+  --content-scheduled: #6366f1;
+  --content-published: #16a34a;
   /* Status de publicação — referência #64748B #E0A011 #EC4899 #0EA5E9 #16A34A #8B5CF6 #DC2626 */
   --pub-draft: oklch(0.554 0.041 257.417);
   --pub-reserved: oklch(0.72 0.144 78.5);
@@ -190,6 +212,17 @@
   --stage-published: oklch(0.72 0.22 340);
   --brand-lime: oklch(0.92 0.24 125);
   --brand-lime-foreground: oklch(0.28 0.1 130);
+  --funnel-top: oklch(0.75 0.15 237.323);
+  --funnel-middle: oklch(0.72 0.2 292.717);
+  --funnel-bottom: oklch(0.72 0.15 163.225);
+  --content-briefing: #94a3b8;
+  --content-idea: #94a3b8;
+  --content-production: #38bdf8;
+  --content-design: #a78bfa;
+  --content-review: #facc15;
+  --content-approved: #4ade80;
+  --content-scheduled: #818cf8;
+  --content-published: #4ade80;
   /* Status de publicação — mesmas matizes, luminosidade ajustada ao escuro */
   --pub-draft: oklch(0.72 0.035 257.417);
   --pub-reserved: oklch(0.82 0.15 82);

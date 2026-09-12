@@ -3,6 +3,10 @@ import {
   APP_TIMEZONE,
   currentMonthStartISO,
   endOfDayInTz,
+  formatDateBr,
+  formatDateOnlyBr,
+  formatDateTimeBr,
+  formatTimeBr,
   isoDateInTz,
   startOfDayInTz,
   zonedParts,
@@ -36,5 +40,19 @@ describe("fuso oficial do sistema — Brasília (GMT-3)", () => {
     expect(to.toISOString()).toBe("2026-08-29T02:59:59.999Z");
     expect(zonedParts(from).day).toBe(28);
     expect(zonedParts(to).day).toBe(28);
+  });
+
+  it("formata datas e horários humanos no padrão completo PT-BR", () => {
+    const utc = new Date("2026-09-01T00:30:45.000Z");
+    expect(formatDateBr(utc)).toBe("31/08/2026");
+    expect(formatTimeBr(utc)).toBe("21:30:45");
+    expect(formatDateTimeBr(utc)).toBe("31/08/2026 21:30:45");
+    expect(formatDateOnlyBr("2026-09-01")).toBe("01/09/2026");
+  });
+
+  it("trata valores ausentes ou inválidos sem quebrar a tela", () => {
+    expect(formatDateBr(null)).toBe("—");
+    expect(formatTimeBr("inválido")).toBe("—");
+    expect(formatDateTimeBr(undefined)).toBe("—");
   });
 });

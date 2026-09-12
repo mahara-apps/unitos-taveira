@@ -18,6 +18,7 @@ export function ProjectHeader({
   periodLabel,
   done,
   total,
+  stages,
 }: {
   name: string;
   color: string;
@@ -30,12 +31,13 @@ export function ProjectHeader({
   periodLabel: string;
   done: number;
   total: number;
+  stages?: ReactNode;
 }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   return (
     <DashboardPanelSurface className="overflow-hidden">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 sm:flex sm:flex-wrap sm:justify-between sm:gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-5 py-5 xl:flex xl:flex-wrap xl:items-center xl:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
@@ -59,7 +61,7 @@ export function ProjectHeader({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 bg-background/40 px-5 py-3 text-[11px] text-muted-foreground">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-border/60 bg-background/40 px-5 py-3 text-[11px] text-muted-foreground sm:flex">
         <span className="tabular-nums">{periodLabel}</span>
         <span className="tabular-nums">
           {done}/{total} peças concluídas
@@ -69,6 +71,7 @@ export function ProjectHeader({
           <span className="font-medium tabular-nums text-foreground">{pct}%</span>
         </span>
       </div>
+      {stages ? <div className="border-t border-border/60 p-3 sm:p-4">{stages}</div> : null}
     </DashboardPanelSurface>
   );
 }

@@ -60,6 +60,7 @@ import {
   FORMAT_STYLES,
   CHANNELS,
   CHANNEL_STYLES,
+  contentStageBand,
 } from "./stage-colors";
 import {
   CONTENT_FORMAT_LABEL,
@@ -292,8 +293,8 @@ export function ContentBoard({
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <DashboardPanelSurface className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden p-4">
+      <DashboardPanelSurface className="flex min-h-0 flex-1 border-0 bg-transparent shadow-none">
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto overflow-y-hidden pb-4">
           {board.stages.map((stage) => (
             <Column
               key={stage.id}
@@ -328,7 +329,7 @@ export function ContentBoard({
           ))}
           <button
             type="button"
-            className="flex h-full min-w-[304px] shrink-0 items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-background/40 px-3 py-3 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-background/60 hover:text-foreground"
+            className="flex h-fit min-h-14 min-w-[180px] shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-background/60 px-4 py-4 text-xs font-semibold text-muted-foreground transition hover:border-primary/40 hover:bg-background hover:text-foreground"
             onClick={() => addStage.mutate()}
             disabled={addStage.isPending}
           >
@@ -388,20 +389,20 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`relative flex h-full w-[304px] shrink-0 flex-col overflow-hidden rounded-xl border px-4 pb-4 pt-4 transition ${
-        isOver ? "border-primary/60 bg-primary/5" : "border-border/60 bg-background/60"
+      className={`relative flex h-full w-[260px] shrink-0 flex-col overflow-hidden rounded-lg border px-3 pb-3 pt-3 transition ${
+        isOver ? "border-primary/60 bg-primary/5" : "border-border/60 bg-muted/50"
       }`}
     >
       <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-linear-to-r ${STAGE_GRADIENT[stage.color] ?? STAGE_GRADIENT.muted}`}
+        className={`pointer-events-none absolute inset-x-0 top-0 h-1 ${contentStageBand(stage.key, stage.label, stage.color)}`}
       />
-      <div className="mb-3 flex items-center justify-between gap-2 border-b border-border/40 pb-3">
+      <div className="mb-2 flex items-center justify-between gap-2 pb-2 pt-1">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${COLOR_MAP[stage.color] ?? COLOR_MAP.muted}`}
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${contentStageBand(stage.key, stage.label, stage.color)}`}
                 aria-label="Alterar cor"
               />
             </PopoverTrigger>
@@ -451,7 +452,7 @@ function Column({
           ) : (
             <button
               type="button"
-              className="truncate text-sm font-medium tracking-tight hover:underline"
+              className="truncate text-sm font-semibold hover:underline"
               onClick={() => setEditing(true)}
             >
               {stage.label}
@@ -615,7 +616,7 @@ function Column({
           onClick={onOpenRichCreate ?? onStartCreate}
           className="mt-3 flex h-9 items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
         >
-          <Plus className="h-3.5 w-3.5" /> Nova tarefa
+            <Plus className="h-3.5 w-3.5" /> Nova peça
         </button>
       ) : null}
     </div>
@@ -738,17 +739,17 @@ function PostCard({
     <button
       type="button"
       onClick={() => onOpen(post.id)}
-      className={`group w-full overflow-hidden rounded-lg border border-border/60 bg-card text-left transition hover:border-primary/50 hover:shadow-sm ${
+      className={`group w-full overflow-hidden rounded-lg border border-border/60 bg-background text-left shadow-sm transition hover:border-primary/50 hover:shadow-md ${
         isOverlay ? "cursor-grabbing shadow-lg" : ""
       }`}
     >
       {/* Visual placeholder / cover */}
-      <div className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden border-b border-dashed border-border/60 bg-linear-to-br from-muted/60 to-muted/20">
+      <div className={`relative flex w-full items-center justify-center overflow-hidden border-b border-dashed border-border/60 bg-muted/30 ${hasCover ? "aspect-[4/3]" : "h-14"}`}>
         {hasCover ? (
           <img src={post.cover_url!} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-muted-foreground/70 transition group-hover:text-muted-foreground">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-medium shadow-sm">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold">
               <Sparkles className="h-3 w-3" /> Subir arte ou gerar com IA
             </div>
           </div>
@@ -839,7 +840,7 @@ function PostCard({
             ) : null}
           </div>
         ) : null}
-        <p className="text-sm font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
+        <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">
           {post.title}
         </p>
         {snippet ? (

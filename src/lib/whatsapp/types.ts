@@ -37,5 +37,6 @@ export type WhatsappRecipientRow = {
   roleLabel: string | null;
   destination: string | null;
   isActive: boolean;
+  isDefault: boolean;
   createdAt: string;
 };

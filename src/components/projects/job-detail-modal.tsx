@@ -36,11 +36,11 @@ export function JobDetailModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[90vh] max-h-[90vh] w-[min(1320px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+      <DialogContent className="flex h-[92dvh] max-h-[92dvh] w-[min(1180px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
         {/* Barra de ações */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/40 px-5 py-3 pr-14">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border/60 bg-muted/35 px-5 py-3 pr-14 sm:flex sm:flex-wrap">
           {onToggleDone ? (
             <Button
               size="sm"
@@ -59,12 +59,12 @@ export function JobDetailModal({
               )}
             </Button>
           ) : null}
-          {controls}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">{controls}</div>
           <div className="ml-auto flex items-center gap-1">{menu}</div>
         </div>
 
         {/* Título + trilha */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-4 sm:flex sm:justify-between">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-5 sm:flex sm:justify-between">
           <h2 className="truncate text-xl font-semibold leading-tight sm:text-2xl">{title}</h2>
           {breadcrumb ? (
             <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -74,11 +74,11 @@ export function JobDetailModal({
         </div>
 
         {/* Corpo em duas colunas */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 border-t border-border/60 lg:grid-cols-[minmax(0,1fr)_min(480px,36vw)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 border-t border-border/60 lg:grid-cols-[minmax(0,1fr)_min(390px,34vw)]">
           <div className="min-h-0 min-w-0 overflow-y-auto lg:border-r lg:border-border/60">
             {main}
           </div>
-          {aside ? <div className="flex min-h-0 min-w-0 flex-col lg:pl-8">{aside}</div> : null}
+          {aside ? <div className="flex min-h-0 min-w-0 flex-col bg-muted/15">{aside}</div> : null}
         </div>
       </DialogContent>
     </Dialog>

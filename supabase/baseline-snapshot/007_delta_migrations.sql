@@ -4656,3 +4656,625 @@ $$;
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.protect_pipeline_delete() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.protect_pipeline_delete() TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260912153717_9f08f144-5f0f-45bf-9a6c-61751f2eab90.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.effective_module_permissions(_user_id uuid, _brand_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_role text;
+  v_profile jsonb := '{}'::jsonb;
+  v_override jsonb := '{}'::jsonb;
+  v_total jsonb;
+BEGIN
+  IF _user_id IS NULL OR _brand_id IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  IF auth.role() <> 'service_role' AND auth.uid() IS DISTINCT FROM _user_id THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  SELECT (public.access_profiles_system_defaults() -> 6) -> 'permissions' INTO v_total;
+
+  IF public.is_super_admin(_user_id) THEN
+    RETURN v_total;
+  END IF;
+
+  SELECT lower(bm.role::text),
+         COALESCE(ap.permissions, '{}'::jsonb),
+         COALESCE(bm.module_permissions, '{}'::jsonb)
+    INTO v_role, v_profile, v_override
+    FROM public.brand_members bm
+    LEFT JOIN public.access_profiles ap ON ap.id = bm.access_profile_id
+   WHERE bm.brand_id = _brand_id AND bm.user_id = _user_id;
+
+  IF v_role IS NULL THEN
+    RETURN '{}'::jsonb;
+  END IF;
+
+  IF v_role IN ('owner','admin','manager') THEN
+    RETURN v_total;
+  END IF;
+
+  RETURN v_profile || v_override;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.effective_module_permissions(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.effective_module_permissions(uuid, uuid) TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260912164848_cc1085af-c3c4-4698-9120-900c1fb66f95.sql
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.whatsapp_recipients
+  ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_recipients_one_default_per_client
+  ON public.whatsapp_recipients (brand_id, client_id)
+  WHERE client_id IS NOT NULL AND is_default = true AND is_active = true;
+
+CREATE TABLE public.client_automation_dates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  date_value date NOT NULL,
+  send_time time NOT NULL DEFAULT '09:00',
+  repeats_annually boolean NOT NULL DEFAULT true,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.client_automation_dates TO authenticated;
+GRANT ALL ON public.client_automation_dates TO service_role;
+ALTER TABLE public.client_automation_dates ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE public.client_automation_rules (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  recipient_id uuid NOT NULL REFERENCES public.whatsapp_recipients(id) ON DELETE RESTRICT,
+  instance_id uuid NOT NULL REFERENCES public.evolution_instances(id) ON DELETE RESTRICT,
+  custom_date_id uuid REFERENCES public.client_automation_dates(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  trigger_type text NOT NULL,
+  event_key text,
+  schedule_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  message_template text NOT NULL,
+  timezone text NOT NULL DEFAULT 'America/Sao_Paulo',
+  is_active boolean NOT NULL DEFAULT false,
+  next_run_at timestamptz,
+  last_run_at timestamptz,
+  created_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT client_automation_rules_trigger_type CHECK (trigger_type IN ('fixed','recurring','system_event','client_date')),
+  CONSTRAINT client_automation_rules_event_shape CHECK (
+    (trigger_type = 'system_event' AND event_key IS NOT NULL)
+    OR (trigger_type = 'client_date' AND custom_date_id IS NOT NULL)
+    OR (trigger_type IN ('fixed','recurring') AND event_key IS NULL AND custom_date_id IS NULL)
+  )
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.client_automation_rules TO authenticated;
+GRANT ALL ON public.client_automation_rules TO service_role;
+ALTER TABLE public.client_automation_rules ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX client_automation_rules_due_idx
+  ON public.client_automation_rules (next_run_at)
+  WHERE is_active = true AND next_run_at IS NOT NULL;
+CREATE INDEX client_automation_rules_event_idx
+  ON public.client_automation_rules (brand_id, client_id, event_key)
+  WHERE is_active = true AND trigger_type = 'system_event';
+
+CREATE TABLE public.client_automation_dispatches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  rule_id uuid NOT NULL REFERENCES public.client_automation_rules(id) ON DELETE CASCADE,
+  recipient_id uuid NOT NULL REFERENCES public.whatsapp_recipients(id) ON DELETE RESTRICT,
+  instance_id uuid NOT NULL REFERENCES public.evolution_instances(id) ON DELETE RESTRICT,
+  occurrence_key text NOT NULL,
+  scheduled_at timestamptz NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 4,
+  retry_at timestamptz,
+  locked_at timestamptz,
+  lock_owner text,
+  event_context jsonb NOT NULL DEFAULT '{}'::jsonb,
+  rendered_message text,
+  last_error text,
+  sent_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT client_automation_dispatches_status CHECK (status IN ('pending','processing','retry','sent','failed','cancelled')),
+  CONSTRAINT client_automation_dispatches_attempts CHECK (attempts >= 0 AND max_attempts BETWEEN 1 AND 10),
+  CONSTRAINT client_automation_dispatches_occurrence_unique UNIQUE (rule_id, occurrence_key)
+);
+GRANT SELECT ON public.client_automation_dispatches TO authenticated;
+GRANT ALL ON public.client_automation_dispatches TO service_role;
+ALTER TABLE public.client_automation_dispatches ENABLE ROW LEVEL SECURITY;
+CREATE INDEX client_automation_dispatches_due_idx
+  ON public.client_automation_dispatches (coalesce(retry_at, scheduled_at), created_at)
+  WHERE status IN ('pending','retry');
+
+CREATE TABLE public.client_automation_attempts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dispatch_id uuid NOT NULL REFERENCES public.client_automation_dispatches(id) ON DELETE CASCADE,
+  brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  attempt_number integer NOT NULL,
+  status text NOT NULL,
+  masked_destination text,
+  provider_message_id text,
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT client_automation_attempts_status CHECK (status IN ('sent','failed','skipped')),
+  CONSTRAINT client_automation_attempts_unique UNIQUE (dispatch_id, attempt_number)
+);
+GRANT SELECT ON public.client_automation_attempts TO authenticated;
+GRANT ALL ON public.client_automation_attempts TO service_role;
+ALTER TABLE public.client_automation_attempts ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.can_manage_client_automations(_brand_id uuid, _client_id uuid, _user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.can_access_client(_client_id, _user_id)
+    AND public.app_access_role(_user_id, _brand_id) = ANY (ARRAY['super_admin','admin']);
+$$;
+REVOKE ALL ON FUNCTION public.can_manage_client_automations(uuid,uuid,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_manage_client_automations(uuid,uuid,uuid) TO authenticated, service_role;
+
+CREATE POLICY client_automation_dates_read ON public.client_automation_dates
+  FOR SELECT TO authenticated USING (public.can_access_client(client_id, auth.uid()));
+CREATE POLICY client_automation_dates_manage ON public.client_automation_dates
+  FOR ALL TO authenticated
+  USING (public.can_manage_client_automations(brand_id, client_id, auth.uid()))
+  WITH CHECK (public.can_manage_client_automations(brand_id, client_id, auth.uid()));
+
+CREATE POLICY client_automation_rules_read ON public.client_automation_rules
+  FOR SELECT TO authenticated USING (public.can_access_client(client_id, auth.uid()));
+CREATE POLICY client_automation_rules_manage ON public.client_automation_rules
+  FOR ALL TO authenticated
+  USING (public.can_manage_client_automations(brand_id, client_id, auth.uid()))
+  WITH CHECK (public.can_manage_client_automations(brand_id, client_id, auth.uid()));
+
+CREATE POLICY client_automation_dispatches_read ON public.client_automation_dispatches
+  FOR SELECT TO authenticated USING (public.can_access_client(client_id, auth.uid()));
+CREATE POLICY client_automation_attempts_read ON public.client_automation_attempts
+  FOR SELECT TO authenticated USING (public.can_access_client(client_id, auth.uid()));
+
+CREATE OR REPLACE FUNCTION public.validate_client_automation_scope()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.clients c WHERE c.id = NEW.client_id AND c.brand_id = NEW.brand_id) THEN
+    RAISE EXCEPTION 'cliente fora do workspace';
+  END IF;
+  IF TG_TABLE_NAME = 'client_automation_rules' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.whatsapp_recipients r
+      WHERE r.id = NEW.recipient_id AND r.brand_id = NEW.brand_id AND r.client_id = NEW.client_id AND r.is_active
+    ) THEN RAISE EXCEPTION 'destino inválido para o cliente'; END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM public.evolution_instances i
+      WHERE i.id = NEW.instance_id AND i.brand_id = NEW.brand_id AND (i.client_id IS NULL OR i.client_id = NEW.client_id)
+    ) THEN RAISE EXCEPTION 'instância inválida para o cliente'; END IF;
+    IF NEW.custom_date_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM public.client_automation_dates d
+      WHERE d.id = NEW.custom_date_id AND d.brand_id = NEW.brand_id AND d.client_id = NEW.client_id
+    ) THEN RAISE EXCEPTION 'data personalizada inválida para o cliente'; END IF;
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.validate_client_automation_scope() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.validate_client_automation_scope() TO service_role;
+
+CREATE TRIGGER client_automation_dates_validate
+BEFORE INSERT OR UPDATE ON public.client_automation_dates
+FOR EACH ROW EXECUTE FUNCTION public.validate_client_automation_scope();
+CREATE TRIGGER client_automation_rules_validate
+BEFORE INSERT OR UPDATE ON public.client_automation_rules
+FOR EACH ROW EXECUTE FUNCTION public.validate_client_automation_scope();
+
+CREATE OR REPLACE FUNCTION public.claim_client_automation_dispatches(_owner text, _limit integer DEFAULT 25, _lease_seconds integer DEFAULT 300)
+RETURNS SETOF public.client_automation_dispatches
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+  RETURN QUERY
+  WITH due AS (
+    SELECT d.id
+    FROM public.client_automation_dispatches d
+    WHERE (
+      d.status IN ('pending','retry')
+      AND coalesce(d.retry_at, d.scheduled_at) <= now()
+    ) OR (
+      d.status = 'processing'
+      AND d.locked_at < now() - make_interval(secs => _lease_seconds)
+    )
+    ORDER BY coalesce(d.retry_at, d.scheduled_at), d.created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT least(greatest(_limit, 1), 100)
+  )
+  UPDATE public.client_automation_dispatches d
+  SET status = 'processing', locked_at = now(), lock_owner = _owner,
+      attempts = d.attempts + 1, updated_at = now()
+  FROM due
+  WHERE d.id = due.id
+  RETURNING d.*;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.claim_client_automation_dispatches(text,integer,integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_client_automation_dispatches(text,integer,integer) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.enqueue_client_automation_event(
+  _brand_id uuid, _client_id uuid, _event_key text, _entity_key text, _context jsonb DEFAULT '{}'::jsonb
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE v_count integer;
+BEGIN
+  INSERT INTO public.client_automation_dispatches (
+    brand_id, client_id, rule_id, recipient_id, instance_id, occurrence_key,
+    scheduled_at, event_context
+  )
+  SELECT r.brand_id, r.client_id, r.id, r.recipient_id, r.instance_id,
+         _event_key || ':' || _entity_key, now(), coalesce(_context, '{}'::jsonb)
+  FROM public.client_automation_rules r
+  JOIN public.brand_features bf ON bf.brand_id = r.brand_id AND bf.feature_key = 'automations' AND bf.enabled
+  WHERE r.brand_id = _brand_id AND r.client_id = _client_id
+    AND r.trigger_type = 'system_event' AND r.event_key = _event_key AND r.is_active
+  ON CONFLICT (rule_id, occurrence_key) DO NOTHING;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.enqueue_client_automation_event(uuid,uuid,text,text,jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enqueue_client_automation_event(uuid,uuid,text,text,jsonb) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260912165512_f3813097-7f10-4eb4-8477-2b90bf0bd8cd.sql
+-- ---------------------------------------------------------------------------
+ALTER FUNCTION public.can_manage_client_automations(uuid, uuid, uuid) SECURITY INVOKER;
+
+-- ---------------------------------------------------------------------------
+-- 20260912171851_0d28d628-671f-470d-9b54-4d0147028153.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.set_client_default_whatsapp_recipient(
+  _brand_id uuid, _client_id uuid, _recipient_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.can_manage_client_automations(_brand_id, _client_id, auth.uid()) THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.whatsapp_recipients
+    WHERE id = _recipient_id AND brand_id = _brand_id AND client_id = _client_id AND is_active
+  ) THEN
+    RAISE EXCEPTION 'destino inválido para este cliente';
+  END IF;
+  UPDATE public.whatsapp_recipients
+  SET is_default = (id = _recipient_id)
+  WHERE brand_id = _brand_id AND client_id = _client_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.emit_client_automation_event()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_event text;
+  v_entity text;
+  v_context jsonb;
+BEGIN
+  IF TG_TABLE_NAME = 'tasks' THEN
+    IF TG_OP = 'INSERT' AND NEW.assignee_id IS NOT NULL THEN
+      v_event := 'task.assigned';
+    ELSIF TG_OP = 'UPDATE' AND NEW.assignee_id IS DISTINCT FROM OLD.assignee_id AND NEW.assignee_id IS NOT NULL THEN
+      v_event := 'task.assigned';
+    ELSIF TG_OP = 'UPDATE' AND NEW.due_at IS NOT NULL AND NEW.due_at <= now()
+          AND (OLD.due_at IS NULL OR OLD.due_at > now()) THEN
+      v_event := 'task.due';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('task', jsonb_build_object('id', NEW.id, 'title', NEW.title, 'due_at', NEW.due_at));
+  ELSIF TG_TABLE_NAME = 'posts' THEN
+    IF TG_OP = 'UPDATE' AND OLD.stage IS DISTINCT FROM NEW.stage AND NEW.stage = 'review'::public.post_stage THEN
+      v_event := 'approval.requested';
+    ELSIF TG_OP = 'UPDATE' AND OLD.stage IS DISTINCT FROM NEW.stage AND NEW.stage = 'approved'::public.post_stage THEN
+      v_event := 'approval.approved';
+    ELSIF TG_OP = 'UPDATE' AND OLD.review_status IS DISTINCT FROM NEW.review_status AND NEW.review_status = 'rework' THEN
+      v_event := 'approval.rework';
+    ELSIF TG_OP = 'UPDATE' AND OLD.schedule_status IS DISTINCT FROM NEW.schedule_status AND NEW.schedule_status = 'scheduled' THEN
+      v_event := 'publication.scheduled';
+    ELSIF TG_OP = 'UPDATE' AND OLD.published_at IS NULL AND NEW.published_at IS NOT NULL THEN
+      v_event := 'publication.published';
+    ELSIF TG_OP = 'UPDATE' AND OLD.schedule_status IS DISTINCT FROM NEW.schedule_status AND NEW.schedule_status = 'failed' THEN
+      v_event := 'publication.failed';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('post', jsonb_build_object('id', NEW.id, 'title', NEW.title, 'scheduled_at', NEW.scheduled_at));
+  ELSIF TG_TABLE_NAME = 'brand_briefing_requests' THEN
+    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'requested') THEN
+      v_event := 'briefing.requested';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('briefing', jsonb_build_object('id', NEW.id, 'due_at', NEW.due_at));
+  ELSIF TG_TABLE_NAME = 'client_portal_access' THEN
+    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+      v_event := 'portal.access';
+    END IF;
+    v_entity := NEW.client_id::text || ':' || extract(epoch FROM NEW.updated_at)::bigint::text;
+    v_context := '{}'::jsonb;
+  END IF;
+
+  IF v_event IS NOT NULL AND NEW.brand_id IS NOT NULL AND NEW.client_id IS NOT NULL THEN
+    PERFORM public.enqueue_client_automation_event(NEW.brand_id, NEW.client_id, v_event, v_entity, v_context);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.emit_client_automation_event() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.emit_client_automation_event() TO service_role;
+
+CREATE TRIGGER tasks_emit_client_automation
+AFTER INSERT OR UPDATE OF assignee_id, due_at ON public.tasks
+FOR EACH ROW EXECUTE FUNCTION public.emit_client_automation_event();
+CREATE TRIGGER posts_emit_client_automation
+AFTER UPDATE OF stage, review_status, schedule_status, published_at ON public.posts
+FOR EACH ROW EXECUTE FUNCTION public.emit_client_automation_event();
+CREATE TRIGGER briefing_requests_emit_client_automation
+AFTER INSERT OR UPDATE OF status ON public.brand_briefing_requests
+FOR EACH ROW EXECUTE FUNCTION public.emit_client_automation_event();
+CREATE TRIGGER portal_access_emit_client_automation
+AFTER INSERT OR UPDATE ON public.client_portal_access
+FOR EACH ROW EXECUTE FUNCTION public.emit_client_automation_event();
+
+-- ---------------------------------------------------------------------------
+-- 20260912172003_b8625f53-2c90-4d2c-9886-e7cd3d473155.sql
+-- ---------------------------------------------------------------------------
+ALTER FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) SECURITY INVOKER;
+
+-- ---------------------------------------------------------------------------
+-- 20260912172140_457339d7-dcf5-4f3c-8276-590c5e8adf74.sql
+-- ---------------------------------------------------------------------------
+INSERT INTO public.feature_catalog (key, name, description, category, icon, is_core, sort_order, is_available, default_enabled)
+VALUES ('automations', 'Automações', 'Disparos programados e por eventos via WhatsApp para cada cliente.', 'Comunicação', 'Zap', false, 115, true, false)
+ON CONFLICT (key) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, category=EXCLUDED.category, icon=EXCLUDED.icon, is_core=false, sort_order=EXCLUDED.sort_order, is_available=true, default_enabled=false, updated_at=now();
+
+CREATE OR REPLACE FUNCTION public.emit_client_automation_event()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_event text;
+  v_entity text;
+  v_context jsonb;
+BEGIN
+  IF TG_TABLE_NAME = 'tasks' THEN
+    IF TG_OP = 'INSERT' AND NEW.assignee_id IS NOT NULL THEN
+      v_event := 'task.assigned';
+    ELSIF TG_OP = 'UPDATE' AND NEW.assignee_id IS DISTINCT FROM OLD.assignee_id AND NEW.assignee_id IS NOT NULL THEN
+      v_event := 'task.assigned';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('task', jsonb_build_object('id', NEW.id, 'title', NEW.title, 'due_at', NEW.due_at));
+  ELSIF TG_TABLE_NAME = 'posts' THEN
+    IF OLD.stage IS DISTINCT FROM NEW.stage AND NEW.stage = 'review'::public.post_stage THEN
+      v_event := 'approval.requested';
+    ELSIF OLD.stage IS DISTINCT FROM NEW.stage AND NEW.stage = 'approved'::public.post_stage THEN
+      v_event := 'approval.approved';
+    ELSIF OLD.review_status IS DISTINCT FROM NEW.review_status AND NEW.review_status = 'rework' THEN
+      v_event := 'approval.rework';
+    ELSIF OLD.scheduled_at IS NULL AND NEW.scheduled_at IS NOT NULL THEN
+      v_event := 'publication.scheduled';
+    ELSIF OLD.published_at IS NULL AND NEW.published_at IS NOT NULL THEN
+      v_event := 'publication.published';
+    ELSIF OLD.schedule_status IS DISTINCT FROM NEW.schedule_status AND NEW.schedule_status = 'failed' THEN
+      v_event := 'publication.failed';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('post', jsonb_build_object('id', NEW.id, 'title', NEW.title, 'scheduled_at', NEW.scheduled_at));
+  ELSIF TG_TABLE_NAME = 'brand_briefing_requests' THEN
+    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'requested') THEN
+      v_event := 'briefing.requested';
+    END IF;
+    v_entity := NEW.id::text;
+    v_context := jsonb_build_object('briefing', jsonb_build_object('id', NEW.id, 'due_at', NEW.due_at));
+  ELSIF TG_TABLE_NAME = 'client_portal_access' THEN
+    IF TG_OP = 'INSERT' OR OLD.permissions IS DISTINCT FROM NEW.permissions OR OLD.owner_user_id IS DISTINCT FROM NEW.owner_user_id THEN
+      v_event := 'portal.access';
+    END IF;
+    v_entity := NEW.client_id::text || ':' || md5(coalesce(NEW.permissions::text, '') || coalesce(NEW.owner_user_id::text, ''));
+    v_context := '{}'::jsonb;
+  END IF;
+
+  IF v_event IS NOT NULL AND NEW.brand_id IS NOT NULL AND NEW.client_id IS NOT NULL THEN
+    PERFORM public.enqueue_client_automation_event(NEW.brand_id, NEW.client_id, v_event, v_entity, v_context);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.emit_client_automation_event() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.emit_client_automation_event() TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 20260912172424_2b8fe489-73b5-42e4-878c-629d6ccd7656.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.enqueue_client_automation_event(
+  _brand_id uuid, _client_id uuid, _event_key text, _entity_key text, _context jsonb DEFAULT '{}'::jsonb
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE v_count integer;
+BEGIN
+  INSERT INTO public.client_automation_dispatches (
+    brand_id, client_id, rule_id, recipient_id, instance_id, occurrence_key,
+    scheduled_at, event_context
+  )
+  SELECT r.brand_id, r.client_id, r.id, r.recipient_id, r.instance_id,
+         _event_key || ':' || _entity_key, now(), coalesce(_context, '{}'::jsonb)
+  FROM public.client_automation_rules r
+  JOIN public.brand_features bf ON bf.brand_id = r.brand_id AND bf.feature_key = 'automations' AND bf.enabled
+  WHERE r.brand_id = _brand_id AND r.client_id = _client_id
+    AND r.trigger_type = 'system_event' AND r.event_key = _event_key AND r.is_active
+  ON CONFLICT (rule_id, occurrence_key) DO NOTHING;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.enqueue_client_automation_event(uuid,uuid,text,text,jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enqueue_client_automation_event(uuid,uuid,text,text,jsonb) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.set_client_default_whatsapp_recipient(
+  _brand_id uuid, _client_id uuid, _recipient_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.can_manage_client_automations(_brand_id, _client_id, auth.uid()) THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.whatsapp_recipients
+    WHERE id = _recipient_id AND brand_id = _brand_id AND client_id = _client_id AND is_active
+  ) THEN
+    RAISE EXCEPTION 'destino inválido para este cliente';
+  END IF;
+  UPDATE public.whatsapp_recipients SET is_default = false
+  WHERE brand_id = _brand_id AND client_id = _client_id AND is_default;
+  UPDATE public.whatsapp_recipients SET is_default = true
+  WHERE id = _recipient_id AND brand_id = _brand_id AND client_id = _client_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) TO authenticated, service_role;
+
+DROP TRIGGER IF EXISTS posts_emit_client_automation ON public.posts;
+CREATE TRIGGER posts_emit_client_automation
+AFTER UPDATE OF stage, review_status, schedule_status, scheduled_at, published_at ON public.posts
+FOR EACH ROW EXECUTE FUNCTION public.emit_client_automation_event();
+
+-- ---------------------------------------------------------------------------
+-- 20260912180139_095644c2-c8cf-440d-a218-b144ed4f4a13.sql
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.clean_mention_tokens(_body text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = public
+AS $$
+  SELECT regexp_replace(
+    coalesce(_body, ''),
+    '@\[([^]\n]+)\]\([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\)',
+    '@\1',
+    'g'
+  )
+$$;
+
+REVOKE ALL ON FUNCTION public.clean_mention_tokens(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.clean_mention_tokens(text) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.sanitize_mention_body()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.body := public.clean_mention_tokens(NEW.body);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS messages_sanitize_mentions ON public.messages;
+CREATE TRIGGER messages_sanitize_mentions
+BEFORE INSERT OR UPDATE OF body ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.sanitize_mention_body();
+
+DROP TRIGGER IF EXISTS task_comments_sanitize_mentions ON public.task_comments;
+CREATE TRIGGER task_comments_sanitize_mentions
+BEFORE INSERT OR UPDATE OF body ON public.task_comments
+FOR EACH ROW EXECUTE FUNCTION public.sanitize_mention_body();
+
+DROP TRIGGER IF EXISTS work_comments_sanitize_mentions ON public.work_comments;
+CREATE TRIGGER work_comments_sanitize_mentions
+BEFORE INSERT OR UPDATE OF body ON public.work_comments
+FOR EACH ROW EXECUTE FUNCTION public.sanitize_mention_body();
+
+CREATE OR REPLACE FUNCTION public.bump_message_thread()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.message_threads
+     SET last_message_at = NEW.created_at,
+         last_message_preview = left(public.clean_mention_tokens(NEW.body), 280),
+         updated_at = now()
+   WHERE id = NEW.thread_id;
+
+  UPDATE public.message_thread_participants
+     SET last_read_at = NEW.created_at
+   WHERE thread_id = NEW.thread_id AND user_id = NEW.author_id;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 20260912180706_b6413cc1-4d43-48e3-b12d-135a7b57ea17.sql
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.clean_mention_tokens(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.clean_mention_tokens(text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.sanitize_mention_body() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sanitize_mention_body() TO service_role;
+
+REVOKE ALL ON FUNCTION public.bump_message_thread() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.bump_message_thread() TO service_role;

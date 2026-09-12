@@ -35,6 +35,7 @@ import { describeError } from "@/lib/errors";
 import { listClientSocialConnectionsFn } from "@/lib/scheduling-wizard.functions";
 import { bulkUpdateDraftsFn } from "@/lib/drafts-bulk.functions";
 import type { BulkApplyResult } from "@/lib/drafts-bulk.server";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 const FORMATS = [
   { key: "feed", label: "Feed" },
@@ -216,7 +217,7 @@ export function BulkApplyDialog({
                   >
                     {it.status === "applied"
                       ? it.proposedAt
-                        ? `Aplicada · proposta ${new Date(it.proposedAt).toLocaleString("pt-BR")}`
+                        ? `Aplicada · proposta ${formatDateTimeBr(it.proposedAt)}`
                         : "Aplicada"
                       : (it.reason ?? it.status)}
                   </span>

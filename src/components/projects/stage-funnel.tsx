@@ -20,7 +20,7 @@ export function StageFunnel({
   const max = Math.max(1, ...CONTENT_STAGES.map((s) => counts[s] ?? 0));
 
   return (
-    <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6", className)}>
+    <div className={cn("grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border/60 bg-border/60 sm:grid-cols-3 lg:grid-cols-6", className)}>
       {CONTENT_STAGES.map((stage) => {
         const token = CONTENT_STAGE[stage];
         const count = counts[stage] ?? 0;
@@ -34,9 +34,9 @@ export function StageFunnel({
             aria-pressed={isActive}
             onClick={() => onSelect?.(isActive ? null : stage)}
             className={cn(
-              "rounded-lg border border-border/60 bg-card px-3 py-2.5 text-left transition-colors",
-              onSelect && "hover:border-border hover:bg-muted/40",
-              isActive && "border-primary/50 bg-primary/5",
+              "min-w-0 bg-card px-3 py-3 text-left transition-colors",
+              onSelect && "hover:bg-muted/50",
+              isActive && "bg-primary/5 ring-1 ring-inset ring-primary/40",
             )}
           >
             <span className="flex items-center gap-1.5">

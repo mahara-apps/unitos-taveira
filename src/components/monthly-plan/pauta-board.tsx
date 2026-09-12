@@ -11,6 +11,7 @@ import {
   FolderKanban,
   ListChecks,
   MoreHorizontal,
+  Plus,
   Search,
   Sparkles,
   Trash2,
@@ -55,6 +56,7 @@ import {
   type PlanBoardItem,
 } from "@/lib/monthly-plans.functions";
 import { LinkPautaProjectDialog } from "@/components/monthly-plan/new-pauta-dialog";
+import { PageKpi, PageKpiGrid } from "@/components/ui/page-kpi";
 
 /** Mensagens de negócio da exclusão definitiva. */
 export function describePlanDeleteError(e: unknown): string {
@@ -175,24 +177,24 @@ export function PautaBoard({
               Gerar com IA
             </Button>
           )}
-          <Button size="sm" variant="outline" className="h-8" onClick={onNewPauta}>
-            Nova pauta
+          <Button size="sm" className="h-9 gap-1.5" onClick={onNewPauta}>
+            <Plus className="h-3.5 w-3.5" /> Nova pauta
           </Button>
         </div>
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <SummaryCell label="Ativas" value={summary.active} />
-          <SummaryCell label="Em produção" value={summary.inProduction} />
-          <SummaryCell label="No cliente" value={summary.withClient} />
-          <SummaryCell label="Arquivadas" value={summary.archived} muted />
-        </div>
+        <PageKpiGrid columns={4}>
+          <PageKpi label="Ativas" value={summary.active} status="info" />
+          <PageKpi label="Em produção" value={summary.inProduction} status="warning" />
+          <PageKpi label="No cliente" value={summary.withClient} status="success" />
+          <PageKpi label="Arquivadas" value={summary.archived} status="neutral" dimmed />
+        </PageKpiGrid>
       )}
 
       {/* Filtros essenciais */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-border/60 p-0.5">
+        <div className="inline-flex rounded-lg bg-muted p-0.5">
           {ARCHIVE_TABS.map((t) => (
             <button
               key={t.key}
@@ -201,7 +203,7 @@ export function PautaBoard({
               className={cn(
                 "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                 archive === t.key
-                  ? "bg-primary/10 text-foreground"
+                  ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -238,7 +240,7 @@ export function PautaBoard({
       </div>
 
       {/* Lista */}
-      <div className="overflow-hidden rounded-xl border border-border/60 bg-card/40">
+      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
         {boardQ.isLoading ? (
           <div className="space-y-2 p-3">
             <Skeleton className="h-14 w-full" />
@@ -331,24 +333,6 @@ export function PautaBoard({
   );
 }
 
-function SummaryCell({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-card px-3 py-2">
-      <div className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "text-xl font-semibold leading-none tabular-nums",
-          muted && "text-muted-foreground",
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
 function PautaRow({
   item,
   busy,
@@ -374,13 +358,13 @@ function PautaRow({
   return (
     <li
       className={cn(
-        "group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40",
+        "group flex items-start gap-3 px-4 py-4 transition-colors hover:bg-muted/30",
         archived && "opacity-70",
       )}
     >
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium">{item.title}</span>
+          <span className="truncate text-sm font-semibold">{item.title}</span>
           <span
             className={`inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[10px] font-medium uppercase tracking-wide ${meta.cls}`}
           >

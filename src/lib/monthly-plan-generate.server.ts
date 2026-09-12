@@ -1,5 +1,6 @@
 import { errorToMessage } from "@/lib/error-message";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ProviderName } from "@/lib/ai-capabilities";
 import { z } from "zod";
 import { brain, type BrainContext } from "@/lib/brain/api";
 import { loadBrainAgentContext } from "@/lib/brain/agent-context.server";
@@ -87,6 +88,7 @@ export type GeneratePlanInput = {
   clientId: string;
   theme?: string;
   briefingId?: string | null;
+  selectedModel?: { provider: ProviderName; modelId: string } | null;
   weeksPerMonth?: number;
   selection?: Array<{
     channel: PlanChannel;
@@ -465,6 +467,7 @@ export async function runPlanGeneration(args: {
       userId: userId,
       prompt,
       extraContext,
+      selectedModel: input.selectedModel,
       schema: AiPlanSchema,
       onAttempt: (info) =>
         logPlanEvent(

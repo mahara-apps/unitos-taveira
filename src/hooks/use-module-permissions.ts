@@ -1,14 +1,15 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 
-import { myModulePermissions } from "@/lib/access-profiles.functions";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { getCachedUser } from "@/lib/auth-cache";
+import { supabase } from "@/integrations/supabase/client";
+import { callRpc } from "@/lib/supabase-rpc";
 import {
   can,
   emptyModulePermissions,
   mergeModulePermissions,
+  normalizeModulePermissions,
   type ModuleAction,
   type ModuleKey,
   type ModulePermissions,
@@ -26,18 +27,23 @@ type Result = {
  */
 export function useModulePermissions(): Result {
   const { brandId } = useActiveContext();
-  const load = useServerFn(myModulePermissions);
 
   const q = useQuery({
     queryKey: ["my-module-permissions", brandId],
     queryFn: async () => {
       const user = await getCachedUser();
       if (!user || !brandId) return null;
-      return load({ data: { brandId } });
+      const { data, error } = await callRpc(supabase, "effective_module_permissions", {
+        _user_id: user.id,
+        _brand_id: brandId,
+      });
+      if (error) throw error;
+      return { permissions: normalizeModulePermissions(data) };
     },
     enabled: !!brandId,
     staleTime: 60_000,
-    retry: false,
+    retry: 1,
+    retryDelay: 1_000,
   });
 
   return useMemo<Result>(() => {
@@ -47,7 +53,7 @@ export function useModulePermissions(): Result {
     return {
       permissions,
       can: (moduleKey, action = "view") => can(permissions, moduleKey, action),
-      isReady: !q.isLoading && q.data !== undefined,
+      isReady: !q.isLoading,
     };
   }, [q.data, q.isLoading]);
 }

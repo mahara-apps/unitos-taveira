@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { EVENT_TYPE_STYLES, SOCIAL_NETWORKS, classifySocialNetwork } from "@/lib/calendar-tokens";
 import type { CalendarPost } from "@/lib/calendar.functions";
 import type { CalendarEvent } from "@/lib/calendar-events.functions";
+import { formatTimeBr } from "@/lib/timezone";
 
 export type UnifiedEvent =
   | { kind: "post"; data: CalendarPost }
@@ -20,10 +21,7 @@ export function EventChip({
 }) {
   if (item.kind === "post") {
     const p = item.data;
-    const t = new Date(p.scheduled_at).toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const t = formatTimeBr(p.scheduled_at);
     const primaryChannel = p.channels?.[0];
     const netKey = classifySocialNetwork(primaryChannel);
     const NetIcon = SOCIAL_NETWORKS[netKey].Icon;
@@ -85,10 +83,7 @@ export function EventChip({
   const style = EVENT_TYPE_STYLES[e.type];
   const t = e.all_day
     ? "Dia todo"
-    : new Date(e.starts_at).toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+    : formatTimeBr(e.starts_at);
   return (
     <Tooltip>
       <TooltipTrigger asChild>

@@ -1,0 +1,1 @@
+ALTER FUNCTION public.set_client_default_whatsapp_recipient(uuid,uuid,uuid) SECURITY INVOKER;

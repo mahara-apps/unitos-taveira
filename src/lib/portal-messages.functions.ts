@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolvePortalSessionScope } from "@/lib/portal-permissions.server";
 import { detectLinkSource, normalizeLinkUrl } from "@/lib/link-source";
 import { MAX_MESSAGE_LENGTH, MAX_MESSAGE_LINKS, type MessageLink } from "@/lib/messaging";
+import { cleanMentionText } from "@/lib/mentions";
 
 /**
  * Mensagens no Portal do Cliente (módulo `messages`).
@@ -117,7 +118,9 @@ export const listPortalThreads = createServerFn({ method: "GET" })
       id: t.id,
       subject: t.subject,
       lastMessageAt: t.last_message_at,
-      lastMessagePreview: t.last_message_preview,
+      lastMessagePreview: t.last_message_preview
+        ? cleanMentionText(t.last_message_preview)
+        : null,
       unread: counts.get(t.id) ?? 0,
     }));
   });
@@ -159,7 +162,7 @@ export const listPortalMessages = createServerFn({ method: "GET" })
     return list
       .map((r) => ({
         id: r.id,
-        body: r.removed_at ? "" : r.body,
+        body: r.removed_at ? "" : cleanMentionText(r.body),
         links: r.removed_at ? [] : parseLinks(r.links),
         authorName: nameOf.get(r.author_id) ?? "Equipe",
         authorKind:
@@ -200,7 +203,7 @@ export const sendPortalMessage = createServerFn({ method: "POST" })
         thread_id: data.threadId,
         author_id: context.userId,
         author_kind: "portal_client",
-        body: data.body,
+        body: cleanMentionText(data.body),
         links,
       })
       .select("id")

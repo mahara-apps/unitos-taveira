@@ -216,6 +216,10 @@ export function MonthlyPlanView({
       briefingId: string | null;
       selection: GenerateSelection[];
       organization: PlanOrganizationInput;
+      selectedModel: {
+        provider: "openai" | "anthropic" | "gemini" | "groq";
+        modelId: string;
+      } | null;
     }) =>
       generate({
         data: {
@@ -225,6 +229,7 @@ export function MonthlyPlanView({
           briefingId: input.briefingId ?? undefined,
           selection: input.selection.length ? input.selection : undefined,
           organization: input.organization,
+          selectedModel: input.selectedModel,
         },
       }),
     onMutate: () => {
@@ -285,7 +290,7 @@ export function MonthlyPlanView({
   if (!planId) {
     return (
       <PlanShell embedded={embedded}>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:flex-wrap sm:justify-between">
+        <header className="flex flex-col gap-4 border-b border-border/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">Volumetria e geração do mês</h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
@@ -317,7 +322,7 @@ export function MonthlyPlanView({
               Gerar pauta com IA
             </Button>
           </div>
-        </div>
+        </header>
 
         <VolumetryCards volumetry={volumetry} loading={volumetryQ.isLoading} />
 
@@ -721,7 +726,7 @@ function ApprovalView({
         ) : null}
 
         {/* Estratégia */}
-        <section className="space-y-5 rounded-2xl border border-border/60 bg-card/40 p-6 backdrop-blur">
+        <section className="space-y-5 border-b border-border/60 pb-6">
           <InlineEditable
             as="h1"
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
@@ -731,8 +736,8 @@ function ApprovalView({
             placeholder="Headline da pauta"
           />
           <ContextSourcesRow sources={plan.context_sources ?? null} />
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 rounded-lg border border-border/60 bg-card p-4">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Descrição
               </div>
@@ -745,7 +750,7 @@ function ApprovalView({
                 placeholder="Contexto do mês…"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-lg border border-border/60 bg-card p-4">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Objetivos
               </div>
@@ -802,7 +807,7 @@ function ApprovalView({
             ) : null}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             {topics.map((t) => (
               <TopicCard
                 key={t.id}
@@ -986,12 +991,12 @@ function TopicCard({
 
   return (
     <div
-      className={`group relative rounded-xl border p-4 transition ${
+      className={`group relative overflow-hidden rounded-xl border bg-card p-5 transition ${
         topic.status === "approved"
-          ? "border-emerald-500/40 bg-emerald-500/5"
+          ? "border-health-good/40"
           : topic.status === "rejected"
             ? "border-border/40 bg-muted/30 opacity-70"
-            : "border-border/60 bg-card/40 hover:border-border"
+            : "border-border/60 hover:border-foreground/20"
       }`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -1124,10 +1129,12 @@ function TopicCard({
         </div>
       ) : null}
       {topic.rationale ? (
-        <p className="mt-2 rounded-md bg-muted/40 px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground/80">Por quê: </span>
+        <div className="mt-3 rounded-lg border border-ai/20 bg-ai/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="mb-1 flex items-center gap-1 font-semibold uppercase tracking-wide text-ai">
+            <Sparkles className="h-3 w-3" /> Por quê
+          </div>
           {topic.rationale}
-        </p>
+        </div>
       ) : null}
 
       {!locked ? (

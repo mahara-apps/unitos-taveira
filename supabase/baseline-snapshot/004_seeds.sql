@@ -615,6 +615,10 @@ INSERT INTO public.feature_catalog (key, name, description, category, icon, is_c
 VALUES ('chat', 'Chat', 'Copiloto conversacional do ambiente.', 'Inteligência', 'MessageSquare', 'f'::boolean, 140, 't'::boolean, 'f'::boolean)
 ON CONFLICT (key) DO NOTHING;
 
+INSERT INTO public.feature_catalog (key, name, description, category, icon, is_core, sort_order, is_available, default_enabled)
+VALUES ('automations', 'Automações', 'Disparos programados e por eventos via WhatsApp para cada cliente.', 'Comunicação', 'Zap', 'f'::boolean, 115, 't'::boolean, 'f'::boolean)
+ON CONFLICT (key) DO NOTHING;
+
 INSERT INTO public.brain_retention_config (key, value_days, description)
 VALUES ('brain_events_hot_days', 90, 'Janela quente antes de arquivar brain_events') ON CONFLICT (key) DO NOTHING;
 

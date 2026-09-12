@@ -26,6 +26,8 @@ import { CustomerHeader } from "@/components/customer/customer-header";
 import { PanelGroup } from "@/components/customer/ui/panel-section";
 import { WorkTab } from "@/components/customer/work/work-tab";
 import { ClientHoursTab } from "@/components/analytics/timesheet/client-hours-tab";
+import { ClientAutomationsTab } from "@/components/customer/client-automations-tab";
+import { useFeatureAccess } from "@/hooks/use-feature-access";
 
 import { PublicationsTab } from "@/components/customer/publications/publications-tab";
 import { BasicInfoTab } from "@/components/customer/basic-info-tab";
@@ -233,6 +235,10 @@ function CustomerDetailReady({
   const [planId, setPlanIdState] = useState<string | null>(initialPlanId ?? null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const automationsFeature = useFeatureAccess("automations");
+  const { authorityRole, brandRole } = useAccessRole();
+  const canManageAutomations =
+    authorityRole === "super_admin" || brandRole === "owner" || brandRole === "admin";
 
   // Sincroniza com ?tab=... (links internos como "Editar em Cadastro").
   useEffect(() => {
@@ -368,7 +374,9 @@ function CustomerDetailReady({
               {/* Navegação horizontal rolável: nunca quebra em várias linhas. */}
               <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
                 <TabsList className="w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl bg-muted/40 p-1">
-                  {CUSTOMER_TABS.map((t) => (
+                  {CUSTOMER_TABS.filter(
+                    (t) => t.value !== "automacoes" || automationsFeature.enabled,
+                  ).map((t) => (
                     <TabsTrigger
                       key={t.value}
                       value={t.value}
@@ -464,6 +472,16 @@ function CustomerDetailReady({
               <TabsContent value="publicacoes" className="mt-0">
                 <PublicationsTab brandId={brandId} clientId={customerId} />
               </TabsContent>
+
+              {automationsFeature.enabled && (
+                <TabsContent value="automacoes" className="mt-0">
+                  <ClientAutomationsTab
+                    brandId={brandId}
+                    clientId={customerId}
+                    canManage={canManageAutomations}
+                  />
+                </TabsContent>
+              )}
             </Tabs>
           </>
         )}

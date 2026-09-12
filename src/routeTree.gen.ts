@@ -112,6 +112,7 @@ import { Route as ApiPublicHooksResumePostContentRouteImport } from './routes/ap
 import { Route as ApiPublicHooksBrainSynthesisRouteImport } from './routes/api/public/hooks/brain-synthesis'
 import { Route as ApiPublicHooksBrainConsolidateRouteImport } from './routes/api/public/hooks/brain-consolidate'
 import { Route as ApiPublicHooksAiModelsHealthRouteImport } from './routes/api/public/hooks/ai-models-health'
+import { Route as ApiPublicCronWhatsappAutomationsRouteImport } from './routes/api/public/cron/whatsapp-automations'
 import { Route as ApiPublicCronSlaCheckRouteImport } from './routes/api/public/cron/sla-check'
 import { Route as ApiPublicCronInstallationResumeRouteImport } from './routes/api/public/cron/installation-resume'
 import { Route as ApiPublicCronImportWorkerRouteImport } from './routes/api/public/cron/import-worker'
@@ -684,6 +685,12 @@ const ApiPublicHooksAiModelsHealthRoute =
     path: '/api/public/hooks/ai-models-health',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronWhatsappAutomationsRoute =
+  ApiPublicCronWhatsappAutomationsRouteImport.update({
+    id: '/api/public/cron/whatsapp-automations',
+    path: '/api/public/cron/whatsapp-automations',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronSlaCheckRoute = ApiPublicCronSlaCheckRouteImport.update({
   id: '/api/public/cron/sla-check',
   path: '/api/public/cron/sla-check',
@@ -851,6 +858,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/import-worker': typeof ApiPublicCronImportWorkerRoute
   '/api/public/cron/installation-resume': typeof ApiPublicCronInstallationResumeRoute
   '/api/public/cron/sla-check': typeof ApiPublicCronSlaCheckRoute
+  '/api/public/cron/whatsapp-automations': typeof ApiPublicCronWhatsappAutomationsRoute
   '/api/public/hooks/ai-models-health': typeof ApiPublicHooksAiModelsHealthRoute
   '/api/public/hooks/brain-consolidate': typeof ApiPublicHooksBrainConsolidateRoute
   '/api/public/hooks/brain-synthesis': typeof ApiPublicHooksBrainSynthesisRoute
@@ -957,6 +965,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/import-worker': typeof ApiPublicCronImportWorkerRoute
   '/api/public/cron/installation-resume': typeof ApiPublicCronInstallationResumeRoute
   '/api/public/cron/sla-check': typeof ApiPublicCronSlaCheckRoute
+  '/api/public/cron/whatsapp-automations': typeof ApiPublicCronWhatsappAutomationsRoute
   '/api/public/hooks/ai-models-health': typeof ApiPublicHooksAiModelsHealthRoute
   '/api/public/hooks/brain-consolidate': typeof ApiPublicHooksBrainConsolidateRoute
   '/api/public/hooks/brain-synthesis': typeof ApiPublicHooksBrainSynthesisRoute
@@ -1075,6 +1084,7 @@ export interface FileRoutesById {
   '/api/public/cron/import-worker': typeof ApiPublicCronImportWorkerRoute
   '/api/public/cron/installation-resume': typeof ApiPublicCronInstallationResumeRoute
   '/api/public/cron/sla-check': typeof ApiPublicCronSlaCheckRoute
+  '/api/public/cron/whatsapp-automations': typeof ApiPublicCronWhatsappAutomationsRoute
   '/api/public/hooks/ai-models-health': typeof ApiPublicHooksAiModelsHealthRoute
   '/api/public/hooks/brain-consolidate': typeof ApiPublicHooksBrainConsolidateRoute
   '/api/public/hooks/brain-synthesis': typeof ApiPublicHooksBrainSynthesisRoute
@@ -1192,6 +1202,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/import-worker'
     | '/api/public/cron/installation-resume'
     | '/api/public/cron/sla-check'
+    | '/api/public/cron/whatsapp-automations'
     | '/api/public/hooks/ai-models-health'
     | '/api/public/hooks/brain-consolidate'
     | '/api/public/hooks/brain-synthesis'
@@ -1298,6 +1309,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/import-worker'
     | '/api/public/cron/installation-resume'
     | '/api/public/cron/sla-check'
+    | '/api/public/cron/whatsapp-automations'
     | '/api/public/hooks/ai-models-health'
     | '/api/public/hooks/brain-consolidate'
     | '/api/public/hooks/brain-synthesis'
@@ -1415,6 +1427,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/import-worker'
     | '/api/public/cron/installation-resume'
     | '/api/public/cron/sla-check'
+    | '/api/public/cron/whatsapp-automations'
     | '/api/public/hooks/ai-models-health'
     | '/api/public/hooks/brain-consolidate'
     | '/api/public/hooks/brain-synthesis'
@@ -1459,6 +1472,7 @@ export interface RootRouteChildren {
   ApiPublicCronImportWorkerRoute: typeof ApiPublicCronImportWorkerRoute
   ApiPublicCronInstallationResumeRoute: typeof ApiPublicCronInstallationResumeRoute
   ApiPublicCronSlaCheckRoute: typeof ApiPublicCronSlaCheckRoute
+  ApiPublicCronWhatsappAutomationsRoute: typeof ApiPublicCronWhatsappAutomationsRoute
   ApiPublicHooksAiModelsHealthRoute: typeof ApiPublicHooksAiModelsHealthRoute
   ApiPublicHooksBrainConsolidateRoute: typeof ApiPublicHooksBrainConsolidateRoute
   ApiPublicHooksBrainSynthesisRoute: typeof ApiPublicHooksBrainSynthesisRoute
@@ -2201,6 +2215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAiModelsHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/whatsapp-automations': {
+      id: '/api/public/cron/whatsapp-automations'
+      path: '/api/public/cron/whatsapp-automations'
+      fullPath: '/api/public/cron/whatsapp-automations'
+      preLoaderRoute: typeof ApiPublicCronWhatsappAutomationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/sla-check': {
       id: '/api/public/cron/sla-check'
       path: '/api/public/cron/sla-check'
@@ -2618,6 +2639,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronImportWorkerRoute: ApiPublicCronImportWorkerRoute,
   ApiPublicCronInstallationResumeRoute: ApiPublicCronInstallationResumeRoute,
   ApiPublicCronSlaCheckRoute: ApiPublicCronSlaCheckRoute,
+  ApiPublicCronWhatsappAutomationsRoute: ApiPublicCronWhatsappAutomationsRoute,
   ApiPublicHooksAiModelsHealthRoute: ApiPublicHooksAiModelsHealthRoute,
   ApiPublicHooksBrainConsolidateRoute: ApiPublicHooksBrainConsolidateRoute,
   ApiPublicHooksBrainSynthesisRoute: ApiPublicHooksBrainSynthesisRoute,

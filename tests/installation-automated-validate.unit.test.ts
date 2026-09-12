@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyVerificationCheck } from "@/lib/installation/automation.server";
+import {
+  classifyVerificationCheck,
+  classifyVerificationHealthCheck,
+} from "@/lib/installation/automation.server";
 import { VALIDATE_STEPS } from "@/lib/installation/manager-contract";
 
 const STEP_IDS = VALIDATE_STEPS.map((s) => s.id) as string[];
@@ -39,5 +42,17 @@ describe("validação automática — classificação das verificações", () =>
     expect(classifyVerificationCheck("vault: cron_secret presente")).toBe("cron");
     expect(classifyVerificationCheck("RLS habilitado em todas as tabelas")).toBe("rls");
     expect(classifyVerificationCheck("baseline: tabelas em public")).toBe("database");
+  });
+
+  it("separa Banco, Schema, RLS e Seeds no diagnóstico do núcleo", () => {
+    expect(classifyVerificationHealthCheck("baseline: tabelas em public")).toBe("database");
+    expect(classifyVerificationHealthCheck("clientes: cascata pode remover o último pipeline")).toBe(
+      "schema",
+    );
+    expect(classifyVerificationHealthCheck("RLS habilitado em todas as tabelas")).toBe("rls");
+    expect(classifyVerificationHealthCheck("seeds: feature_catalog")).toBe("seeds");
+    expect(classifyVerificationHealthCheck("Mensagens: recurso disponível e ligado por padrão")).toBe(
+      "seeds",
+    );
   });
 });

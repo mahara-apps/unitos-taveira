@@ -3755,6 +3755,356 @@ export type Database = {
           },
         ]
       }
+      client_automation_attempts: {
+        Row: {
+          attempt_number: number
+          brand_id: string
+          client_id: string
+          created_at: string
+          dispatch_id: string
+          error_message: string | null
+          id: string
+          masked_destination: string | null
+          provider_message_id: string | null
+          status: string
+        }
+        Insert: {
+          attempt_number: number
+          brand_id: string
+          client_id: string
+          created_at?: string
+          dispatch_id: string
+          error_message?: string | null
+          id?: string
+          masked_destination?: string | null
+          provider_message_id?: string | null
+          status: string
+        }
+        Update: {
+          attempt_number?: number
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          dispatch_id?: string
+          error_message?: string | null
+          id?: string
+          masked_destination?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_automation_attempts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_automation_attempts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_attempts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_attempts_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "client_automation_dispatches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_automation_dates: {
+        Row: {
+          brand_id: string
+          client_id: string
+          created_at: string
+          created_by: string
+          date_value: string
+          id: string
+          is_active: boolean
+          name: string
+          repeats_annually: boolean
+          send_time: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          client_id: string
+          created_at?: string
+          created_by: string
+          date_value: string
+          id?: string
+          is_active?: boolean
+          name: string
+          repeats_annually?: boolean
+          send_time?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          date_value?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          repeats_annually?: boolean
+          send_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_automation_dates_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_automation_dates_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_dates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_automation_dispatches: {
+        Row: {
+          attempts: number
+          brand_id: string
+          client_id: string
+          created_at: string
+          event_context: Json
+          id: string
+          instance_id: string
+          last_error: string | null
+          lock_owner: string | null
+          locked_at: string | null
+          max_attempts: number
+          occurrence_key: string
+          recipient_id: string
+          rendered_message: string | null
+          retry_at: string | null
+          rule_id: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          client_id: string
+          created_at?: string
+          event_context?: Json
+          id?: string
+          instance_id: string
+          last_error?: string | null
+          lock_owner?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          occurrence_key: string
+          recipient_id: string
+          rendered_message?: string | null
+          retry_at?: string | null
+          rule_id: string
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          event_context?: Json
+          id?: string
+          instance_id?: string
+          last_error?: string | null
+          lock_owner?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          occurrence_key?: string
+          recipient_id?: string
+          rendered_message?: string | null
+          retry_at?: string | null
+          rule_id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_automation_dispatches_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_automation_dispatches_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_dispatches_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_dispatches_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "evolution_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_dispatches_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_recipients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_dispatches_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "client_automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_automation_rules: {
+        Row: {
+          brand_id: string
+          client_id: string
+          created_at: string
+          created_by: string
+          custom_date_id: string | null
+          event_key: string | null
+          id: string
+          instance_id: string
+          is_active: boolean
+          last_run_at: string | null
+          message_template: string
+          name: string
+          next_run_at: string | null
+          recipient_id: string
+          schedule_config: Json
+          timezone: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          client_id: string
+          created_at?: string
+          created_by: string
+          custom_date_id?: string | null
+          event_key?: string | null
+          id?: string
+          instance_id: string
+          is_active?: boolean
+          last_run_at?: string | null
+          message_template: string
+          name: string
+          next_run_at?: string | null
+          recipient_id: string
+          schedule_config?: Json
+          timezone?: string
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          custom_date_id?: string | null
+          event_key?: string | null
+          id?: string
+          instance_id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          message_template?: string
+          name?: string
+          next_run_at?: string | null
+          recipient_id?: string
+          schedule_config?: Json
+          timezone?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_automation_rules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brain_stats_mv"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_automation_rules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_rules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_rules_custom_date_id_fkey"
+            columns: ["custom_date_id"]
+            isOneToOne: false
+            referencedRelation: "client_automation_dates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_rules_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "evolution_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_automation_rules_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_recipients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_briefing_tokens: {
         Row: {
           brand_id: string
@@ -7820,6 +8170,7 @@ export type Database = {
           destination: string | null
           id: string
           is_active: boolean
+          is_default: boolean
           metadata: Json
           name: string
           role_label: string | null
@@ -7835,6 +8186,7 @@ export type Database = {
           destination?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           metadata?: Json
           name: string
           role_label?: string | null
@@ -7850,6 +8202,7 @@ export type Database = {
           destination?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           metadata?: Json
           name?: string
           role_label?: string | null
@@ -8289,6 +8642,10 @@ export type Database = {
         Args: { _brand_id: string; _user_id: string }
         Returns: boolean
       }
+      can_manage_client_automations: {
+        Args: { _brand_id: string; _client_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_read_ad_account: {
         Args: { _ad_account_id: string; _brand_id: string; _user_id: string }
         Returns: boolean
@@ -8308,6 +8665,37 @@ export type Database = {
         Args: { _brand_id: string; _client_id: string; _user_id: string }
         Returns: Json
       }
+      claim_client_automation_dispatches: {
+        Args: { _lease_seconds?: number; _limit?: number; _owner: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          client_id: string
+          created_at: string
+          event_context: Json
+          id: string
+          instance_id: string
+          last_error: string | null
+          lock_owner: string | null
+          locked_at: string | null
+          max_attempts: number
+          occurrence_key: string
+          recipient_id: string
+          rendered_message: string | null
+          retry_at: string | null
+          rule_id: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_automation_dispatches"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_scheduled_social_posts: {
         Args: { p_limit?: number }
         Returns: {
@@ -8324,6 +8712,7 @@ export type Database = {
           publish_attempts: number
         }[]
       }
+      clean_mention_tokens: { Args: { _body: string }; Returns: string }
       client_in_scope: {
         Args: { _brand_id: string; _client_id: string }
         Returns: boolean
@@ -8376,6 +8765,16 @@ export type Database = {
           p_source_module: string
         }
         Returns: string
+      }
+      enqueue_client_automation_event: {
+        Args: {
+          _brand_id: string
+          _client_id: string
+          _context?: Json
+          _entity_key: string
+          _event_key: string
+        }
+        Returns: number
       }
       enqueue_deadline_notifications: { Args: never; Returns: number }
       find_user_id_by_email: { Args: { _email: string }; Returns: string }
@@ -8613,6 +9012,10 @@ export type Database = {
       }
       safe_uuid: { Args: { _txt: string }; Returns: string }
       seed_access_profiles: { Args: { _brand_id: string }; Returns: number }
+      set_client_default_whatsapp_recipient: {
+        Args: { _brand_id: string; _client_id: string; _recipient_id: string }
+        Returns: undefined
+      }
       set_cron_secret: { Args: { _value: string }; Returns: undefined }
       set_member_hourly_cost: {
         Args: {

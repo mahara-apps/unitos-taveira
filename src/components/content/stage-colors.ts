@@ -24,6 +24,29 @@ export const STAGE_GRADIENT: Record<StageColor, string> = {
   cyan: "from-cyan-500 via-cyan-400/60 to-transparent",
 };
 
+/** Faixas canônicas da tela de Conteúdo. A chave/label prevalece sobre a cor configurável. */
+export const CONTENT_STAGE_BAND_BY_KEY: Record<string, string> = {
+  idea: "bg-content-idea",
+  ideia: "bg-content-idea",
+  production: "bg-content-production",
+  producao: "bg-content-production",
+  produção: "bg-content-production",
+  design: "bg-content-design",
+  review: "bg-content-review",
+  revisao: "bg-content-review",
+  revisão: "bg-content-review",
+  approved: "bg-content-approved",
+  aprovado: "bg-content-approved",
+  scheduled: "bg-content-scheduled",
+  agendado: "bg-content-scheduled",
+};
+
+export function contentStageBand(key: string, label: string, fallback: StageColor): string {
+  const normalizedKey = key.trim().toLowerCase();
+  const normalizedLabel = label.trim().toLowerCase();
+  return CONTENT_STAGE_BAND_BY_KEY[normalizedKey] ?? CONTENT_STAGE_BAND_BY_KEY[normalizedLabel] ?? STAGE_BG[fallback];
+}
+
 // Prioridade — alinhada à paleta semântica do DESIGN_SYSTEM (sky/amber/rose).
 export const PRIORITY_STYLES: Record<string, string> = {
   none: "border-border/60 bg-muted/40 text-muted-foreground",

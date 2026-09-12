@@ -613,6 +613,7 @@ export async function getBrandAiCandidates(
   brandId: string,
   role: ProviderRole = "operational",
   usage?: AiUsageContext,
+  selected?: { provider: ProviderName; modelId: string } | null,
 ): Promise<BrandAiCandidate[]> {
   const primary = await getBrandProviderKey(supabase, brandId, "text");
   const primaryModelId = await resolveModel(primary.provider, role);
@@ -627,15 +628,27 @@ export async function getBrandAiCandidates(
   const fallback = await getBrandFallbackProviderKey(supabase, brandId, primary.provider);
   if (fallback) credentials.push(fallback);
 
+  if (selected) {
+    const selectedCredential = credentials.find((item) => item.provider === selected.provider);
+    const allowedModel = await resolveModel(selected.provider, role);
+    if (!selectedCredential || !allowedModel || selected.modelId !== allowedModel) {
+      throw new Error(
+        "ai_model_unavailable: o modelo selecionado não está disponível nas conexões deste workspace.",
+      );
+    }
+    credentials.sort((a, b) => {
+      if (a.provider === selected.provider) return -1;
+      if (b.provider === selected.provider) return 1;
+      return 0;
+    });
+  }
+
   const candidates: BrandAiCandidate[] = [];
   // Um único budget para TODA a operação: o consumo soma as tentativas de
   // todos os candidatos, não reinicia a cada troca de provedor.
   const requestBudget = createAiRequestBudget();
   for (const credential of credentials) {
-    const modelId =
-      credential.provider === primary.provider
-        ? primaryModelId
-        : await resolveModel(credential.provider, role);
+    const modelId = await resolveModel(credential.provider, role);
     if (!modelId) continue;
     const providerAttempts: ProviderAttempt[] = [];
     const base = instantiateModel(credential.provider, credential.apiKey, modelId) as ModelV2;

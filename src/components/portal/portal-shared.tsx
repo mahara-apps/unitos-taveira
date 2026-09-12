@@ -1,6 +1,7 @@
 import { AlertTriangle, Home, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateBr } from "@/lib/timezone";
 
 /* --------------------------------- UI base -------------------------------- */
 
@@ -162,7 +163,7 @@ export function ListSkeleton() {
 /* -------------------------------- formatters ------------------------------ */
 
 export function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  return formatDateBr(iso);
 }
 export function formatMonth(ym: string) {
   const [y, m] = ym.split("-").map(Number);

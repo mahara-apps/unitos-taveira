@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 export const Route = createFileRoute("/approval/$token")({
   head: () => ({
@@ -106,7 +107,7 @@ function ApprovalPage() {
           <h2 className="text-lg font-medium">{post.title}</h2>
           {post.scheduled_at ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Agendado para {new Date(post.scheduled_at).toLocaleString("pt-BR")}
+              Agendado para {formatDateTimeBr(post.scheduled_at)}
             </p>
           ) : null}
 

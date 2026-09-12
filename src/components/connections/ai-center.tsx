@@ -46,6 +46,7 @@ import { aiErrorMessage } from "@/lib/ai-error-display";
 import { getAiModelStatus, runAiModelHealthNow } from "@/lib/ai-models.functions";
 import { saveProviderKey, testProviderKey, removeProviderKey } from "@/lib/connections.functions";
 import { cn } from "@/lib/utils";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 export type AiProviderId = "openai" | "anthropic" | "gemini" | "groq";
 
@@ -567,7 +568,7 @@ function HealthPanel({
           <div className="text-sm font-semibold">Saúde da IA</div>
           <p className="text-xs text-muted-foreground">
             {lastCheckedAt
-              ? `Última verificação: ${new Date(lastCheckedAt).toLocaleString("pt-BR")}`
+              ? `Última verificação: ${formatDateTimeBr(lastCheckedAt)}`
               : "Nunca verificado"}
           </p>
         </div>
@@ -611,7 +612,7 @@ function HealthPanel({
                   </div>
                   <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {keyStateLabel(c)}
-                    {c?.verifiedAt ? ` · ${new Date(c.verifiedAt).toLocaleString("pt-BR")}` : ""}
+                    {c?.verifiedAt ? ` · ${formatDateTimeBr(c.verifiedAt)}` : ""}
                   </div>
                 </div>
               </div>
@@ -648,7 +649,7 @@ function HealthPanel({
               <span>
                 {providerLabel(m.provider)}: o modelo {modelLabel(m.provider, m.replacedModelId!)}{" "}
                 saiu do ar e foi substituído automaticamente por {modelLabel(m.provider, m.modelId)}
-                {m.updatedAt ? ` em ${new Date(m.updatedAt).toLocaleString("pt-BR")}` : ""}.
+                {m.updatedAt ? ` em ${formatDateTimeBr(m.updatedAt)}` : ""}.
               </span>
             </div>
           ))}

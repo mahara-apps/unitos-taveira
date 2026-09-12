@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalApi } from "./portal-context";
 import { PortalSchedule } from "./portal-schedule";
 import { ChannelDot, PortalThumb } from "./portal-ui";
+import { formatDateBr, formatTimeBr } from "@/lib/timezone";
 import {
   EmptyState,
   ErrorState,
@@ -87,16 +88,12 @@ function dayKey(d: Date) {
 
 function timeLabel(iso: string | null) {
   if (!iso) return "Sem horário definido";
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeBr(iso);
 }
 
 function fullDateLabel(iso: string | null) {
   if (!iso) return "Data a definir";
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  });
+  return formatDateBr(iso);
 }
 
 function normalize(rows: unknown[]): CalItem[] {
@@ -161,7 +158,7 @@ function dayHeading(key: string) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (key === dayKey(tomorrow)) return "Amanhã";
-  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  return formatDateBr(d);
 }
 
 /** Uma linha por dia; itens sem data vão para o fim. */

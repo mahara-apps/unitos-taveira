@@ -33,6 +33,7 @@ import {
 } from "@/lib/customer-dashboard.functions";
 import { PortalThemeForm } from "@/components/customer/portal-theme-form";
 import { PortalAccessSection } from "@/components/customer/portal-access-section";
+import { formatDateBr, formatDateTimeBr } from "@/lib/timezone";
 
 const EXPIRY_OPTIONS = [
   { value: "never", label: "Sem expiração" },
@@ -43,9 +44,9 @@ const EXPIRY_OPTIONS = [
 ] as const;
 
 const fmtDate = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleDateString("pt-BR") : null;
+  iso ? formatDateBr(iso) : null;
 const fmtDateTime = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleString("pt-BR") : null;
+  iso ? formatDateTimeBr(iso) : null;
 
 /**
  * Fase 2 — card único de gestão do link público do cliente.

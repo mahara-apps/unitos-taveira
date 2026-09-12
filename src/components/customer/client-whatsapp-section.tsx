@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProfileSection } from "@/components/customer/ui/profile-ui";
 import { WhatsappRecipientsPanel } from "@/components/connections/whatsapp-recipients-panel";
 import { listWhatsappSendLogs } from "@/lib/whatsapp-recipients.functions";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 const STATUS_LABEL: Record<string, string> = {
   sent: "Enviado",
@@ -79,7 +80,7 @@ export function ClientWhatsappSection({
                     {log.message ?? log.errorMessage ?? "Mensagem enviada pelo sistema."}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {new Date(log.sentAt).toLocaleString("pt-BR")}
+                    {formatDateTimeBr(log.sentAt)}
                   </p>
                 </div>
                 <Badge tone={statusTone(log.status)} className="shrink-0 text-[10px]">

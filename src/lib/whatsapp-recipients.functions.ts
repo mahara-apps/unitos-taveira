@@ -65,6 +65,7 @@ function mapRow(row: Row): WhatsappRecipientRow {
     roleLabel: (row["role_label"] as string | null) ?? null,
     destination: (row["destination"] as string | null) ?? null,
     isActive: row["is_active"] as boolean,
+    isDefault: (row["is_default"] as boolean | null) ?? false,
     createdAt: row["created_at"] as string,
   };
 }

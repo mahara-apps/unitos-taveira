@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { cleanMentionText } from "@/lib/mentions";
 
 export const TASK_STATUSES = ["todo", "in_progress", "review", "done"] as const;
 export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -504,7 +505,7 @@ export const listTaskCommentsFn = createServerFn({ method: "GET" })
         author_id: c.author_id as string,
         author_name: p?.full_name ?? null,
         author_avatar: p?.avatar_url ?? null,
-        body: c.body as string,
+        body: cleanMentionText(c.body as string),
         mentions: (c.mentions as string[]) ?? [],
         created_at: c.created_at as string,
       };
@@ -541,7 +542,7 @@ export const addTaskCommentFn = createServerFn({ method: "POST" })
         task_id: data.taskId,
         brand_id: task!.brand_id as string,
         author_id: context.userId,
-        body: data.body,
+        body: cleanMentionText(data.body),
         mentions,
       })
       .select("id")
@@ -556,7 +557,7 @@ export const addTaskCommentFn = createServerFn({ method: "POST" })
         mentions,
         commentId: (inserted as { id: string } | null)?.id ?? null,
         title: `Você foi mencionado em: ${(task as { title?: string }).title ?? "tarefa"}`,
-        body: data.body,
+        body: cleanMentionText(data.body),
         href: `/tasks?taskId=${data.taskId}`,
       });
     }

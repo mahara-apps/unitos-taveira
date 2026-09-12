@@ -13,9 +13,13 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/p/briefing/$token")({
   head: () => ({
     meta: [
-      { title: "Brand briefing" },
+      { title: "Briefing da marca" },
       { name: "robots", content: "noindex" },
-      { name: "description", content: "Share your brand parameters." },
+      { name: "description", content: "Compartilhe as informações essenciais da sua marca." },
+      { property: "og:title", content: "Briefing da marca" },
+      { property: "og:description", content: "Compartilhe as informações essenciais da sua marca." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   loader: async ({ params }) => {
@@ -24,12 +28,12 @@ export const Route = createFileRoute("/p/briefing/$token")({
     return { info };
   },
   errorComponent: () => (
-    <ShellError title="Something went wrong" body="Please try refreshing the page." />
+    <ShellError title="Algo deu errado" body="Atualize a página e tente novamente." />
   ),
   notFoundComponent: () => (
     <ShellError
-      title="This briefing link is no longer active."
-      body="The link you followed does not exist."
+      title="Este link de briefing não está mais ativo."
+      body="O link acessado não existe."
     />
   ),
   component: BriefingPage,
@@ -69,12 +73,12 @@ function BriefingPage() {
   if (!info.ok) {
     const title =
       info.reason === "revoked"
-        ? "This briefing link has been revoked."
+        ? "Este link de briefing foi revogado."
         : info.reason === "expired"
-          ? "This briefing link has expired."
-          : "This briefing link is no longer active.";
+          ? "Este link de briefing expirou."
+          : "Este link de briefing não está mais ativo.";
     return (
-      <ShellError title={title} body="Contact your account manager to request a new invitation." />
+      <ShellError title={title} body="Fale com a equipe responsável para solicitar um novo convite." />
     );
   }
 
@@ -86,16 +90,16 @@ function BriefingPage() {
 }
 
 const TONE_SUGGESTIONS = [
-  "Professional",
-  "Playful",
-  "Bold",
-  "Minimal",
-  "Warm",
-  "Technical",
-  "Aspirational",
-  "Friendly",
-  "Confident",
-  "Educational",
+  "Profissional",
+  "Divertido",
+  "Ousado",
+  "Minimalista",
+  "Acolhedor",
+  "Técnico",
+  "Inspirador",
+  "Amigável",
+  "Confiante",
+  "Educativo",
 ];
 
 function BriefingForm({
@@ -117,7 +121,7 @@ function BriefingForm({
   const [tones, setTones] = useState<string[]>([]);
   const [toneInput, setToneInput] = useState("");
 
-  const steps = ["Business overview", "Target audience", "Tone of voice"] as const;
+  const steps = ["Visão do negócio", "Público-alvo", "Tom de voz"] as const;
   const canNext =
     (step === 0 && description.trim().length >= 20) ||
     (step === 1 && audience.trim().length >= 10) ||
@@ -147,7 +151,7 @@ function BriefingForm({
       });
       setDone(true);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Submission failed. Please try again.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível enviar. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
@@ -165,24 +169,23 @@ function BriefingForm({
               <Sparkles className="h-4 w-4 text-emerald-300" />
             </div>
             <div className="text-xs text-zinc-400">
-              <span className="font-mono">{brandName}</span> · brand briefing
+              <span className="font-mono">{brandName}</span> · briefing da marca
             </div>
           </div>
           <Badge
             variant="outline"
             className="border-white/10 bg-white/[0.03] font-mono text-[10px] text-zinc-400"
           >
-            secure link
+            link seguro
           </Badge>
         </header>
 
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome, <span className="text-emerald-300">{clientName}</span>
+            Olá, <span className="text-emerald-300">{clientName}</span>
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Answer three quick questions so the team can start building content aligned with your
-            brand.
+            Responda três perguntas rápidas para a equipe criar conteúdos alinhados à sua marca.
           </p>
         </div>
 
@@ -201,7 +204,7 @@ function BriefingForm({
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl backdrop-blur-2xl">
           <div className="mb-4">
             <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-              step {step + 1} of {steps.length}
+              etapa {step + 1} de {steps.length}
             </div>
             <div className="mt-1 text-lg font-semibold">{steps[step]}</div>
           </div>
@@ -209,14 +212,14 @@ function BriefingForm({
           {step === 0 && (
             <div className="space-y-3">
               <Label htmlFor="desc" className="text-xs text-zinc-400">
-                What does your business do, and what makes it different?
+                O que sua empresa faz e o que a torna diferente?
               </Label>
               <Textarea
                 id="desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={7}
-                placeholder="We help X do Y through Z. Founded in 2019, we specialize in…"
+                placeholder="Ajudamos nosso público a alcançar resultados por meio de…"
                 className="border-white/10 bg-white/[0.02] text-sm focus-visible:ring-emerald-500/40"
               />
               <div className="text-right font-mono text-[10px] text-zinc-500">
@@ -229,27 +232,27 @@ function BriefingForm({
             <div className="space-y-5">
               <div className="space-y-3">
                 <Label htmlFor="aud" className="text-xs text-zinc-400">
-                  Who are you talking to? (age, role, context)
+                   Com quem sua marca fala? (idade, função e contexto)
                 </Label>
                 <Textarea
                   id="aud"
                   value={audience}
                   onChange={(e) => setAudience(e.target.value)}
                   rows={5}
-                  placeholder="Founders and marketing leads at Series A-B startups, mostly 28-42…"
+                   placeholder="Empreendedores e líderes de marketing, principalmente entre 28 e 42 anos…"
                   className="border-white/10 bg-white/[0.02] text-sm focus-visible:ring-emerald-500/40"
                 />
               </div>
               <div className="space-y-3">
                 <Label htmlFor="pain" className="text-xs text-zinc-400">
-                  Pain points they struggle with (optional)
+                   Principais dificuldades desse público (opcional)
                 </Label>
                 <Textarea
                   id="pain"
                   value={painPoints}
                   onChange={(e) => setPainPoints(e.target.value)}
                   rows={3}
-                  placeholder="They lack time to produce consistent content and struggle with tone…"
+                   placeholder="Falta tempo para produzir conteúdo consistente e manter o tom da marca…"
                   className="border-white/10 bg-white/[0.02] text-sm focus-visible:ring-emerald-500/40"
                 />
               </div>
@@ -259,7 +262,7 @@ function BriefingForm({
           {step === 2 && (
             <div className="space-y-4">
               <Label className="text-xs text-zinc-400">
-                Pick or type words that describe your voice
+                 Escolha ou digite palavras que descrevem a voz da marca
               </Label>
               <div className="flex flex-wrap gap-1.5">
                 {TONE_SUGGESTIONS.map((t) => {
@@ -290,7 +293,7 @@ function BriefingForm({
                       addTone(toneInput);
                     }
                   }}
-                  placeholder="Add custom tone…"
+                  placeholder="Adicionar tom personalizado…"
                   className="h-9 border-white/10 bg-white/[0.02] text-sm focus-visible:ring-emerald-500/40"
                 />
                 <Button
@@ -300,7 +303,7 @@ function BriefingForm({
                   onClick={() => addTone(toneInput)}
                   className="border-white/10 bg-white/[0.02]"
                 >
-                  Add
+                  Adicionar
                 </Button>
               </div>
               {tones.length > 0 && (
@@ -337,7 +340,7 @@ function BriefingForm({
               disabled={step === 0 || submitting}
               className="text-zinc-400 hover:bg-white/[0.04]"
             >
-              <ArrowLeft className="mr-1 h-4 w-4" /> Back
+              <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
             </Button>
             {step < steps.length - 1 ? (
               <Button
@@ -346,7 +349,7 @@ function BriefingForm({
                 disabled={!canNext}
                 className="bg-emerald-500/90 text-emerald-950 hover:bg-emerald-400"
               >
-                Continue <ArrowRight className="ml-1 h-4 w-4" />
+                Continuar <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             ) : (
               <Button
@@ -355,14 +358,14 @@ function BriefingForm({
                 disabled={!canNext || submitting}
                 className="bg-emerald-500/90 text-emerald-950 hover:bg-emerald-400"
               >
-                {submitting ? "Submitting…" : "Submit briefing"}
+                {submitting ? "Enviando…" : "Enviar briefing"}
               </Button>
             )}
           </div>
         </div>
 
         <footer className="mt-8 text-center font-mono text-[10px] text-zinc-500">
-          Your response is encrypted in transit and shared only with {brandName}.
+          Sua resposta é protegida durante o envio e compartilhada somente com {brandName}.
         </footer>
       </div>
     </div>
@@ -378,10 +381,10 @@ function ThankYou({ brandName }: { brandName: string }) {
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
             <CheckCircle2 className="h-6 w-6 text-emerald-300" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">Thank you</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Obrigado</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Your briefing has been delivered to <span className="text-zinc-200">{brandName}</span>.
-            The team will be in touch shortly.
+            Seu briefing foi enviado para <span className="text-zinc-200">{brandName}</span>. A
+            equipe entrará em contato em breve.
           </p>
         </div>
       </div>

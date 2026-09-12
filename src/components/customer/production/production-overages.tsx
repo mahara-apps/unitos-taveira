@@ -22,6 +22,7 @@ import {
   setClientOveragePolicyFn,
   type OverageRequestRow,
 } from "@/lib/plan-overage.functions";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Aguardando liberação",
@@ -36,7 +37,7 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 function formatDate(v: string) {
-  return new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return formatDateTimeBr(v);
 }
 
 export function ProductionOverages({ brandId, clientId }: { brandId: string; clientId: string }) {

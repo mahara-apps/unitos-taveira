@@ -47,9 +47,23 @@ if [ "${FAILED:-0}" -gt 0 ]; then state=error; fi
 
 for s in "${STEPS[@]}"; do report_step "$s" "$state" "$PASSED PASS / $FAILED FAIL"; done
 
-CHECKS='{"database":"ok","storage":"ok","cron":"ok","secrets":"ok"}'
+CHECKS='{"database":"ok","schema":"ok","rls":"ok","seeds":"ok","storage":"ok","cron":"ok","secrets":"ok"}'
 if [ "${FAILED:-0}" -gt 0 ]; then
-  CHECKS='{"database":"error","storage":"attention","cron":"attention","secrets":"attention"}'
+  # O fallback manual não possui o parser estruturado do MASTER. Marque somente
+  # os grupos comprovadamente reprovados, sem espalhar uma falha para todo o núcleo.
+  DATABASE_STATE=ok
+  SCHEMA_STATE=ok
+  RLS_STATE=ok
+  SEEDS_STATE=ok
+  STORAGE_STATE=ok
+  CRON_STATE=ok
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'baseline:|delta:|extensões obrigatórias' && DATABASE_STATE=error
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'schema:|módulo |clientes:|briefing:|conteúdo:|auditoria:' && SCHEMA_STATE=error
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'RLS |policies|triggers|trigger ' && RLS_STATE=error
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'seeds:|Mensagens: recurso' && SEEDS_STATE=error
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'storage:' && STORAGE_STATE=error
+  printf '%s\n' "$OUT" | grep 'FAIL' | grep -qiE 'cron:|vault:|brain_stats_mv' && CRON_STATE=error
+  CHECKS="{\"database\":\"$DATABASE_STATE\",\"schema\":\"$SCHEMA_STATE\",\"rls\":\"$RLS_STATE\",\"seeds\":\"$SEEDS_STATE\",\"storage\":\"$STORAGE_STATE\",\"cron\":\"$CRON_STATE\",\"secrets\":\"ok\"}"
   report_done false "$RELEASE_VERSION" "Validação: $PASSED aprovados, $FAILED falhos." false "$CHECKS"
   exit 1
 fi

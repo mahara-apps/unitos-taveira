@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveMentions } from "../src/components/ui/mention-textarea";
+import { cleanMentionText } from "../src/lib/mentions";
 import { notifyMentions } from "../src/lib/mention-notify.server";
 
 const people = [
@@ -116,5 +117,23 @@ describe("menções com token estável", () => {
 
   it("ignora menção legada ambígua entre homônimos", () => {
     expect(resolveMentions("oi @Maria Souza", people)).toEqual([]);
+  });
+});
+
+describe("texto visível de menções", () => {
+  it("remove UUID, colchetes e parênteses de tokens antigos", () => {
+    expect(
+      cleanMentionText(
+        "Oi @[Maria Souza](22222222-2222-2222-2222-222222222222), veja com @Bruno Lima",
+      ),
+    ).toBe("Oi @Maria Souza, veja com @Bruno Lima");
+  });
+
+  it("limpa múltiplas menções e preserva o restante do texto", () => {
+    expect(
+      cleanMentionText(
+        "@[Ana](11111111-1111-1111-1111-111111111111) e @[Bia](22222222-2222-2222-2222-222222222222): https://unitos.app",
+      ),
+    ).toBe("@Ana e @Bia: https://unitos.app");
   });
 });

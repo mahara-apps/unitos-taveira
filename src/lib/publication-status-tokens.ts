@@ -219,8 +219,10 @@ export function formatLabel(raw: string | null | undefined) {
 export function timeLabel(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
 }
 
@@ -233,7 +235,12 @@ export function dayLabel(iso: string | null | undefined) {
   tomorrow.setDate(today.getDate() + 1);
   if (same(d, today)) return "Hoje";
   if (same(d, tomorrow)) return "Amanhã";
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function relativeLabel(iso: string | null | undefined) {

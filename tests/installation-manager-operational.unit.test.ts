@@ -78,7 +78,19 @@ describe("saúde da instalação", () => {
     expect(healthFromChecks({ database: { state: "attention" } })).toBe("degraded");
     expect(healthFromChecks({})).toBe("unknown");
     const all = Object.fromEntries(
-      ["connectivity", "supabase", "database", "storage", "cron", "frontend", "secrets", "configuration"].map(
+      [
+        "connectivity",
+        "supabase",
+        "database",
+        "schema",
+        "rls",
+        "seeds",
+        "storage",
+        "cron",
+        "frontend",
+        "secrets",
+        "configuration",
+      ].map(
         (id) => [id, { state: "ok" }],
       ),
     );

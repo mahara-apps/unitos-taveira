@@ -14,6 +14,7 @@ export const CUSTOMER_TABS = [
   { value: "trabalho", label: "Trabalho" },
   { value: "horas", label: "Horas" },
   { value: "publicacoes", label: "Publicações" },
+  { value: "automacoes", label: "Automações" },
 
   { value: "area-cliente", label: "Área do cliente" },
 ] as const;

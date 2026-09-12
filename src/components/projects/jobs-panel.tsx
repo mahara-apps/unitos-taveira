@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -76,6 +76,8 @@ type Props = {
   footer?: ReactNode;
   /** Quando informado, abrir a pauta navega na própria tela (sem modal). */
   onOpenPautas?: () => void;
+  /** Abre o fluxo existente de criação/gestão de pautas. */
+  onCreatePauta?: () => void;
   /** Nível inicial exibido: visão geral ou lista de jobs. */
   initialMode?: "overview" | "jobs";
 };
@@ -91,6 +93,7 @@ export function JobsPanel({
   pautasCount = 0,
   footer,
   onOpenPautas,
+  onCreatePauta,
   initialMode = "overview",
 }: Props) {
   const qc = useQueryClient();
@@ -117,6 +120,10 @@ export function JobsPanel({
   /** Job aberto em modal amplo. */
   const [openJobId, setOpenJobId] = useState<string | null>(null);
   const [pautasOpen, setPautasOpen] = useState(false);
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   const jobsArchive = needsArchived(visibility) ? "all" : "active";
   const jobsQ = useQuery({
@@ -551,45 +558,20 @@ export function JobsPanel({
             </div>
           </div>
         ) : (
-          /* Nível 2 — lista de jobs */
-          <div className="grid gap-0 md:grid-cols-[240px_minmax(0,1fr)]">
-            <div className="border-b border-border/60 md:border-b-0 md:border-r">
-              <div className="flex items-center justify-between border-b border-border/60 bg-background/40 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-foreground">
-                    Jobs
-                  </span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {doneJobs} / {jobs.length}
-                  </span>
+          /* Nível 2 — Jobs e Pautas lado a lado */
+          <div className="grid min-w-0 gap-px bg-border/60 xl:grid-cols-2">
+            <section className="min-w-0 bg-card">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/60 bg-background/40 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">Jobs</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {doneJobs}/{jobs.length} concluídos · {taskTotals.done}/{taskTotals.total} tarefas concluídas
+                  </p>
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  aria-label="Novo job"
-                  onClick={() => setAddingJob((v) => !v)}
-                >
-                  <Plus className="h-4 w-4" />
+                <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddingJob((v) => !v)}>
+                  <Plus className="h-3.5 w-3.5" /> Novo job
                 </Button>
               </div>
-              <div className="space-y-1 p-4 text-[11px] text-muted-foreground">
-                <p>
-                  {taskTotals.done}/{taskTotals.total} tarefas concluídas
-                </p>
-                {hasPautas ? (
-                  <button
-                    type="button"
-                    className="mt-2 flex items-center gap-1.5 text-primary hover:underline"
-                    onClick={() => openPautas()}
-                  >
-                    <Sparkles className="h-3 w-3" /> Ver pautas ({pautasCount})
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="min-w-0">
               {addingJob && (
                 <div className="flex gap-2 border-b border-border/60 p-3">
                   <Input
@@ -621,32 +603,6 @@ export function JobsPanel({
                   </Button>
                 </div>
               )}
-
-              {/* A pauta é um TIPO de job (job de conteúdo) e entra na MESMA lista. */}
-              {hasPautas ? (
-                <div className="border-b border-border/60">
-                  <WorkItemRow
-                    className="px-5 py-4"
-                    title="Pauta de conteúdo"
-                    color="hsl(var(--primary))"
-                    onOpen={() => openPautas()}
-                    subCount={pautasCount}
-                    meta={
-                      <span className="tabular-nums">
-                        {pautasCount} {pautasCount === 1 ? "item" : "itens"} por rede
-                      </span>
-                    }
-                    status={
-                      <Badge
-                        variant="outline"
-                        className="h-5 rounded-full border-primary/40 px-2 text-[10px] text-primary"
-                      >
-                        Pauta de conteúdo
-                      </Badge>
-                    }
-                  />
-                </div>
-              ) : null}
 
               {jobsQ.isLoading ? (
                 <div className="space-y-3 p-5">
@@ -777,7 +733,34 @@ export function JobsPanel({
                   })}
                 </div>
               )}
-            </div>
+            </section>
+
+            <section className="min-w-0 bg-card">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/60 bg-background/40 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">Pautas</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {pautasCount} {pautasCount === 1 ? "pauta de conteúdo" : "pautas de conteúdo"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => openPautas()} disabled={!hasPautas}>
+                    Ver todas
+                  </Button>
+                  <Button size="sm" className="h-8 gap-1.5" onClick={onCreatePauta}>
+                    <Plus className="h-3.5 w-3.5" /> Nova pauta
+                  </Button>
+                </div>
+              </div>
+              {hasPautas ? (
+                <div className="max-h-[520px] overflow-y-auto p-4">{pautasContent}</div>
+              ) : (
+                <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 p-8 text-center text-xs text-muted-foreground">
+                  <Sparkles className="h-5 w-5" />
+                  <p>Nenhuma pauta vinculada a este projeto.</p>
+                </div>
+              )}
+            </section>
           </div>
         )}
 
@@ -823,30 +806,26 @@ export function JobsPanel({
                   patchJobMut.mutate({ jobId: currentJob.id, patch: { status_id: statusId } })
                 }
               />
-              <Input
-                type="date"
-                className="h-9 w-[135px] text-xs"
-                aria-label="Início do job"
-                defaultValue={currentJob.start_date ? currentJob.start_date.slice(0, 10) : ""}
-                onBlur={(e) =>
-                  patchJobMut.mutate({
-                    jobId: currentJob.id,
-                    patch: { start_date: e.target.value || null },
-                  })
-                }
-              />
-              <Input
-                type="date"
-                className="h-9 w-[135px] text-xs"
-                aria-label="Prazo do job"
-                defaultValue={currentJob.due_at ? currentJob.due_at.slice(0, 10) : ""}
-                onBlur={(e) =>
-                  patchJobMut.mutate({
-                    jobId: currentJob.id,
-                    patch: { due_at: e.target.value || null },
-                  })
-                }
-              />
+              <label className="grid gap-0.5 text-[9px] font-medium uppercase text-muted-foreground">
+                Início
+                <Input
+                  type="date"
+                  className="h-9 w-[135px] text-xs"
+                  aria-label="Início do job"
+                  defaultValue={currentJob.start_date ? currentJob.start_date.slice(0, 10) : ""}
+                  onBlur={(e) => patchJobMut.mutate({ jobId: currentJob.id, patch: { start_date: e.target.value || null } })}
+                />
+              </label>
+              <label className="grid gap-0.5 text-[9px] font-medium uppercase text-muted-foreground">
+                Entrega
+                <Input
+                  type="date"
+                  className="h-9 w-[135px] text-xs"
+                  aria-label="Prazo do job"
+                  defaultValue={currentJob.due_at ? currentJob.due_at.slice(0, 10) : ""}
+                  onBlur={(e) => patchJobMut.mutate({ jobId: currentJob.id, patch: { due_at: e.target.value || null } })}
+                />
+              </label>
             </>
           ) : null
         }

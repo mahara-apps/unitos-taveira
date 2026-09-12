@@ -16,6 +16,7 @@ import { assertClientScope, assertModuleAccess, resolveAuthorityRole } from "@/l
 import { assertFeatureEnabled } from "@/lib/feature-gate.server";
 import { detectLinkSource, linkFallbackLabel, normalizeLinkUrl } from "@/lib/link-source";
 import { displayName } from "@/lib/identity";
+import { cleanMentionText } from "@/lib/mentions";
 import { notifyMentionsSafe } from "@/lib/mention-notify.server";
 import { insertNotificationsDeduped, notificationDedupeKey } from "@/lib/notifications-dedupe";
 import {
@@ -216,7 +217,9 @@ export const listThreads = createServerFn({ method: "GET" })
         projectId: (r.project_id as string | null) ?? null,
         projectName: r.project_id ? (projectName.get(r.project_id as string) ?? null) : null,
         lastMessageAt: r.last_message_at as string,
-        lastMessagePreview: (r.last_message_preview as string | null) ?? null,
+        lastMessagePreview: r.last_message_preview
+          ? cleanMentionText(r.last_message_preview as string)
+          : null,
         lastAuthorName: lastAuthorName.get(r.id as string) ?? null,
         unread: unreadMap.get(r.id as string) ?? 0,
         participants: byThread.get(r.id as string) ?? [],
@@ -257,7 +260,7 @@ export const listMessages = createServerFn({ method: "GET" })
           authorEmail: prof?.email ?? null,
           authorAvatarUrl: prof?.avatar_url ?? null,
           authorKind: asParticipantRole(r.author_kind),
-          body: (r.removed_at ? "" : (r.body as string)) ?? "",
+          body: r.removed_at ? "" : cleanMentionText((r.body as string) ?? ""),
           links: r.removed_at ? [] : parseLinks(r.links),
           mentions: (r.mentions as string[] | null) ?? [],
           removedAt: (r.removed_at as string | null) ?? null,
@@ -446,13 +449,14 @@ export const sendMessage = createServerFn({ method: "POST" })
     });
 
     const links = normalizeLinks(data.links);
+    const body = cleanMentionText(data.body);
     const { data: created, error } = await supabase
       .from("messages")
       .insert({
         thread_id: data.threadId,
         author_id: userId,
         author_kind: authorKind,
-        body: data.body,
+        body,
         links,
         mentions,
       })
@@ -471,7 +475,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       threadId: data.threadId,
       brandId: thread.brand_id as string,
       subject: (thread.subject as string) ?? "Mensagem",
-      body: data.body,
+      body,
       authorId: userId,
       authorKind,
       messageId: created.id as string,

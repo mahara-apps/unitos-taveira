@@ -1,0 +1,1 @@
+ALTER FUNCTION public.can_manage_client_automations(uuid, uuid, uuid) SECURITY INVOKER;

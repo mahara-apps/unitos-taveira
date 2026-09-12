@@ -37,6 +37,7 @@ import {
 } from "@/lib/monthly-plan-lock.server";
 import { runPlanGeneration } from "@/lib/monthly-plan-generate.server";
 import { countGeneratedThisMonth } from "@/lib/monthly-plan-generated-count.server";
+import { PROVIDER_CAPABILITIES, type ProviderName } from "@/lib/ai-capabilities";
 
 /* ---------- Types ---------- */
 
@@ -80,6 +81,13 @@ export type GenerateMonthlyPlanResult =
       code: "overage_not_authorized";
       overage: Array<{ channel: PlanChannel; quota: number; requested: number; overage: number }>;
     };
+
+export type PlanAiModelOption = {
+  provider: ProviderName;
+  modelId: string;
+  label: string;
+  primary: boolean;
+};
 
 export type MonthlyPlan = {
   id: string;
@@ -206,6 +214,13 @@ const GenerateInput = z.object({
   clientId: z.string().uuid(),
   theme: z.string().trim().max(500).optional().default(""),
   briefingId: z.string().uuid().nullable().optional(),
+  selectedModel: z
+    .object({
+      provider: z.enum(["openai", "anthropic", "gemini", "groq"]),
+      modelId: z.string().trim().min(1).max(160),
+    })
+    .nullable()
+    .optional(),
   /** Seleção opcional do wizard: canais, quantidade e cotas por formato. */
   selection: z
     .array(
@@ -233,6 +248,51 @@ const GenerateInput = z.object({
     }),
   ]),
 });
+
+export const listPlanAiModelsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ brandId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }): Promise<PlanAiModelOption[]> => {
+    const { data: membership } = await context.supabase
+      .from("brand_members")
+      .select("role")
+      .eq("brand_id", data.brandId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!membership) throw new Error("Você não tem acesso a este workspace.");
+
+    const { data: connection, error } = await context.supabase
+      .from("brand_connections")
+      .select("text_provider, text_fallback_provider, providers")
+      .eq("brand_id", data.brandId)
+      .maybeSingle();
+    if (error) throw error;
+
+    const providers = (connection?.providers ?? {}) as Record<string, { connected?: boolean }>;
+    const primary = connection?.text_provider as ProviderName | null | undefined;
+    const fallback = connection?.text_fallback_provider as ProviderName | null | undefined;
+    const available = [primary, fallback].filter(
+      (provider, index, all): provider is ProviderName =>
+        !!provider &&
+        all.indexOf(provider) === index &&
+        provider in PROVIDER_CAPABILITIES &&
+        providers[provider]?.connected === true,
+    );
+    const { resolveModel } = await import("@/lib/ai-models-catalog.server");
+    const options = await Promise.all(
+      available.map(async (provider) => ({
+        provider,
+        modelId: await resolveModel(provider, "operational"),
+      })),
+    );
+    return options
+      .filter((option): option is { provider: ProviderName; modelId: string } => !!option.modelId)
+      .map((option) => ({
+        ...option,
+        label: `${option.provider} · ${option.modelId}`,
+        primary: option.provider === primary,
+      }));
+  });
 
 export const generateMonthlyPlanFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

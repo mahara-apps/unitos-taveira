@@ -8,6 +8,7 @@ import type { PendingSchedulePost } from "@/lib/scheduling-wizard.functions";
 import { dayLabel, relativeLabel } from "@/lib/publication-status-tokens";
 import { PublicationRow } from "./publication-card";
 import { dayKey } from "./day-map";
+import { formatDateBr } from "@/lib/timezone";
 
 /** Visão Lista: itens agrupados por data, com faixa de status e pill à direita. */
 export function AgendaList({
@@ -111,11 +112,7 @@ export function AgendaList({
                   {key === "sem-data" ? "Sem data" : dayLabel(list[0]!.when)}
                   {key === "sem-data" ? null : (
                     <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/80">
-                      {new Date(list[0]!.when!).toLocaleDateString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
+                      {formatDateBr(list[0]?.when)}
                     </span>
                   )}
                 </span>

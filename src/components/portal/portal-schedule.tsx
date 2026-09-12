@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { usePortalApi, usePortalCanInteract } from "./portal-context";
 import { ListSkeleton } from "./portal-shared";
+import { formatDateTimeBr } from "@/lib/timezone";
 
 const STATUS_LABEL: Record<string, string> = {
   internal_approved: "Aguardando sua confirmação",
@@ -23,13 +24,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function dateLabel(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTimeBr(iso);
 }
 
 export function PortalSchedule({ month }: { month: string }) {
